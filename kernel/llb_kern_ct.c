@@ -79,9 +79,6 @@ dp_ct_proto_xfk_init(struct dp_ctv4_key *key,
   /* Apply NAT xfrm if needed */
   if (xi->nat_flags & LLB_NAT_DST) {
     xkey->saddr = xi->nat_xip;
-    if (xi->nat_rip) {
-      xkey->daddr = xi->nat_rip;
-    }
     if (key->l4proto != IPPROTO_ICMP) {
         if (xi->nat_xport)
           xkey->sport = xi->nat_xport;
@@ -91,17 +88,12 @@ dp_ct_proto_xfk_init(struct dp_ctv4_key *key,
 
     xxi->nat_flags = LLB_NAT_SRC;
     xxi->nat_xip = key->daddr;
-    if (xi->nat_rip) {
-      xxi->nat_rip = key->saddr;
-    }
     if (key->l4proto != IPPROTO_ICMP)
       xxi->nat_xport = key->dport;
   }
   if (xi->nat_flags & LLB_NAT_SRC) {
     xkey->daddr = xi->nat_xip;
-    if (xi->nat_rip) {
-      xkey->saddr = xi->nat_rip;
-    }
+
     if (key->l4proto != IPPROTO_ICMP) {
       if (xi->nat_xport)
         xkey->dport = xi->nat_xport;
@@ -111,9 +103,6 @@ dp_ct_proto_xfk_init(struct dp_ctv4_key *key,
 
     xxi->nat_flags = LLB_NAT_DST;
     xxi->nat_xip = key->saddr;
-    if (xi->nat_rip) {
-      xxi->nat_rip = key->daddr;
-    }
 
     if (key->l4proto != IPPROTO_ICMP)
       xxi->nat_xport = key->sport;
@@ -835,12 +824,10 @@ dp_ctv4_in(void *ctx, struct xfi *xf)
 
   xi->nat_flags = xf->pm.nf;
   xi->nat_xip   = xf->l4m.nxip;
-  xi->nat_rip   = xf->l4m.nrip;
   xi->nat_xport = xf->l4m.nxport;
 
   xxi->nat_flags = 0;
   xxi->nat_xip = 0;
-  xxi->nat_rip = 0;
   xxi->nat_xport = 0;
 
   if (xf->pm.nf & (LLB_NAT_DST|LLB_NAT_SRC)) {
@@ -868,7 +855,6 @@ dp_ctv4_in(void *ctx, struct xfi *xf)
       adat->ca.act_type = xi->nat_flags & (LLB_NAT_DST|LLB_NAT_HDST) ?
                              DP_SET_DNAT: DP_SET_SNAT;
       adat->nat_act.xip = xi->nat_xip;
-      adat->nat_act.rip = xi->nat_rip;
       adat->nat_act.xport = xi->nat_xport;
       adat->nat_act.doct = 1;
       adat->nat_act.rid = xf->pm.rule_id;
@@ -892,7 +878,6 @@ dp_ctv4_in(void *ctx, struct xfi *xf)
       axdat->ca.act_type = xxi->nat_flags & (LLB_NAT_DST|LLB_NAT_HDST) ?
                              DP_SET_DNAT: DP_SET_SNAT;
       axdat->nat_act.xip = xxi->nat_xip;
-      axdat->nat_act.rip = xxi->nat_rip;
       axdat->nat_act.xport = xxi->nat_xport;
       axdat->nat_act.doct = 1;
       axdat->nat_act.rid = xf->pm.rule_id;

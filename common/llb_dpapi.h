@@ -165,13 +165,11 @@ struct dp_sess_act {
 
 struct dp_nat_act {
   __u32 xip;
-  __u32 rip;
   __u16 xport;
   __u8 fr;
   __u8 doct;
   __u32 rid;
   __u32 aid;
-  __u32 res;
 };
 
 #define MIN_DP_POLICER_RATE  (8*1000*1000)  /* 1 MBps = 8 Mbps */
@@ -538,7 +536,6 @@ struct mf_xfrm_inf
   uint16_t res;
   uint16_t nat_xport;
   uint32_t nat_xip;
-  uint32_t nat_rip;
 };
 typedef struct mf_xfrm_inf nxfrm_inf_t;
 

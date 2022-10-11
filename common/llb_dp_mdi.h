@@ -176,14 +176,12 @@ struct dp_qos_mdi {
 
 struct dp_l4_mdi {
     __u32            nxip;         /* NAT xIP */
-    __u32            nrip;         /* NAT rIP (for one-arm) */
     __u16            nxport;       /* NAT xport */
 #define LLB_PIPE_CT_NONE  0
 #define LLB_PIPE_CT_INP   1
 #define LLB_PIPE_CT_EST   2
     __u8            ct_sts;       /* Conntrack state */
     __u8            sel_aid;
-    __u32           res;
 };
 
 struct dp_key_mdi {

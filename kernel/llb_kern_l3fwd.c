@@ -120,7 +120,6 @@ dp_pipe_set_nat(void *ctx, struct xfi *xf,
 {
   xf->pm.nf = do_snat ? LLB_NAT_SRC : LLB_NAT_DST;
   xf->l4m.nxip = na->xip;
-  xf->l4m.nrip = na->rip;
   xf->l4m.nxport = na->xport;
   LL_DBG_PRINTK("[ACL4] NAT ACT %x\n", xf->pm.nf);
 

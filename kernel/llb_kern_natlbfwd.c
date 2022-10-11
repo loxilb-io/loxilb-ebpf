@@ -78,7 +78,8 @@ dp_do_nat4_rule_lkup(void *ctx, struct xfi *xf)
     return 0;
   }
 
-  LL_DBG_PRINTK("[NAT4] action %d pipe %x\n", act->ca.act_type, xf->pm.pipe_act);
+  LL_DBG_PRINTK("[NAT4] action %d pipe %x\n",
+                 act->ca.act_type, xf->pm.pipe_act);
 
   if (act->ca.act_type == DP_SET_SNAT || 
       act->ca.act_type == DP_SET_DNAT) {
@@ -95,7 +96,6 @@ dp_do_nat4_rule_lkup(void *ctx, struct xfi *xf)
       if (nxfrm_act < act + 1) {
         xf->pm.nf = act->ca.act_type == DP_SET_SNAT ? LLB_NAT_SRC : LLB_NAT_DST;
         xf->l4m.nxip = nxfrm_act->nat_xip;
-        xf->l4m.nrip = nxfrm_act->nat_rip;
         xf->l4m.nxport = nxfrm_act->nat_xport;
         xf->l4m.sel_aid = sel;
         xf->pm.rule_id =  act->ca.cidx;
