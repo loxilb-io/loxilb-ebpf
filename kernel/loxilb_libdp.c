@@ -2,7 +2,7 @@
  * loxilb_libdp.c: LoxiLB DP config library 
  * Copyright (C) 2022,  NetLOX <www.netlox.io>
  *
- * SPDX-License-Identifier: Apache-2.0
+ * SPDX-License-Identifier: (GPL-2.0 OR BSD-2-Clause)
  */
 #include <stdio.h>
 #include <stdlib.h>

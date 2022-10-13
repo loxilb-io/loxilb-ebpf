@@ -1,7 +1,7 @@
 /* 
  * Copyright (c) 2022 NetLOX Inc
  *
- * SPDX-License-Identifier: Apache-2.0 
+ * SPDX-License-Identifier: (GPL-2.0 OR BSD-2-Clause) 
  */
 #ifndef __LOXILB_DP_H__
 #define __LOXILB_DP_H__
