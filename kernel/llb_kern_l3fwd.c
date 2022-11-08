@@ -55,8 +55,14 @@ dp_do_rtv4_lkup(void *ctx, struct xfi *xf, void *fa_)
   if (xf->pm.nf & LLB_NAT_DST) {
     *(__u32 *)&key->v4k[2] = xf->l4m.nxip?:xf->l3m.ip.saddr;
   } else {
-    if (xf->pm.nf & LLB_NAT_SRC && xf->l4m.nxip == 0) {
-      *(__u32 *)&key->v4k[2] = xf->l3m.ip.saddr;
+    if (xf->pm.nf & LLB_NAT_SRC) {
+      if (xf->l4m.nrip) {
+        *(__u32 *)&key->v4k[2] = xf->l4m.nrip;
+      } else if (xf->l4m.nxip == 0) {
+        *(__u32 *)&key->v4k[2] = xf->l3m.ip.saddr;
+      } else {
+        *(__u32 *)&key->v4k[2] = xf->l3m.ip.daddr;
+      }
     } else {
       if (xf->tm.new_tunnel_id && xf->tm.tun_type == LLB_TUN_GTP) {
         /* In case of GTP, there is no interface created in OS 
@@ -120,6 +126,7 @@ dp_pipe_set_nat(void *ctx, struct xfi *xf,
 {
   xf->pm.nf = do_snat ? LLB_NAT_SRC : LLB_NAT_DST;
   xf->l4m.nxip = na->xip;
+  xf->l4m.nrip = na->rip;
   xf->l4m.nxport = na->xport;
   LL_DBG_PRINTK("[ACL4] NAT ACT %x\n", xf->pm.nf);
 
