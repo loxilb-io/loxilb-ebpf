@@ -989,6 +989,9 @@ dp_do_dnat(void *ctx, struct xfi *xf, __be32 xip, __be16 xport)
       dp_set_tcp_src_ip(ctx, xf, xf->l3m.ip.daddr);
       dp_set_tcp_dst_ip(ctx, xf, xip);
     } else {
+      if (xf->l4m.nrip) {
+        dp_set_tcp_src_ip(ctx, xf, xf->l4m.nrip);
+      }
       dp_set_tcp_dst_ip(ctx, xf, xip);
     }
     dp_set_tcp_dport(ctx, xf, xport);
@@ -1006,6 +1009,9 @@ dp_do_dnat(void *ctx, struct xfi *xf, __be32 xip, __be16 xport)
       dp_set_udp_src_ip(ctx, xf, xf->l3m.ip.daddr);
       dp_set_udp_dst_ip(ctx, xf, xip);
     } else {
+      if (xf->l4m.nrip) {
+        dp_set_udp_src_ip(ctx, xf, xf->l4m.nrip);
+      }
       dp_set_udp_dst_ip(ctx, xf, xip);
     }
     dp_set_udp_dport(ctx, xf, xport);
@@ -1023,10 +1029,16 @@ dp_do_dnat(void *ctx, struct xfi *xf, __be32 xip, __be16 xport)
       dp_set_sctp_src_ip(ctx, xf, xf->l3m.ip.daddr);
       dp_set_sctp_dst_ip(ctx, xf, xip);
     } else {
+      if (xf->l4m.nrip) {
+        dp_set_sctp_src_ip(ctx, xf, xf->l4m.nrip);
+      }
       dp_set_sctp_dst_ip(ctx, xf, xip);
     }
     dp_set_sctp_dport(ctx, xf, xport);
   } else if (xf->l3m.nw_proto == IPPROTO_ICMP)  {
+    if (xf->l4m.nrip) {
+      dp_set_icmp_src_ip(ctx, xf, xf->l4m.nrip);
+    }
     dp_set_icmp_dst_ip(ctx, xf, xip);
   }
 
@@ -1052,6 +1064,9 @@ dp_do_snat(void *ctx, struct xfi *xf, __be32 xip, __be16 xport)
       dp_set_tcp_dst_ip(ctx, xf, xip);
     } else {
       dp_set_tcp_src_ip(ctx, xf, xip);
+      if (xf->l4m.nrip) {
+        dp_set_tcp_dst_ip(ctx, xf, xf->l4m.nrip);
+      }
     }
     dp_set_tcp_sport(ctx, xf, xport);
   } else if (xf->l3m.nw_proto == IPPROTO_UDP)  {
@@ -1069,6 +1084,9 @@ dp_do_snat(void *ctx, struct xfi *xf, __be32 xip, __be16 xport)
       dp_set_udp_dst_ip(ctx, xf, xip);
     } else {
       dp_set_udp_src_ip(ctx, xf, xip);
+      if (xf->l4m.nrip) {
+        dp_set_udp_dst_ip(ctx, xf, xf->l4m.nrip);
+      }
     }
     dp_set_udp_sport(ctx, xf, xport);
   } else if (xf->l3m.nw_proto == IPPROTO_SCTP)  {
@@ -1086,10 +1104,16 @@ dp_do_snat(void *ctx, struct xfi *xf, __be32 xip, __be16 xport)
       dp_set_sctp_dst_ip(ctx, xf, xip);
     } else {
       dp_set_sctp_src_ip(ctx, xf, xip);
+      if (xf->l4m.nrip) {
+        dp_set_sctp_dst_ip(ctx, xf, xf->l4m.nrip);
+      }
     }
     dp_set_sctp_sport(ctx, xf, xport);
   } else if (xf->l3m.nw_proto == IPPROTO_ICMP)  {
     dp_set_icmp_src_ip(ctx, xf, xip);
+    if (xf->l4m.nrip) {
+      dp_set_icmp_dst_ip(ctx, xf, xf->l4m.nrip);
+    }
   }
 
   return 0;

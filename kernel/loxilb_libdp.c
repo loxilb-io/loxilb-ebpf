@@ -1013,6 +1013,9 @@ ctm_proto_xfk_init(struct dp_ctv4_key *key,
   /* Apply NAT xfrm if needed */
   if (xi->nat_flags & LLB_NAT_DST) {
     xkey->saddr = xi->nat_xip;
+    if (xi->nat_rip) {
+      xkey->daddr = xi->nat_rip;
+    }
     if (key->l4proto != IPPROTO_ICMP) {
         if (xi->nat_xport)
           xkey->sport = xi->nat_xport;
@@ -1020,7 +1023,9 @@ ctm_proto_xfk_init(struct dp_ctv4_key *key,
   }
   if (xi->nat_flags & LLB_NAT_SRC) {
     xkey->daddr = xi->nat_xip;
-
+    if (xi->nat_rip) {
+      xkey->saddr = xi->nat_rip;
+    }
     if (key->l4proto != IPPROTO_ICMP) {
       if (xi->nat_xport)
         xkey->dport = xi->nat_xport;
@@ -1110,6 +1115,7 @@ ll_aclct4_map_ent_has_aged(int tid, void *k, void *ita)
 
     if (ts->state & CT_TCP_FIN_MASK ||
         ts->state & CT_TCP_ERR ||
+        ts->state & CT_TCP_SYNC_MASK ||
         ts->state == CT_TCP_CLOSED) {
       to = CT_TCP_FN_CPTO;
     } else if (ts->state == CT_TCP_EST) {
