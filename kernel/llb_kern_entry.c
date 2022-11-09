@@ -665,6 +665,11 @@ dp_parse_packet(void *md,
             c->type == SCTP_SHUT_COMPLETE) {
           xf->pm.l4fin = 1;
         }
+      } else if (xf->l3m.nw_proto == IPPROTO_ESP ||
+                 xf->l3m.nw_proto == IPPROTO_AH) {
+        /* Let xfrm handle it */
+        LLBS_PPLN_PASS(xf);
+        return 1;
       }
 
       if (ip_is_fragment(iph)) {
