@@ -41,32 +41,34 @@ dp_pipe_set_l32_tun_nh(void *ctx, struct xfi *xf,
   return 0;
 }
 
-static void __always_inline
-dp_rtv4_get_ipkey(struct xfi *xf, uint32_t *ipkey)
+static __u32 __always_inline
+dp_rtv4_get_ipkey(struct xfi *xf)
 {
+  __u32 ipkey;
+
   if (xf->pm.nf & LLB_NAT_DST) {
-    *ipkey = xf->l4m.nxip?:xf->l3m.ip.saddr;
+    ipkey = xf->l4m.nxip?:xf->l3m.ip.saddr;
   } else {
     if (xf->pm.nf & LLB_NAT_SRC) {
       if (xf->l4m.nrip) {
-        *ipkey = xf->l4m.nrip;
+        ipkey = xf->l4m.nrip;
       } else if (xf->l4m.nxip == 0) {
-        *ipkey = xf->l3m.ip.saddr;
+        ipkey = xf->l3m.ip.saddr;
       } else {
-        *ipkey = xf->l3m.ip.daddr;
+        ipkey = xf->l3m.ip.daddr;
       }
     } else {
       if (xf->tm.new_tunnel_id && xf->tm.tun_type == LLB_TUN_GTP) {
         /* In case of GTP, there is no interface created in OS 
          * which has a specific route through it. So, this hack !!
          */
-        *ipkey = xf->tm.tun_rip;
+        ipkey = xf->tm.tun_rip;
       } else {
-        *ipkey = xf->l3m.ip.daddr;
+        ipkey = xf->l3m.ip.daddr;
       }
     }
   }
-  /* Not reached */
+  return ipkey;
 }
 
 static int __always_inline
@@ -80,7 +82,7 @@ dp_do_rtv4_lkup(void *ctx, struct xfi *xf, void *fa_)
   key->v4k[0] = xf->pm.zone >> 8 & 0xff;
   key->v4k[1] = xf->pm.zone & 0xff;
 
-  dp_rtv4_get_ipkey(xf, (__u32 *)&key->v4k[2]);
+  *(__u32 *)&key->v4k[2] = dp_rtv4_get_ipkey(xf);
   
   LL_DBG_PRINTK("[RTFW] --Lookup\n");
   LL_DBG_PRINTK("[RTFW] Zone %d 0x%x\n",
