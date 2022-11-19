@@ -71,6 +71,7 @@ struct dp_pi_mdi {
 #define LLB_XDP_RT_HIT        0x8
 #define LLB_DP_FC_HIT         0x10
 #define LLB_DP_SESS_HIT       0x20
+#define LLB_DP_RES_HIT        0x40
     __u8             phit;
 #define LLB_DP_PORT_UPP       0x1
     __u8             pprop;
