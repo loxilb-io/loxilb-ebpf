@@ -469,8 +469,12 @@ dp_ing_slow_main(void *ctx,  struct xfi *xf)
     dp_insert_fcv4(ctx, xf, fa);
   }
 #endif
+
 out:
-  return dp_pipe_check_res(ctx, xf, fa);
+  xf->pm.phit |= LLB_DP_RES_HIT;
+
+  bpf_tail_call(ctx, &pgm_tbl, LLB_DP_CT_PGM_ID);
+  return DP_PASS;
 }
 
 static int __always_inline
@@ -483,6 +487,10 @@ dp_ing_ct_main(void *ctx,  struct xfi *xf)
   fa = bpf_map_lookup_elem(&fcas, &val);
   if (!fa) return DP_DROP;
 #endif
+
+  if (xf->pm.phit & LLB_DP_RES_HIT) {
+    return dp_pipe_check_res(ctx, xf, fa);
+  }
 
   /* If ACL is hit, and packet arrives here 
    * it only means that we need CT processing.

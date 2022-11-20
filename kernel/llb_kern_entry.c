@@ -869,15 +869,18 @@ int tc_packet_func_fast(struct __sk_buff *md)
 SEC("tc_packet_hook1")
 int tc_packet_func(struct __sk_buff *md)
 {
-  struct xfi xf;
+  int val = 0;
+  struct xfi *xf;
 
-  // FIXME need to optimize this madness
-  // But we cant use xf metadata from first stage 
-  // pipeline due to the way fc stage works
-  memset(&xf, 0, sizeof xf);
+  xf = bpf_map_lookup_elem(&xfis, &val);
+  if (!xf) {
+    return DP_DROP;
+  }
 
-  xf.pm.tc = 1;
-  return dp_ing_pkt_main(md, &xf);
+  memset(xf, 0, sizeof(*xf));
+
+  xf->pm.tc = 1;
+  return dp_ing_pkt_main(md, xf);
 }
 
 SEC("tc_packet_hook2")
