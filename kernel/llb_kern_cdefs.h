@@ -2,7 +2,7 @@
  *  llb_dp_cdefs.h: Loxilb eBPF/XDP utility functions 
  *  Copyright (C) 2022,  NetLOX <www.netlox.io>
  * 
- * SPDX-License-Identifier: GPL-2.0
+ * SPDX-License-Identifier: (GPL-2.0 OR BSD-2-Clause)
  */
 #ifndef __LLB_DP_CDEFS_H__
 #define __LLB_DP_CDEFS_H__

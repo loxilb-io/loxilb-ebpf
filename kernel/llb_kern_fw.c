@@ -2,7 +2,7 @@
  *  llb_kern_fw.c: LoxiLB Kernel eBPF firewall Implementation
  *  Copyright (C) 2022,  NetLOX <www.netlox.io>
  * 
- * SPDX-License-Identifier: GPL-2.0
+ * SPDX-License-Identifier: (GPL-2.0 OR BSD-2-Clause)
  */
 
 static int __always_inline

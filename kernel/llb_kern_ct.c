@@ -2,7 +2,7 @@
  *  llb_kern_ct.c: Loxilb kernel eBPF ConnTracking Implementation
  *  Copyright (C) 2022,  NetLOX <www.netlox.io>
  * 
- * SPDX-License-Identifier: GPL-2.0
+ * SPDX-License-Identifier: (GPL-2.0 OR BSD-2-Clause)
  */
 
 #define CT_CTR_SID      (0)

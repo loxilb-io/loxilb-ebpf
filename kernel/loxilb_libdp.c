@@ -515,6 +515,10 @@ llb_xh_init(llb_dp_struct_t *xh)
   xh->maps[LL_DP_SESS4_STATS_MAP].pbs = calloc(LLB_SESS_MAP_ENTRIES,
                                             sizeof(struct dp_pbc_stats));
 
+  xh->maps[LL_DP_FW4_MAP].map_name = "fw_v4_map";
+  xh->maps[LL_DP_FW4_MAP].has_pb   = 0;
+  xh->maps[LL_DP_FW4_MAP].max_entries = LLB_FW4_MAP_ENTRIES;
+
   strcpy(xh->psecs[0].name, LLB_SECTION_PASS);
   strcpy(xh->psecs[1].name, XDP_LL_SEC_DEFAULT);
   xh->psecs[1].setup = llb_dflt_sec_map2fd_all;

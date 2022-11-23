@@ -2,7 +2,7 @@
  *  llb_kern_fc.c: LoxiLB kernel cache based forwarding
  *  Copyright (C) 2022,  NetLOX <www.netlox.io>
  * 
- * SPDX-License-Identifier: GPL-2.0
+ * SPDX-License-Identifier: (GPL-2.0 OR BSD-2-Clause)
  */
 static int  __always_inline
 dp_mk_fcv4_key(struct xfi *xf, struct dp_fcv4_key *key)

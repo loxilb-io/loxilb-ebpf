@@ -2,7 +2,7 @@
  *  llb_kern_nat.c: LoxiLB Kernel eBPF Stateful NAT/LB Processing
  *  Copyright (C) 2022,  NetLOX <www.netlox.io>
  * 
- * SPDX-License-Identifier: GPL-2.0
+ * SPDX-License-Identifier: (GPL-2.0 OR BSD-2-Clause)
  */
 static int __always_inline
 dp_sel_nat_ep(void *ctx, struct dp_natv4_tacts *act)

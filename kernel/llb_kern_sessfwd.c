@@ -2,7 +2,7 @@
  *  llb_kern_sess.c: LoxiLB kernel eBPF Subscriber Session Implementation
  *  Copyright (C) 2022,  NetLOX <www.netlox.io>
  * 
- * SPDX-License-Identifier: GPL-2.0 
+ * SPDX-License-Identifier: (GPL-2.0 OR BSD-2-Clause)
  */
 #include <linux/bpf.h>
 #include <linux/in.h>

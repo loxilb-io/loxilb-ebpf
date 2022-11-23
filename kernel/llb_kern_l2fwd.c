@@ -2,7 +2,7 @@
  *  llb_kern_l2fwd.c: LoxiLB kernel eBPF L2 forwarder Implementation
  *  Copyright (C) 2022,  NetLOX <www.netlox.io>
  * 
- * SPDX-License-Identifier: GPL-2.0
+ * SPDX-License-Identifier: (GPL-2.0 OR BSD-2-Clause)
  */
 static int __always_inline
 dp_do_smac_lkup(void *ctx, struct xfi *xf, void *fc)

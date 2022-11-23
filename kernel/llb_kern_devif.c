@@ -2,7 +2,7 @@
  *  llb_kernel_devif.c: LoxiLB kernel eBPF dev in/out pipeline
  *  Copyright (C) 2022,  NetLOX <www.netlox.io>
  * 
- * SPDX-License-Identifier: GPL-2.0
+ * SPDX-License-Identifier: (GPL-2.0 OR BSD-2-Clause)
  */
 static int __always_inline
 dp_do_if_lkup(void *ctx, struct xfi *xf)
