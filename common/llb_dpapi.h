@@ -39,6 +39,7 @@
 #define LLB_PSECS             (8)
 #define LLB_MAX_NXFRMS        (16)
 
+#define LLB_DP_FW_PGM_ID       (3)
 #define LLB_DP_CT_PGM_ID       (2)
 #define LLB_DP_PKT_SLOW_PGM_ID (1)
 #define LLB_DP_PKT_PGM_ID      (0)
@@ -88,6 +89,7 @@ enum llb_dp_tid {
   LL_DP_SESS4_MAP,
   LL_DP_SESS4_STATS_MAP,
   LL_DP_FW4_MAP,
+  LL_DP_FW4_STATS_MAP,
   LL_DP_MAX_MAP
 };
 
@@ -606,10 +608,23 @@ struct dp_ctv4_key {
   __u8  r;
 };
 
+struct dp_fwv4_tact {
+  struct dp_cmn_act ca; /* Possible actions :
+                         *  DP_SET_DROP
+                         *  DP_SET_TOCP
+                         *  DP_SET_NOP
+                         *  DP_SET_RDR_PORT
+                         */
+  union {
+    struct dp_rdr_act port_act;
+    struct dp_nat_act nat_act;
+  };
+};
+
 struct dp_fwv4_ent {
 	struct dp_ctv4_key v;
   struct dp_ctv4_key m;
-  struct dp_aclv4_tact fwa;
+  struct dp_fwv4_tact fwa;
 };
 
 struct dp_natv4_key {

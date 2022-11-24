@@ -244,6 +244,8 @@ llb_dflt_sec_map2fd_all(struct bpf_object *bpf_obj)
           key = 1;
         } else  if (strcmp(section, "tc_packet_hook2") == 0) {
           key = 2;
+        } else  if (strcmp(section, "tc_packet_hook3") == 0) {
+          key = 3;
         } else key = -1;
         if (key >= 0) {
           bpf_map_update_elem(fd, &key, &bfd, BPF_ANY);
@@ -516,8 +518,15 @@ llb_xh_init(llb_dp_struct_t *xh)
                                             sizeof(struct dp_pbc_stats));
 
   xh->maps[LL_DP_FW4_MAP].map_name = "fw_v4_map";
-  xh->maps[LL_DP_FW4_MAP].has_pb   = 0;
+  xh->maps[LL_DP_FW4_MAP].has_pb   = 1;
+  xh->maps[LL_DP_FW4_MAP].pb_xtid  = LL_DP_FW4_STATS_MAP;
   xh->maps[LL_DP_FW4_MAP].max_entries = LLB_FW4_MAP_ENTRIES;
+
+  xh->maps[LL_DP_FW4_STATS_MAP].map_name = "fw_v4_stats_map";
+  xh->maps[LL_DP_FW4_STATS_MAP].has_pb   = 1;
+  xh->maps[LL_DP_FW4_STATS_MAP].max_entries = LLB_FW4_MAP_ENTRIES;
+  xh->maps[LL_DP_FW4_STATS_MAP].pbs = calloc(LLB_FW4_MAP_ENTRIES,
+                                            sizeof(struct dp_pbc_stats));
 
   strcpy(xh->psecs[0].name, LLB_SECTION_PASS);
   strcpy(xh->psecs[1].name, XDP_LL_SEC_DEFAULT);

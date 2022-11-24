@@ -268,7 +268,14 @@ struct bpf_map_def SEC("maps") fc_v4_stats_map = {
 struct bpf_map_def SEC("maps") fw_v4_map = {
   .type = BPF_MAP_TYPE_ARRAY,
   .key_size = sizeof(__u32),
-  .value_size = sizeof(struct dp_aclv4_tact),
+  .value_size = sizeof(struct dp_fwv4_ent),
+  .max_entries = LLB_FW4_MAP_ENTRIES
+};
+
+struct bpf_map_def SEC("maps") fw_v4_stats_map = {
+  .type = BPF_MAP_TYPE_PERCPU_ARRAY,
+  .key_size = sizeof(__u32),  /* Counter Index */
+  .value_size = sizeof(struct dp_pb_stats),
   .max_entries = LLB_FW4_MAP_ENTRIES
 };
 
@@ -529,9 +536,16 @@ struct {
 struct {
         __uint(type,        BPF_MAP_TYPE_ARRAY);
         __type(key,         __u32);
-        __type(value,       struct dp_aclv4_tact);
+        __type(value,       struct dp_fwv4_ent);
         __uint(max_entries, LLB_FW4_MAP_ENTRIES);
 } fw_v4_map SEC(".maps");
+
+struct {
+        __uint(type,        BPF_MAP_TYPE_PERCPU_ARRAY);
+        __type(key,         __u32);
+        __type(value,       struct dp_pb_stats);
+        __uint(max_entries, LLB_FW4_MAP_ENTRIES);
+} fw_v4_stats_map SEC(".maps");
 
 struct {
         __uint(type,        BPF_MAP_TYPE_PROG_ARRAY);

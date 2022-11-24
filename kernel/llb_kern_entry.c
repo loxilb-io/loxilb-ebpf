@@ -17,6 +17,7 @@
 #include "llb_kern_cdefs.h"
 #include "llb_kern_policer.c"
 #include "llb_kern_sessfwd.c"
+#include "llb_kern_fw.c"
 #include "llb_kern_ct.c"
 #include "llb_kern_natlbfwd.c"
 #include "llb_kern_l3fwd.c"
@@ -896,5 +897,21 @@ int tc_packet_func_slow(struct __sk_buff *md)
 
   return dp_ing_ct_main(md, xf);
 }
+
+
+SEC("tc_packet_hook3")
+int tc_packet_func_fw(struct __sk_buff *md)
+{
+  int val = 0;
+  struct xfi *xf;
+
+  xf = bpf_map_lookup_elem(&xfis, &val);
+  if (!xf) {
+    return DP_DROP;
+  }
+
+  return dp_do_fw_main(md, xf);
+}
+
 
 #endif

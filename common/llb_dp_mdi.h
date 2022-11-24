@@ -60,6 +60,7 @@ struct dp_pi_mdi {
 #define LLB_PIPE_RC_PARSER    0x1
 #define LLB_PIPE_RC_ACL_MISS  0x2
 #define LLB_PIPE_RC_TUN_DECAP 0x4 
+#define LLB_PIPE_RC_FW_RDR    0x8 
     __u8             rcode;
     __u8             tc;
     __u8             l3_off;
@@ -106,7 +107,7 @@ struct dp_pi_mdi {
     __u8             il4fin:4;
     __u16            l3_len;
     __u16            tun_off;
-    __u16            fw_id;
+    __u16            fw_mid;
     __u16            fw_lid;
     __u32            xfrm_mark;
 }__attribute__((packed));

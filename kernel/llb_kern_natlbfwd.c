@@ -111,5 +111,5 @@ dp_do_nat4_rule_lkup(void *ctx, struct xfi *xf)
     LLBS_PPLN_DROP(xf);
   }
 
-  return 0;
+  return 1;
 }
