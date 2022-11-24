@@ -5,7 +5,7 @@
  * SPDX-License-Identifier: (GPL-2.0 OR BSD-2-Clause)
  */
 
-#define DP_MAX_LOOPS_PER_FWLKUP (10)
+#define DP_MAX_LOOPS_PER_FWLKUP (1000)
 
 #define RETURN_TO_MP() bpf_tail_call(ctx, &pgm_tbl, LLB_DP_CT_PGM_ID)
 
@@ -15,19 +15,24 @@ dp_do_fw4_main(void *ctx, struct xfi *xf)
   __u32 idx = 0;
   int i = 0;
   struct dp_fwv4_ent *fwe;
-  struct dp_ctv4_key key;
+  struct dp_fwv4_key key;
   struct dp_fwv4_tact *act = NULL;
 
+  key.inport = xf->pm.iport;
+  key.zone = xf->pm.zone;
+  key.bd = xf->pm.bd;
+  key.oport = xf->pm.oport;
   key.daddr = xf->l3m.ip.daddr;
   key.saddr = xf->l3m.ip.saddr;
   key.sport = xf->l3m.source;
   key.dport = xf->l3m.dest;
   key.l4proto = xf->l3m.nw_proto;
-  key.zone = xf->pm.zone;
-  key.r = 0;
+  key.nr = 0;
+  key.res = 0;
 
   LL_DBG_PRINTK("[FW4] -- Lookup\n");
   LL_DBG_PRINTK("[FW4] key-sz %d\n", sizeof(key));
+  LL_DBG_PRINTK("[FW4] port %x\n", key.inport);
   LL_DBG_PRINTK("[FW4] daddr %x\n", key.daddr);
   LL_DBG_PRINTK("[FW4] saddr %d\n", key.saddr);
   LL_DBG_PRINTK("[FW4] sport %d\n", key.sport);
@@ -49,10 +54,11 @@ dp_do_fw4_main(void *ctx, struct xfi *xf)
       return DP_DROP;
     } else {
       if (idx == 0) {
-        xf->pm.fw_mid = fwe->v.r;
+        xf->pm.fw_mid = fwe->v.nr;
       }
 
       if (fwe->v.zone != 0 && 
+        (key.inport & fwe->m.inport) == fwe->v.inport &&
         (key.daddr & fwe->m.daddr) == fwe->v.daddr &&
         (key.saddr & fwe->m.saddr) == fwe->v.saddr &&
         (key.sport & fwe->m.sport) == fwe->v.sport &&
