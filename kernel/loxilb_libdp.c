@@ -81,6 +81,8 @@ typedef struct llb_dp_struct
   llb_dp_map_t maps[LL_DP_MAX_MAP];
   llb_dp_link_t links[LLB_INTERFACES];
   llb_dp_sect_t psecs[LLB_PSECS];
+  struct pdi_map *ufw4;
+  struct pdi_map *ufw6;
 } llb_dp_struct_t;
 
 #define XH_LOCK()    pthread_rwlock_wrlock(&xh->lock)
@@ -532,6 +534,12 @@ llb_xh_init(llb_dp_struct_t *xh)
   strcpy(xh->psecs[1].name, XDP_LL_SEC_DEFAULT);
   xh->psecs[1].setup = llb_dflt_sec_map2fd_all;
 
+  xh->ufw4 = pdi_map_alloc("ufw4", NULL, NULL);
+  assert(xh->ufw4);
+
+  xh->ufw6 = pdi_map_alloc("ufw6", NULL, NULL);
+  assert(xh->ufw6);
+
   if (llb_mgmt_ch_init(xh) != 0) {
     assert(0);
   }
@@ -830,6 +838,132 @@ llb_add_map_elem_nat4_post_proc(void *k, void *v)
 
 }
 
+static void
+llb_dp_pdik2_ufw4(struct pdi_rule *new, struct dp_fwv4_ent *e) 
+{
+  memset(&e->v, 0, sizeof(struct dp_fwv4_key));
+  memset(&e->m, 0, sizeof(struct dp_fwv4_key));
+
+  e->v.daddr = htonl(new->key.dest.val);
+  e->m.daddr = htonl(new->key.dest.valid);
+
+  e->v.saddr = htonl(new->key.source.val);
+  e->m.saddr = htonl(new->key.source.valid);
+
+  e->v.sport = htons(new->key.sport.u.v.val);
+  e->m.sport = htons(new->key.sport.u.v.valid);
+
+  e->v.dport = htons(new->key.dport.u.v.val);
+  e->m.dport = htons(new->key.dport.u.v.valid);
+
+  e->v.inport = htons(new->key.inport.val);
+  e->m.inport = htons(new->key.inport.valid);
+
+  e->v.l4proto = (new->key.protocol.val);
+  e->m.l4proto = (new->key.protocol.valid);
+
+  e->v.zone = 1;
+  e->m.zone = 0xffff;
+}
+
+static void
+llb_dp_ufw42_pdik(struct pdi_rule *new, struct dp_fwv4_ent *e) 
+{
+  PDI_MATCH_INIT(&new->key.dest, htonl(e->v.daddr), htonl(e->m.daddr));
+  PDI_MATCH_INIT(&new->key.source, htonl(e->v.saddr), htonl(e->m.saddr));
+  PDI_RMATCH_INIT(&new->key.sport, 0, htons(e->v.sport), htons(e->m.sport));
+  PDI_RMATCH_INIT(&new->key.dport, 0, htons(e->v.dport), htons(e->m.dport));
+  PDI_MATCH_INIT(&new->key.inport, htons(e->v.inport), htons(e->m.inport));
+  PDI_MATCH_INIT(&new->key.protocol, e->v.l4proto, e->m.l4proto);
+}
+
+static void
+llb_dp_pdiop2_ufw4(struct pdi_rule *new, struct dp_fwv4_ent *e) 
+{
+  memset(&e->fwa, 0, sizeof(e->fwa));
+  e->fwa.ca.cidx = new->data.rid;
+
+  switch (new->data.op) {
+  case PDI_SET_DROP:
+    e->fwa.ca.act_type = DP_SET_DROP;
+    break;
+  case PDI_SET_TRAP:
+    e->fwa.ca.act_type = DP_SET_TOCP;
+    break;
+  case DP_SET_RDR_PORT:
+    e->fwa.ca.act_type = DP_SET_RDR_PORT;
+    e->fwa.port_act.oport = new->data.opts.port;
+    break;
+  default:
+    break;
+  }
+}
+
+static void
+llb_dp_ufw42_pdiop(struct pdi_rule *new, struct dp_fwv4_ent *e) 
+{
+  new->data.rid = e->fwa.ca.cidx;
+  new->data.pref = e->v.res; // overloaded for prio(max 255)
+
+  switch (e->fwa.ca.act_type) {
+  case DP_SET_DROP:
+    new->data.op = PDI_SET_DROP;
+    break;
+  case DP_SET_TOCP:
+    new->data.op = PDI_SET_TRAP;
+    break;
+  case DP_SET_RDR_PORT:
+    new->data.op = PDI_SET_FWD;
+    new->data.opts.port = e->fwa.port_act.oport;
+  default:
+    break; 
+  }
+}
+
+int
+llb_add_mf_map_elem__(int tbl, void *k, void *v)
+{
+  int ret = 0;
+  int n = 0;
+  int nr = 0;
+  struct dp_fwv4_ent p = { 0 };
+
+  if (tbl == LL_DP_FW4_MAP) {
+    struct dp_fwv4_ent *e = k;
+    struct pdi_rule *new = calloc(1, sizeof(struct pdi_rule));
+    
+    if (!new) return -1;
+
+    llb_dp_ufw42_pdik(new, e);
+    llb_dp_ufw42_pdiop(new, e) ;
+
+    ret = pdi_rule_insert(xh->ufw4, new, &nr);
+    if (ret != 0) {
+      free(new);
+      return -1;
+    }
+
+    PDI_MAP_LOCK(xh->ufw4);
+    FOR_EACH_PDI_ENT(xh->ufw4, new) {
+      if (n == 0 || n >= nr) {
+        memset(&p, 0, sizeof(p));
+        llb_dp_pdik2_ufw4(new, &p);
+        llb_dp_pdiop2_ufw4(new, &p);
+        if (n == 0) {
+          p.v.nr = xh->ufw4->nr;
+        }
+        ret = bpf_map_update_elem(llb_map2fd(tbl), &n, &p, 0);
+        if (ret != 0) {
+          ret = -EFAULT;
+        }
+      }  
+      n++;
+    }
+    PDI_MAP_ULOCK(xh->ufw4);
+  }
+  return ret;
+}
+
 int
 llb_add_map_elem(int tbl, void *k, void *v)
 {
@@ -844,11 +978,17 @@ llb_add_map_elem(int tbl, void *k, void *v)
   if (tbl == LL_DP_NAT4_MAP ||
       tbl == LL_DP_TMAC_MAP ||
       tbl == LL_DP_TMAC_MAP ||
+      tbl == LL_DP_FW4_MAP  ||
       tbl == LL_DP_RTV4_MAP) {
     struct dp_cmn_act *ca = v;
     llb_clear_map_stats(tbl, ca->cidx);
   }
-  ret = bpf_map_update_elem(llb_map2fd(tbl), k, v, 0);
+
+  if (tbl == LL_DP_FW4_MAP) {
+    ret = llb_add_mf_map_elem__(tbl, k, v);
+  } else {
+    ret = bpf_map_update_elem(llb_map2fd(tbl), k, v, 0);
+  }
   if (ret != 0) {
     ret = -EFAULT;
   } else {
@@ -903,6 +1043,58 @@ llb_del_map_elem_with_cidx(int tbl, uint32_t cidx)
   llb_map_loop_and_delete(tbl, ll_map_elem_cmp_cidx, &it);
 }
 
+int 
+llb_del_mf_map_elem__(int tbl, void *k)
+{
+  int ret = 0;
+  int n = 0;
+  int nr = 0;
+  struct dp_fwv4_ent p = { 0 };
+
+  if (tbl == LL_DP_FW4_MAP) {
+    struct dp_fwv4_ent *e = k;
+    struct pdi_rule *new = calloc(1, sizeof(struct pdi_rule));
+    
+    if (!new) return -1;
+
+    llb_dp_ufw42_pdik(new, e);
+    llb_dp_ufw42_pdiop(new, e) ;
+
+    ret = pdi_rule_delete(xh->ufw4, &new->key, new->data.pref, &nr);
+    if (ret != 0) {
+      free(new);
+      return -1;
+    }
+
+    free(new);
+
+    PDI_MAP_LOCK(xh->ufw4);
+    FOR_EACH_PDI_ENT(xh->ufw4, new) {
+      if (n == 0 || n >= nr) {
+        memset(&p, 0, sizeof(p));
+        llb_dp_pdik2_ufw4(new, &p);
+        llb_dp_pdiop2_ufw4(new, &p);
+        if (n == 0) {
+          p.v.nr = xh->ufw4->nr;
+        }
+        ret = bpf_map_update_elem(llb_map2fd(tbl), &n, &p, 0);
+        if (ret != 0) {
+          ret = -EFAULT;
+        }
+      }
+      n++;
+    }
+    PDI_MAP_ULOCK(xh->ufw4);
+
+    while (n < LLB_FW4_MAP_ENTRIES) {
+      memset(&p, 0, sizeof(p));
+      bpf_map_update_elem(llb_map2fd(tbl), &n, &p, 0);
+      n++;
+    }
+  }
+  return ret;
+}
+
 int
 llb_del_map_elem(int tbl, void *k)
 {
@@ -925,7 +1117,11 @@ llb_del_map_elem(int tbl, void *k)
     cidx = t.ca.cidx;
   }
   
-  ret = bpf_map_delete_elem(llb_map2fd(tbl), k);
+  if (tbl == LL_DP_FW4_MAP) {
+    ret = llb_del_mf_map_elem__(tbl, k);
+  } else {
+    ret = bpf_map_delete_elem(llb_map2fd(tbl), k);
+  }
   if (ret != 0) {
     ret = -EFAULT;
   }

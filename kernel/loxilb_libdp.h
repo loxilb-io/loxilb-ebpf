@@ -45,6 +45,7 @@ enum llb_bpf_mnt_type {
 #include "../common/common_libbpf.h"
 #include "../common/llb_dpapi.h"
 #include "../common/llb_dp_mdi.h"
+#include "../common/pdi.h"
 
 unsigned long long get_os_usecs(void);
 

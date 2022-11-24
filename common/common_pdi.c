@@ -9,15 +9,21 @@
 #include <pthread.h>
 #include <linux/types.h>
 #include <arpa/inet.h>
-#include "uthash.h"
 #include "pdi.h"
 
 struct pdi_map *
-pdi_map_alloc(pdi_add_map_op_t add_map, pdi_del_map_op_t del_map)
+pdi_map_alloc(const char *name, pdi_add_map_op_t add_map, pdi_del_map_op_t del_map)
 {
   struct pdi_map *map = calloc(1, sizeof(struct pdi_map));
-  map->pdi_add_map = add_map;
-  map->pdi_del_map = del_map;
+
+  if (name) {
+    strncpy(map->name, name, PDI_MAP_NAME_LEN);
+    map->name[PDI_MAP_NAME_LEN-1] = '\0'; 
+  } else {
+    strncpy(map->name, "default", PDI_MAP_NAME_LEN);
+  }
+  map->pdi_add_map_em = add_map;
+  map->pdi_del_map_em = del_map;
 
   return map;
 }
@@ -31,7 +37,7 @@ pdi_key2str(struct pdi_key *key, char *fstr)
   PDI_MATCH_PRINT(&key->source, "source", fstr, l, none);
   PDI_RMATCH_PRINT(&key->dport, "dport", fstr, l, none);
   PDI_RMATCH_PRINT(&key->dport, "sport", fstr, l, none);
-  PDI_MATCH_PRINT(&key->qos, "qos", fstr, l, none);
+  PDI_MATCH_PRINT(&key->inport, "inport", fstr, l, none);
   PDI_MATCH_PRINT(&key->protocol, "prot", fstr, l, none);
   PDI_MATCH_PRINT(&key->dir, "dir", fstr, l, none);
   PDI_MATCH_PRINT(&key->ident, "ident", fstr, l, none);
@@ -62,11 +68,13 @@ pdi_rules2str(struct pdi_map *map)
 }
 
 int
-pdi_rule_insert(struct pdi_map *map, struct pdi_rule *new)
+pdi_rule_insert(struct pdi_map *map, struct pdi_rule *new, int *nr)
 {
   struct pdi_rule *prev =  NULL;
   struct pdi_rule *node;
   uint32_t pref = new->data.pref;
+
+  if (nr) *nr = 0;
 
   PDI_MAP_LOCK(map);
 
@@ -82,6 +90,7 @@ pdi_rule_insert(struct pdi_map *map, struct pdi_rule *new)
         new->next = node;
       }
 
+      map->nr++;
       PDI_MAP_ULOCK(map);
       return 0;
     }
@@ -94,6 +103,9 @@ pdi_rule_insert(struct pdi_map *map, struct pdi_rule *new)
     }
     prev = node;
     node = node->next;
+    if (nr) {
+      *nr = *nr + 1;;
+    }
   }
 
   if (prev) {
@@ -103,6 +115,7 @@ pdi_rule_insert(struct pdi_map *map, struct pdi_rule *new)
     map->head = new;
     new->next = node;
   }
+  map->nr++;
 
   PDI_MAP_ULOCK(map);
 
@@ -110,7 +123,7 @@ pdi_rule_insert(struct pdi_map *map, struct pdi_rule *new)
 }
 
 struct pdi_rule *
-pdi_rule_delete__(struct pdi_map *map, struct pdi_key *key, uint32_t pref)
+pdi_rule_delete__(struct pdi_map *map, struct pdi_key *key, uint32_t pref, int *nr)
 {
   struct pdi_rule *prev =  NULL;
   struct pdi_rule *node;
@@ -130,27 +143,30 @@ pdi_rule_delete__(struct pdi_map *map, struct pdi_key *key, uint32_t pref)
     }
     prev = node;
     node = node->next;
+    if (nr) {
+      *nr = *nr + 1;
+    }
   }
 
   return NULL;
 }
 
 int
-pdi_rule_delete(struct pdi_map *map, struct pdi_key *key, uint32_t pref)
+pdi_rule_delete(struct pdi_map *map, struct pdi_key *key, uint32_t pref, int *nr)
 {
   struct pdi_rule *node = NULL;
   struct pdi_val *val, *tmp;
 
   PDI_MAP_LOCK(map);
 
-  node = pdi_rule_delete__(map, key, pref);
+  node = pdi_rule_delete__(map, key, pref, nr);
   if (node != NULL) {
     printf("Deleting....\n");
     pdi_rule2str(node);
     HASH_ITER(hh, node->hash, val, tmp) {
       HASH_DEL(node->hash, val);
-      if (map->pdi_del_map) {
-        map->pdi_del_map(&val->val);
+      if (map->pdi_del_map_em) {
+        map->pdi_del_map_em(&val->val);
       }
       free(val);
       printf("Hash del\n");
@@ -196,8 +212,8 @@ pdi_add_val(struct pdi_map *map, struct pdi_key *kval)
     HASH_FIND(hh, rule->hash, kval, sizeof(struct pdi_key), hval);
     if (hval) {
       printf("hval exists\n");
-      if (map->pdi_add_map) {
-        map->pdi_add_map(kval, &rule->data, sizeof(rule->data));
+      if (map->pdi_add_map_em) {
+        map->pdi_add_map_em(kval, &rule->data, sizeof(rule->data));
       }
       PDI_MAP_ULOCK(map);
       return -EEXIST;
@@ -267,8 +283,8 @@ pdi_map_run(struct pdi_map *map)
     HASH_ITER(hh, node->hash, val, tmp) {
       if (pdi_val_expired(val)) {
         HASH_DEL(node->hash, val);
-        if (map->pdi_del_map) {
-          map->pdi_del_map(&val->val);
+        if (map->pdi_del_map_em) {
+          map->pdi_del_map_em(&val->val);
         }
         pdi_key2str(&val->val, fmtstr);
         printf("Expired entry %s\n", fmtstr);
@@ -286,13 +302,13 @@ pdi_unit_test(void)
   struct pdi_map *map;
   int r = 0;
 
-  map = pdi_map_alloc(NULL, NULL);
+  map = pdi_map_alloc("ufw4", NULL, NULL);
 
   struct pdi_rule *new = calloc(1, sizeof(struct pdi_rule));
   if (new) {
     PDI_MATCH_INIT(&new->key.dest, 0x0a0a0a0a, 0xffffff00);
     PDI_RMATCH_INIT(&new->key.dport, 1, 100, 200); 
-    r = pdi_rule_insert(map, new);
+    r = pdi_rule_insert(map, new, NULL);
     if (r != 0) {
       printf("Insert fail1\n");
       exit(0);
@@ -304,7 +320,7 @@ pdi_unit_test(void)
   if (new1) {
     memcpy(new1, new, sizeof(*new));
     new1->data.pref = 100;
-    r = pdi_rule_insert(map, new1);
+    r = pdi_rule_insert(map, new1, NULL);
     if (r != 0) {
      printf("Insert fail2\n");
      exit(0);
@@ -316,20 +332,20 @@ pdi_unit_test(void)
   if (new2) {
     PDI_MATCH_INIT(&new2->key.dest, 0x0a0a0a0a, 0xffffff00);
     PDI_RMATCH_INIT(&new2->key.dport, 0, 100, 0xffff); 
-    r = pdi_rule_insert(map, new2);
+    r = pdi_rule_insert(map, new2, NULL);
     if (r != 0) {
       printf("Insert fail3\n");
       exit(0);
     }
 
-    r = pdi_rule_insert(map, new2);
+    r = pdi_rule_insert(map, new2, NULL);
     if (r == 0) {
       printf("Insert fail4\n");
       exit(0);
     }
   }
 
-  if (pdi_rule_delete(map, &new1->key, 100) != 0) {
+  if (pdi_rule_delete(map, &new1->key, 100, NULL) != 0) {
     // Free //
     printf("Delete fail4\n");
     exit(0);
@@ -341,7 +357,7 @@ pdi_unit_test(void)
     PDI_MATCH_INIT(&new4->key.source, 0x0b0b0b00, 0xffffff00);
     PDI_RMATCH_INIT(&new4->key.dport, 1, 500, 600); 
     PDI_RMATCH_INIT(&new4->key.sport, 1, 500, 600); 
-    r = pdi_rule_insert(map, new4);
+    r = pdi_rule_insert(map, new4, NULL);
     if (r != 0) {
       printf("Insert fail1\n");
       exit(0);
@@ -372,7 +388,7 @@ pdi_unit_test(void)
     }
   }
 
-  if (pdi_rule_delete(map, &new4->key, 0) != 0) {
+  if (pdi_rule_delete(map, &new4->key, 0, NULL) != 0) {
      printf("Failed delete--%d\n", __LINE__);
   }
 
