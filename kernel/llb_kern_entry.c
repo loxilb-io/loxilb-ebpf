@@ -12,6 +12,7 @@
 #include <bpf/bpf_endian.h>
 
 #include "../common/parsing_helpers.h"
+#include "../common/common_pdi.h"
 #include "../common/llb_dpapi.h"
 
 #include "llb_kern_cdefs.h"

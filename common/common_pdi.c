@@ -39,8 +39,8 @@ pdi_key2str(struct pdi_key *key, char *fstr)
   PDI_RMATCH_PRINT(&key->dport, "sport", fstr, l, none);
   PDI_MATCH_PRINT(&key->inport, "inport", fstr, l, none);
   PDI_MATCH_PRINT(&key->protocol, "prot", fstr, l, none);
-  PDI_MATCH_PRINT(&key->dir, "dir", fstr, l, none);
-  PDI_MATCH_PRINT(&key->ident, "ident", fstr, l, none);
+  PDI_MATCH_PRINT(&key->zone, "zone", fstr, l, none);
+  PDI_MATCH_PRINT(&key->bd, "bd", fstr, l, none);
 }
 
 void
@@ -138,6 +138,7 @@ pdi_rule_delete__(struct pdi_map *map, struct pdi_key *key, uint32_t pref, int *
         } else {
           map->head = node->next;
         }
+        map->nr--;
         return node;
       } 
     }
@@ -161,7 +162,6 @@ pdi_rule_delete(struct pdi_map *map, struct pdi_key *key, uint32_t pref, int *nr
 
   node = pdi_rule_delete__(map, key, pref, nr);
   if (node != NULL) {
-    printf("Deleting....\n");
     pdi_rule2str(node);
     HASH_ITER(hh, node->hash, val, tmp) {
       HASH_DEL(node->hash, val);

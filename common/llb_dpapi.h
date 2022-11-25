@@ -621,25 +621,8 @@ struct dp_fwv4_tact {
   };
 };
 
-struct dp_fwv4_key {
-  __u32 daddr;
-  __u32 saddr;
-
-  __u16 sport;
-  __u16 dport;
-  __u16 inport;
-  __u16 zone;
-
-  __u16 nr; 
-  __u16 bd;
-  __u16 oport;
-  __u8  l4proto;
-  __u8  res;
-};
-
 struct dp_fwv4_ent {
-	struct dp_fwv4_key v;
-  struct dp_fwv4_key m;
+	struct pdi_key k;
   struct dp_fwv4_tact fwa;
 };
 

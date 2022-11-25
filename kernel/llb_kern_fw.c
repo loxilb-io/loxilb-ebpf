@@ -5,9 +5,20 @@
  * SPDX-License-Identifier: (GPL-2.0 OR BSD-2-Clause)
  */
 
-#define DP_MAX_LOOPS_PER_FWLKUP (1000)
+#define DP_MAX_LOOPS_PER_FWLKUP (400)
 
 #define RETURN_TO_MP() bpf_tail_call(ctx, &pgm_tbl, LLB_DP_CT_PGM_ID)
+
+#define PDI_PKEY_EQ(v1, v2)                             \
+  (((PDI_MATCH(&(v1)->dest, &(v2)->dest)))        &&    \
+  ((PDI_MATCH(&(v1)->source, &(v2)->source)))     &&    \
+  ((PDI_RMATCH(&(v1)->dport, &(v2)->dport)))      &&    \
+  ((PDI_RMATCH(&(v1)->sport, &(v2)->sport)))      &&    \
+  ((PDI_MATCH(&(v1)->inport, &(v2)->inport)))     &&    \
+  ((PDI_MATCH(&(v1)->zone, &(v2)->zone)))         &&    \
+  ((PDI_MATCH(&(v1)->protocol, &(v2)->protocol))) &&    \
+  ((PDI_MATCH(&(v1)->bd, &(v2)->bd))))
+
 
 static int __always_inline
 dp_do_fw4_main(void *ctx, struct xfi *xf)
@@ -15,29 +26,27 @@ dp_do_fw4_main(void *ctx, struct xfi *xf)
   __u32 idx = 0;
   int i = 0;
   struct dp_fwv4_ent *fwe;
-  struct dp_fwv4_key key;
+  struct pdi_key key;
   struct dp_fwv4_tact *act = NULL;
 
-  key.inport = xf->pm.iport;
-  key.zone = xf->pm.zone;
-  key.bd = xf->pm.bd;
-  key.oport = xf->pm.oport;
-  key.daddr = xf->l3m.ip.daddr;
-  key.saddr = xf->l3m.ip.saddr;
-  key.sport = xf->l3m.source;
-  key.dport = xf->l3m.dest;
-  key.l4proto = xf->l3m.nw_proto;
-  key.nr = 0;
-  key.res = 0;
+  memset(&key, 0, sizeof(key));
+  PDI_VAL_INIT(&key.inport, xf->pm.iport);
+  PDI_VAL_INIT(&key.zone, xf->pm.zone);
+  PDI_VAL_INIT(&key.bd, xf->pm.bd);
+  PDI_VAL_INIT(&key.dest, bpf_ntohl(xf->l3m.ip.daddr));
+  PDI_VAL_INIT(&key.source, bpf_ntohl(xf->l3m.ip.saddr));
+  PDI_RVAL_INIT(&key.dport, bpf_htons(xf->l3m.dest));
+  PDI_RVAL_INIT(&key.sport, bpf_htons(xf->l3m.source));
+  PDI_VAL_INIT(&key.protocol, xf->l3m.nw_proto);
 
   LL_DBG_PRINTK("[FW4] -- Lookup\n");
   LL_DBG_PRINTK("[FW4] key-sz %d\n", sizeof(key));
   LL_DBG_PRINTK("[FW4] port %x\n", key.inport);
-  LL_DBG_PRINTK("[FW4] daddr %x\n", key.daddr);
-  LL_DBG_PRINTK("[FW4] saddr %d\n", key.saddr);
+  LL_DBG_PRINTK("[FW4] daddr %x\n", key.dest);
+  LL_DBG_PRINTK("[FW4] saddr %d\n", key.source);
   LL_DBG_PRINTK("[FW4] sport %d\n", key.sport);
   LL_DBG_PRINTK("[FW4] dport %d\n", key.dport);
-  LL_DBG_PRINTK("[FW4] l4proto %d\n", key.l4proto);
+  LL_DBG_PRINTK("[FW4] l4proto %d\n", key.protocol);
 
   xf->pm.table_id = LL_DP_FW4_MAP;
 
@@ -54,16 +63,11 @@ dp_do_fw4_main(void *ctx, struct xfi *xf)
       return DP_DROP;
     } else {
       if (idx == 0) {
-        xf->pm.fw_mid = fwe->v.nr;
+        xf->pm.fw_mid = fwe->k.nr.val;
       }
 
-      if (fwe->v.zone != 0 && 
-        (key.inport & fwe->m.inport) == fwe->v.inport &&
-        (key.daddr & fwe->m.daddr) == fwe->v.daddr &&
-        (key.saddr & fwe->m.saddr) == fwe->v.saddr &&
-        (key.sport & fwe->m.sport) == fwe->v.sport &&
-        (key.dport & fwe->m.dport) == fwe->v.dport &&
-        (key.l4proto & fwe->m.l4proto) == fwe->v.l4proto) {
+      if (fwe->k.zone.val != 0 && 
+          PDI_PKEY_EQ(&key, &fwe->k)) {
 
         /* End of lookup */
         xf->pm.fw_lid = LLB_FW4_MAP_ENTRIES;

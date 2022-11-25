@@ -30,6 +30,7 @@
 #include <netinet/in.h>
 
 #include "loxilb_libdp.h"
+#include "../common/pdi.h"
 
 #ifndef PATH_MAX
 #define PATH_MAX  4096
@@ -839,42 +840,28 @@ llb_add_map_elem_nat4_post_proc(void *k, void *v)
 }
 
 static void
-llb_dp_pdik2_ufw4(struct pdi_rule *new, struct dp_fwv4_ent *e) 
+llb_dp_pdik2_ufw4(struct pdi_rule *new, struct pdi_key *k) 
 {
-  memset(&e->v, 0, sizeof(struct dp_fwv4_key));
-  memset(&e->m, 0, sizeof(struct dp_fwv4_key));
+  memset(k, 0, sizeof(struct pdi_key));
 
-  e->v.daddr = htonl(new->key.dest.val);
-  e->m.daddr = htonl(new->key.dest.valid);
-
-  e->v.saddr = htonl(new->key.source.val);
-  e->m.saddr = htonl(new->key.source.valid);
-
-  e->v.sport = htons(new->key.sport.u.v.val);
-  e->m.sport = htons(new->key.sport.u.v.valid);
-
-  e->v.dport = htons(new->key.dport.u.v.val);
-  e->m.dport = htons(new->key.dport.u.v.valid);
-
-  e->v.inport = htons(new->key.inport.val);
-  e->m.inport = htons(new->key.inport.valid);
-
-  e->v.l4proto = (new->key.protocol.val);
-  e->m.l4proto = (new->key.protocol.valid);
-
-  e->v.zone = 1;
-  e->m.zone = 0xffff;
+  PDI_MATCH_COPY(&k->dest, &new->key.dest);
+  PDI_MATCH_COPY(&k->source, &new->key.source);
+  PDI_RMATCH_COPY(&k->sport, &new->key.sport);
+  PDI_RMATCH_COPY(&k->dport, &new->key.dport);
+  PDI_MATCH_COPY(&k->inport, &new->key.inport);
+  PDI_MATCH_COPY(&k->protocol, &new->key.protocol);
+  PDI_MATCH_INIT(&k->zone, 1, -1);
 }
 
 static void
-llb_dp_ufw42_pdik(struct pdi_rule *new, struct dp_fwv4_ent *e) 
+llb_dp_ufw42_pdik(struct pdi_rule *new, struct pdi_key *k)
 {
-  PDI_MATCH_INIT(&new->key.dest, htonl(e->v.daddr), htonl(e->m.daddr));
-  PDI_MATCH_INIT(&new->key.source, htonl(e->v.saddr), htonl(e->m.saddr));
-  PDI_RMATCH_INIT(&new->key.sport, 0, htons(e->v.sport), htons(e->m.sport));
-  PDI_RMATCH_INIT(&new->key.dport, 0, htons(e->v.dport), htons(e->m.dport));
-  PDI_MATCH_INIT(&new->key.inport, htons(e->v.inport), htons(e->m.inport));
-  PDI_MATCH_INIT(&new->key.protocol, e->v.l4proto, e->m.l4proto);
+  PDI_MATCH_COPY(&new->key.dest, &k->dest);
+  PDI_MATCH_COPY(&new->key.source, &k->source);
+  PDI_RMATCH_COPY(&new->key.sport, &k->sport);
+  PDI_RMATCH_COPY(&new->key.dport, &k->dport);
+  PDI_MATCH_COPY(&new->key.inport, &k->inport);
+  PDI_MATCH_COPY(&new->key.protocol, &k->protocol);
 }
 
 static void
@@ -903,7 +890,7 @@ static void
 llb_dp_ufw42_pdiop(struct pdi_rule *new, struct dp_fwv4_ent *e) 
 {
   new->data.rid = e->fwa.ca.cidx;
-  new->data.pref = e->v.res; // overloaded for prio(max 255)
+  new->data.pref = e->fwa.ca.oif; // Overloaded field
 
   switch (e->fwa.ca.act_type) {
   case DP_SET_DROP:
@@ -934,7 +921,7 @@ llb_add_mf_map_elem__(int tbl, void *k, void *v)
     
     if (!new) return -1;
 
-    llb_dp_ufw42_pdik(new, e);
+    llb_dp_ufw42_pdik(new, &e->k);
     llb_dp_ufw42_pdiop(new, e) ;
 
     ret = pdi_rule_insert(xh->ufw4, new, &nr);
@@ -947,10 +934,10 @@ llb_add_mf_map_elem__(int tbl, void *k, void *v)
     FOR_EACH_PDI_ENT(xh->ufw4, new) {
       if (n == 0 || n >= nr) {
         memset(&p, 0, sizeof(p));
-        llb_dp_pdik2_ufw4(new, &p);
+        llb_dp_pdik2_ufw4(new, &p.k);
         llb_dp_pdiop2_ufw4(new, &p);
         if (n == 0) {
-          p.v.nr = xh->ufw4->nr;
+          PDI_VAL_INIT(&p.k.nr, xh->ufw4->nr);
         }
         ret = bpf_map_update_elem(llb_map2fd(tbl), &n, &p, 0);
         if (ret != 0) {
@@ -1057,7 +1044,7 @@ llb_del_mf_map_elem__(int tbl, void *k)
     
     if (!new) return -1;
 
-    llb_dp_ufw42_pdik(new, e);
+    llb_dp_ufw42_pdik(new, &e->k);
     llb_dp_ufw42_pdiop(new, e) ;
 
     ret = pdi_rule_delete(xh->ufw4, &new->key, new->data.pref, &nr);
@@ -1072,10 +1059,10 @@ llb_del_mf_map_elem__(int tbl, void *k)
     FOR_EACH_PDI_ENT(xh->ufw4, new) {
       if (n == 0 || n >= nr) {
         memset(&p, 0, sizeof(p));
-        llb_dp_pdik2_ufw4(new, &p);
+        llb_dp_pdik2_ufw4(new, &p.k);
         llb_dp_pdiop2_ufw4(new, &p);
         if (n == 0) {
-          p.v.nr = xh->ufw4->nr;
+          PDI_VAL_INIT(&p.k.nr, xh->ufw4->nr);
         }
         ret = bpf_map_update_elem(llb_map2fd(tbl), &n, &p, 0);
         if (ret != 0) {

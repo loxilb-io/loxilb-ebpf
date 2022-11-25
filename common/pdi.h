@@ -7,52 +7,7 @@
 #define __PDI_H__
 
 #include "uthash.h"
-
-#define none(x)  (x)
-
-#define PDI_TYPEDEF(sz) pdi_tup##sz##_t
-#define PDI_TYPEDEF_R(sz) pdi_tupr##sz##_t
-
-#define PDI_DEF_FIELD(sz)       \
-typedef struct pdi_tup##sz##_ { \
-    __u##sz val;                \
-    __u##sz valid;              \
-} PDI_TYPEDEF(sz)
-
-#define PDI_DEF_RANGE_FIELD(sz)   \
-typedef struct pdi_tupwr##sz##_ { \
-    uint32_t has_range;           \
-    union {                     \
-      struct pdi_tup##sz##r_  { \
-      __u##sz min;              \
-      __u##sz max;              \
-      }r;                       \
-      struct pdi_tup##sz##v_ {  \
-        __u##sz val;            \
-        __u##sz valid;          \
-      }v;                       \
-    }u;                         \
-}pdi_tupr##sz##_t;
-
-PDI_DEF_FIELD(64);
-PDI_DEF_FIELD(32);
-PDI_DEF_RANGE_FIELD(16);
-PDI_DEF_FIELD(16);
-PDI_DEF_FIELD(8);
-
-#define PDI_MATCH(v1, v2) \
-(((v2)->valid == 0) || ((v2)->valid && (((v1)->val & (v2)->valid) == (v2)->val)))
-
-#define PDI_RMATCH(v1, v2) \
-(((v2)->has_range && ((v1)->u.v.val >= (v2)->u.r.min && (v1)->u.v.val <= (v2)->u.r.max)) || \
- (((v2)->has_range == 0 ) && (((v2)->u.v.valid == 0) || ((v2)->u.v.valid && (((v1)->u.v.val & (v2)->u.v.valid) == (v2)->u.v.val)))))
-
-#define PDI_MATCH_ALL(v1, v2) \
-(((v2)->valid == (v1)->valid) && (((v1)->val & (v2)->valid) == (v2)->val))
-
-#define PDI_RMATCH_ALL(v1, v2) \
-((((v2)->has_range == (v1)->has_range) && ((v1)->u.v.val >= (v2)->u.r.min && (v1)->u.v.val <= (v2)->u.r.max)) || \
- (((v2)->has_range != 0) &&(((v2)->u.v.valid == (v1)->u.v.valid) && (((v1)->u.v.val & (v2)->u.v.valid) == (v2)->u.v.val))))
+#include "common_pdi.h"
 
 #define PDI_MATCH_PRINT(v1, kstr, fmtstr, l, cv)                   \
 do {                                                               \
@@ -71,38 +26,6 @@ do {                                                               \
   }                                                                \
 } while(0)
 
-#define PDI_MATCH_INIT(v1, v, vld)           \
-do {                                         \
-  (v1)->valid = vld;                         \
-  (v1)->val = (v) & (v1)->valid;             \
-} while (0)
-
-#define PDI_RMATCH_INIT(v1, hr, val1, val2)  \
-do {                                         \
-  if (hr) {                                  \
-    (v1)->u.r.min = val1;                    \
-    (v1)->u.r.max = val2;                    \
-    (v1)->has_range = 1;                     \
-  } else {                                   \
-    (v1)->u.v.valid = val2;                  \
-    (v1)->u.v.val = val1 & (v1)->u.v.valid;  \
-    (v1)->has_range = 0;                     \
-  }                                          \
-} while (0)
-
-#define PDI_VAL_INIT(v1, v)                  \
-do {                                         \
-  (v1)->valid = -1;                          \
-  (v1)->val = (v);                           \
-} while (0)
-
-#define PDI_RVAL_INIT(v1, val1)              \
-do {                                         \
-    (v1)->u.v.valid = -1;                    \
-    (v1)->u.v.val = val1;                    \
-    (v1)->has_range = 0;                     \
-} while (0)
-
 #define PDI_MAP_NAME_LEN 16
 #define PDI_MAP_LOCK(m) pthread_rwlock_wrlock(&m->lock)
 #define PDI MAP_RLOCK(m) pthread_rwlock_rdlock(&m->lock)
@@ -120,7 +43,7 @@ struct pdi_map {
 typedef int (*pdi_add_map_op_t)(void *key, void *val, size_t sz);
 typedef int (*pdi_del_map_op_t)(void *key);
 
-struct pdi_key {
+struct pdi_gen_key {
     PDI_TYPEDEF(32)    dest;
     PDI_TYPEDEF(32)    source;
     PDI_TYPEDEF_R(16)  dport;
@@ -182,9 +105,9 @@ struct pdi_rule {
   ((PDI_RMATCH_ALL(&(v1)->dport, &(v2)->dport)))      &&    \
   ((PDI_RMATCH_ALL(&(v1)->sport, &(v2)->sport)))      &&    \
   ((PDI_MATCH_ALL(&(v1)->inport, &(v2)->inport)))     &&    \
-  ((PDI_MATCH_ALL(&(v1)->dir, &(v2)->dir)))           &&    \
+  ((PDI_MATCH_ALL(&(v1)->zone, &(v2)->zone)))         &&    \
   ((PDI_MATCH_ALL(&(v1)->protocol, &(v2)->protocol))) &&    \
-  ((PDI_MATCH_ALL(&(v1)->ident, &(v2)->ident)))
+  ((PDI_MATCH_ALL(&(v1)->bd, &(v2)->bd)))
 
 #define PDI_PKEY_EQ(v1, v2)                             \
   (((PDI_MATCH(&(v1)->dest, &(v2)->dest)))        &&    \
@@ -192,16 +115,17 @@ struct pdi_rule {
   ((PDI_RMATCH(&(v1)->dport, &(v2)->dport)))      &&    \
   ((PDI_RMATCH(&(v1)->sport, &(v2)->sport)))      &&    \
   ((PDI_MATCH(&(v1)->inport, &(v2)->inport)))     &&    \
-  ((PDI_MATCH(&(v1)->dir, &(v2)->dir)))           &&    \
+  ((PDI_MATCH(&(v1)->zone, &(v2)->zone)))         &&    \
   ((PDI_MATCH(&(v1)->protocol, &(v2)->protocol))) &&    \
-  ((PDI_MATCH(&(v1)->ident, &(v2)->ident))))
+  ((PDI_MATCH(&(v1)->bd, &(v2)->bd))))
 
 #define PDI_PKEY_NTOH(v1)                          \
     (v1)->dest = htonl((v1)->dest);                \
     (v1)->source = htonl((v1)->source);            \
     (v1)->dport = htons((v1)->dport);              \
     (v1)->dest = htons((v1)->sport);               \
-    (v1)->ident= htonl((v1)->ident);               \
+    (v1)->zone = htons((v1)->zone);                \
+    (v1)->bd = htons((v1)->bd);                    \
     (v1)->inport = htons((v1)->inport);
 
 #define FOR_EACH_PDI_ENT(map, ent) for(ent = map->head; ent; ent = ent->next) 
