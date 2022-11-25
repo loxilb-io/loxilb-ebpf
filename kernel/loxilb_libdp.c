@@ -877,9 +877,12 @@ llb_dp_pdiop2_ufw4(struct pdi_rule *new, struct dp_fwv4_ent *e)
   case PDI_SET_TRAP:
     e->fwa.ca.act_type = DP_SET_TOCP;
     break;
-  case DP_SET_RDR_PORT:
+  case PDI_SET_RDR:
     e->fwa.ca.act_type = DP_SET_RDR_PORT;
     e->fwa.port_act.oport = new->data.opts.port;
+    break;
+  case PDI_SET_FWD:
+    e->fwa.ca.act_type = DP_SET_NOP;
     break;
   default:
     break;
@@ -900,8 +903,11 @@ llb_dp_ufw42_pdiop(struct pdi_rule *new, struct dp_fwv4_ent *e)
     new->data.op = PDI_SET_TRAP;
     break;
   case DP_SET_RDR_PORT:
-    new->data.op = PDI_SET_FWD;
+    new->data.op = PDI_SET_RDR;
     new->data.opts.port = e->fwa.port_act.oport;
+    break;
+  case DP_SET_NOP:
+    new->data.op = PDI_SET_FWD;
   default:
     break; 
   }
