@@ -11,7 +11,7 @@
 # as a space-separated list
 #
 LLC = llc
-CLANG = clang-10
+CLANG := $(shell if [ -f /usr/bin/clang-13 ];then echo clang-13; else echo clang-10; fi;)
 CC ?= gcc
 
 XDP_C = ${XDP_TARGETS:=.c}
