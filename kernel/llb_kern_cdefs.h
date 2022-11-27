@@ -616,6 +616,9 @@ dp_do_map_stats(struct xdp_md *ctx,
   case LL_DP_NAT4_STATS_MAP:
     map = &nat_v4_stats_map;
     break;
+  case LL_DP_FW4_STATS_MAP:
+    map = &fw_v4_stats_map;
+    break;
   default:
     return;
   }

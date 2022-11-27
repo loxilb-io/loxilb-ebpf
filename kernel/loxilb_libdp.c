@@ -850,7 +850,7 @@ llb_dp_pdik2_ufw4(struct pdi_rule *new, struct pdi_key *k)
   PDI_RMATCH_COPY(&k->dport, &new->key.dport);
   PDI_MATCH_COPY(&k->inport, &new->key.inport);
   PDI_MATCH_COPY(&k->protocol, &new->key.protocol);
-  PDI_MATCH_INIT(&k->zone, 1, -1);
+  PDI_MATCH_COPY(&k->zone, &new->key.zone);
 }
 
 static void
@@ -862,6 +862,7 @@ llb_dp_ufw42_pdik(struct pdi_rule *new, struct pdi_key *k)
   PDI_RMATCH_COPY(&new->key.dport, &k->dport);
   PDI_MATCH_COPY(&new->key.inport, &k->inport);
   PDI_MATCH_COPY(&new->key.protocol, &k->protocol);
+  PDI_MATCH_COPY(&new->key.zone, &k->zone);
 }
 
 static void
@@ -973,8 +974,17 @@ llb_add_map_elem(int tbl, void *k, void *v)
       tbl == LL_DP_TMAC_MAP ||
       tbl == LL_DP_FW4_MAP  ||
       tbl == LL_DP_RTV4_MAP) {
-    struct dp_cmn_act *ca = v;
-    llb_clear_map_stats(tbl, ca->cidx);
+    __u32 cidx = 0;
+
+    if (tbl == LL_DP_FW4_MAP) {
+      struct dp_fwv4_ent *e = k;
+      cidx = e->fwa.ca.cidx;
+    } else {
+      struct dp_cmn_act *ca = v;
+      cidx = ca->cidx;
+    }
+
+    llb_clear_map_stats(tbl, cidx);
   }
 
   if (tbl == LL_DP_FW4_MAP) {

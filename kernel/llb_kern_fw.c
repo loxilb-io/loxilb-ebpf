@@ -64,7 +64,12 @@ dp_do_fw4_main(void *ctx, struct xfi *xf)
     } else {
       if (idx == 0) {
         xf->pm.fw_mid = fwe->k.nr.val;
+      } else if (i + xf->pm.fw_lid >= xf->pm.fw_mid) {
+        i = DP_MAX_LOOPS_PER_FWLKUP;
+        break;
       }
+
+      idx++;
 
       if (fwe->k.zone.val != 0 && 
           PDI_PKEY_EQ(&key, &fwe->k)) {
@@ -80,13 +85,13 @@ dp_do_fw4_main(void *ctx, struct xfi *xf)
     /* No match in this iteration */
     xf->pm.fw_lid += DP_MAX_LOOPS_PER_FWLKUP;
     if (xf->pm.fw_lid >= LLB_FW4_MAP_ENTRIES ||
-        xf->pm.fw_lid >= xf->pm.fw_mid) {
+        xf->pm.fw_lid > xf->pm.fw_mid) {
       /* End of lookup */
       xf->pm.fw_lid = LLB_FW4_MAP_ENTRIES;
-      bpf_printk("[FW4] -- done");
-      RETURN_TO_MP();
-      return DP_DROP;
     }
+    LL_DBG_PRINTK("[FW4] done");
+    RETURN_TO_MP();
+    return DP_DROP;
   }
 
   xf->pm.phit |= LLB_DP_FW_HIT;
