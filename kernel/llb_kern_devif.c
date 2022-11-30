@@ -220,14 +220,14 @@ dp_unparse_packet_always(void *ctx,  struct xfi *xf)
 
   if (xf->pm.nf & LLB_NAT_SRC) {
     LL_DBG_PRINTK("[DEPR] LL_SNAT 0x%lx:%x\n",
-                 xf->l4m.nxip, xf->l4m.nxport);
-    if (dp_do_snat(ctx, xf, xf->l4m.nxip, xf->l4m.nxport) != 0) {
+                 xf->nm.nxip, xf->nm.nxport);
+    if (dp_do_snat(ctx, xf, xf->nm.nxip, xf->nm.nxport) != 0) {
       return DP_DROP;
     }
   } else if (xf->pm.nf & LLB_NAT_DST) {
     LL_DBG_PRINTK("[DEPR] LL_DNAT 0x%x\n",
-                  xf->l4m.nxip, xf->l4m.nxport);
-    if (dp_do_dnat(ctx, xf, xf->l4m.nxip, xf->l4m.nxport) != 0) {
+                  xf->nm.nxip, xf->nm.nxport);
+    if (dp_do_dnat(ctx, xf, xf->nm.nxip, xf->nm.nxport) != 0) {
       return DP_DROP;
     }
   }
@@ -512,7 +512,7 @@ dp_ing_ct_main(void *ctx,  struct xfi *xf)
     return DP_PASS;
   }
 
-  xf->l4m.ct_sts = LLB_PIPE_CT_INP;
+  xf->nm.ct_sts = LLB_PIPE_CT_INP;
 
   /* CT pipeline is hit after acl lookup fails 
    * So, after CT processing we continue the rest

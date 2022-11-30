@@ -399,6 +399,10 @@ end:
   ts->state = nstate;
   rts->state = nstate;
 
+  if (nstate != CT_TCP_ERR && dir == CT_DIR_OUT) {
+    xtdat->pi.t.tcp_cts[0].seq = seq;
+  }
+
   bpf_spin_unlock(&atdat->lock);
 
   if (nstate == CT_TCP_EST) {
@@ -761,7 +765,7 @@ dp_ct_sm(void *ctx, struct xfi *xf,
 
   atdat->ctd.pi.frag = 0;
 
-  switch (xf->l3m.nw_proto) {
+  switch (xf->l34m.nw_proto) {
   case IPPROTO_TCP:
     sm_ret = dp_ct_tcp_sm(ctx, xf, atdat, axtdat, dir);
     break;
@@ -818,11 +822,11 @@ dp_ctv4_in(void *ctx, struct xfi *xf)
   xxi = &axdat->ctd.xi;
  
   /* CT Key */
-  key.daddr = xf->l3m.ip.daddr;
-  key.saddr = xf->l3m.ip.saddr;
-  key.sport = xf->l3m.source;
-  key.dport = xf->l3m.dest;
-  key.l4proto = xf->l3m.nw_proto;
+  key.daddr = xf->l34m.ip.daddr;
+  key.saddr = xf->l34m.ip.saddr;
+  key.sport = xf->l34m.source;
+  key.dport = xf->l34m.dest;
+  key.l4proto = xf->l34m.nw_proto;
   key.zone = xf->pm.zone;
   key.r = 0;
 
@@ -834,9 +838,9 @@ dp_ctv4_in(void *ctx, struct xfi *xf)
   }
 
   xi->nat_flags = xf->pm.nf;
-  xi->nat_xip   = xf->l4m.nxip;
-  xi->nat_rip   = xf->l4m.nrip;
-  xi->nat_xport = xf->l4m.nxport;
+  xi->nat_xip   = xf->nm.nxip;
+  xi->nat_rip   = xf->nm.nrip;
+  xi->nat_xport = xf->nm.nxport;
 
   xxi->nat_flags = 0;
   xxi->nat_xip = 0;
@@ -872,7 +876,7 @@ dp_ctv4_in(void *ctx, struct xfi *xf)
       adat->nat_act.xport = xi->nat_xport;
       adat->nat_act.doct = 1;
       adat->nat_act.rid = xf->pm.rule_id;
-      adat->nat_act.aid = xf->l4m.sel_aid;
+      adat->nat_act.aid = xf->nm.sel_aid;
     } else {
       adat->ca.act_type = DP_SET_DO_CT;
     }
@@ -880,7 +884,7 @@ dp_ctv4_in(void *ctx, struct xfi *xf)
 
     /* FIXME This is duplicated data */
     adat->ctd.rid = xf->pm.rule_id;
-    adat->ctd.aid = xf->l4m.sel_aid;
+    adat->ctd.aid = xf->nm.sel_aid;
     adat->ctd.smr = CT_SMR_INIT;
     bpf_map_update_elem(&acl_v4_map, &key, adat, BPF_ANY);
 
@@ -896,7 +900,7 @@ dp_ctv4_in(void *ctx, struct xfi *xf)
       axdat->nat_act.xport = xxi->nat_xport;
       axdat->nat_act.doct = 1;
       axdat->nat_act.rid = xf->pm.rule_id;
-      axdat->nat_act.aid = xf->l4m.sel_aid;
+      axdat->nat_act.aid = xf->nm.sel_aid;
     } else {
       axdat->ca.act_type = DP_SET_DO_CT;
     }

@@ -58,14 +58,14 @@ dp_do_nat4_rule_lkup(void *ctx, struct xfi *xf)
   struct dp_natv4_tacts *act;
   __u32 sel;
 
-  key->daddr = xf->l3m.ip.daddr;
-  if (xf->l3m.nw_proto != IPPROTO_ICMP) {
-    key->dport = xf->l3m.dest;
+  key->daddr = xf->l34m.ip.daddr;
+  if (xf->l34m.nw_proto != IPPROTO_ICMP) {
+    key->dport = xf->l34m.dest;
   } else {
     key->dport = 0;
   }
   key->zone = xf->pm.zone;
-  key->l4proto = xf->l3m.nw_proto;
+  key->l4proto = xf->l34m.nw_proto;
 
   LL_DBG_PRINTK("[NAT4] --Lookup\n");
 
@@ -95,15 +95,15 @@ dp_do_nat4_rule_lkup(void *ctx, struct xfi *xf)
 
       if (nxfrm_act < act + 1) {
         xf->pm.nf = act->ca.act_type == DP_SET_SNAT ? LLB_NAT_SRC : LLB_NAT_DST;
-        xf->l4m.nxip = nxfrm_act->nat_xip;
-        xf->l4m.nrip = nxfrm_act->nat_rip;
-        xf->l4m.nxport = nxfrm_act->nat_xport;
-        xf->l4m.sel_aid = sel;
+        xf->nm.nxip = nxfrm_act->nat_xip;
+        xf->nm.nrip = nxfrm_act->nat_rip;
+        xf->nm.nxport = nxfrm_act->nat_xport;
+        xf->nm.sel_aid = sel;
         xf->pm.rule_id =  act->ca.cidx;
         LL_DBG_PRINTK("[NAT4] ACT %x\n", xf->pm.nf);
         /* Special case related to host-dnat */
-        if (xf->l3m.ip.saddr == xf->l4m.nxip && xf->pm.nf == LLB_NAT_DST) {
-          xf->l4m.nxip = 0;
+        if (xf->l34m.ip.saddr == xf->nm.nxip && xf->pm.nf == LLB_NAT_DST) {
+          xf->nm.nxip = 0;
         }
       }
     }

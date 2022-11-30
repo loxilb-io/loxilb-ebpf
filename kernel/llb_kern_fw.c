@@ -33,11 +33,11 @@ dp_do_fw4_main(void *ctx, struct xfi *xf)
   PDI_VAL_INIT(&key.inport, xf->pm.iport);
   PDI_VAL_INIT(&key.zone, xf->pm.zone);
   PDI_VAL_INIT(&key.bd, xf->pm.bd);
-  PDI_VAL_INIT(&key.dest, bpf_ntohl(xf->l3m.ip.daddr));
-  PDI_VAL_INIT(&key.source, bpf_ntohl(xf->l3m.ip.saddr));
-  PDI_RVAL_INIT(&key.dport, bpf_htons(xf->l3m.dest));
-  PDI_RVAL_INIT(&key.sport, bpf_htons(xf->l3m.source));
-  PDI_VAL_INIT(&key.protocol, xf->l3m.nw_proto);
+  PDI_VAL_INIT(&key.dest, bpf_ntohl(xf->l34m.ip.daddr));
+  PDI_VAL_INIT(&key.source, bpf_ntohl(xf->l34m.ip.saddr));
+  PDI_RVAL_INIT(&key.dport, bpf_htons(xf->l34m.dest));
+  PDI_RVAL_INIT(&key.sport, bpf_htons(xf->l34m.source));
+  PDI_VAL_INIT(&key.protocol, xf->l34m.nw_proto);
 
   LL_DBG_PRINTK("[FW4] -- Lookup\n");
   LL_DBG_PRINTK("[FW4] key-sz %d\n", sizeof(key));

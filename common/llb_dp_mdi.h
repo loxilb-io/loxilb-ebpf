@@ -130,7 +130,7 @@ struct dp_l2_mdi {
     __u32            r2;
 };
 
-struct dp_l3_mdi {
+struct dp_l34_mdi {
     __u8             tos;
     __u8             nw_proto;
 
@@ -180,7 +180,7 @@ struct dp_qos_mdi {
     __u32            polid;
 };
 
-struct dp_l4_mdi {
+struct dp_nat_mdi {
     __u32            nxip;         /* NAT xIP */
     __u32            nrip;         /* NAT rIP (for one-arm) */
     __u16            nxport;       /* NAT xport */
@@ -199,11 +199,11 @@ struct dp_key_mdi {
 struct xfi {
     struct dp_fr_mdi  fm;
     struct dp_l2_mdi  l2m;
-    struct dp_l3_mdi  l3m;
+    struct dp_l34_mdi l34m;
     struct dp_l2_mdi  il2m;
-    struct dp_l3_mdi  il3m;
+    struct dp_l34_mdi il34m;
     struct dp_tun_mdi tm;
-    struct dp_l4_mdi  l4m;
+    struct dp_nat_mdi nm;
     struct dp_key_mdi km;
     struct dp_qos_mdi qm; 
 

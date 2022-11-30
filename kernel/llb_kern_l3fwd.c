@@ -47,15 +47,15 @@ dp_rtv4_get_ipkey(struct xfi *xf)
   __u32 ipkey;
 
   if (xf->pm.nf & LLB_NAT_DST) {
-    ipkey = xf->l4m.nxip?:xf->l3m.ip.saddr;
+    ipkey = xf->nm.nxip?:xf->l34m.ip.saddr;
   } else {
     if (xf->pm.nf & LLB_NAT_SRC) {
-      if (xf->l4m.nrip) {
-        ipkey = xf->l4m.nrip;
-      } else if (xf->l4m.nxip == 0) {
-        ipkey = xf->l3m.ip.saddr;
+      if (xf->nm.nrip) {
+        ipkey = xf->nm.nrip;
+      } else if (xf->nm.nxip == 0) {
+        ipkey = xf->l34m.ip.saddr;
       } else {
-        ipkey = xf->l3m.ip.daddr;
+        ipkey = xf->l34m.ip.daddr;
       }
     } else {
       if (xf->tm.new_tunnel_id && xf->tm.tun_type == LLB_TUN_GTP) {
@@ -64,7 +64,7 @@ dp_rtv4_get_ipkey(struct xfi *xf)
          */
         ipkey = xf->tm.tun_rip;
       } else {
-        ipkey = xf->l3m.ip.daddr;
+        ipkey = xf->l34m.ip.daddr;
       }
     }
   }
@@ -134,9 +134,9 @@ dp_pipe_set_nat(void *ctx, struct xfi *xf,
                 struct dp_nat_act *na, int do_snat)
 {
   xf->pm.nf = do_snat ? LLB_NAT_SRC : LLB_NAT_DST;
-  xf->l4m.nxip = na->xip;
-  xf->l4m.nrip = na->rip;
-  xf->l4m.nxport = na->xport;
+  xf->nm.nxip = na->xip;
+  xf->nm.nrip = na->rip;
+  xf->nm.nxport = na->xport;
   LL_DBG_PRINTK("[ACL4] NAT ACT %x\n", xf->pm.nf);
 
   return 0;
@@ -151,11 +151,11 @@ dp_do_aclv4_lkup(void *ctx, struct xfi *xf, void *fa_)
   struct dp_fc_tacts *fa = fa_;
 #endif
 
-  key.daddr = xf->l3m.ip.daddr;
-  key.saddr = xf->l3m.ip.saddr;
-  key.sport = xf->l3m.source;
-  key.dport = xf->l3m.dest;
-  key.l4proto = xf->l3m.nw_proto;
+  key.daddr = xf->l34m.ip.daddr;
+  key.saddr = xf->l34m.ip.saddr;
+  key.sport = xf->l34m.source;
+  key.dport = xf->l34m.dest;
+  key.l4proto = xf->l34m.nw_proto;
   key.zone = xf->pm.zone;
   key.r = 0;
 

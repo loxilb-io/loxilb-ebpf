@@ -14,19 +14,19 @@ dp_mk_fcv4_key(struct xfi *xf, struct dp_fcv4_key *key)
 
   //key->bd         = xf->pm.bd;
   key->bd         = 0; 
-  key->daddr      = xf->l3m.ip.daddr;
-  key->saddr      = xf->l3m.ip.saddr;
-  key->sport      = xf->l3m.source;
-  key->dport      = xf->l3m.dest;
-  key->l4proto    = xf->l3m.nw_proto;
+  key->daddr      = xf->l34m.ip.daddr;
+  key->saddr      = xf->l34m.ip.saddr;
+  key->sport      = xf->l34m.source;
+  key->dport      = xf->l34m.dest;
+  key->l4proto    = xf->l34m.nw_proto;
 
   //key->in_port    = xf->pm.iport;
   key->in_port    = 0;
-  key->in_daddr   = xf->il3m.ip.daddr;
-  key->in_saddr   = xf->il3m.ip.saddr;
-  key->in_sport   = xf->il3m.source;
-  key->in_dport   = xf->il3m.dest;
-  key->in_l4proto = xf->il3m.nw_proto;
+  key->in_daddr   = xf->il34m.ip.daddr;
+  key->in_saddr   = xf->il34m.ip.saddr;
+  key->in_sport   = xf->il34m.source;
+  key->in_dport   = xf->il34m.dest;
+  key->in_l4proto = xf->il34m.nw_proto;
 
   return 0;
 }
