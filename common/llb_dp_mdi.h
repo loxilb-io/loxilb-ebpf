@@ -140,6 +140,9 @@ struct dp_l34_mdi {
     __u16            source;
     __u16            dest;
 
+    __u32            seq;
+    __u32            ack;
+
     union {
         struct out_ip_flow {
             __u32    saddr;

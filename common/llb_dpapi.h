@@ -282,6 +282,8 @@ struct dp_fc_tact {
 struct dp_fc_tacts {
   struct dp_cmn_act ca;
   __u64 its;
+  __u32 zone;
+  __u32 pad;
   struct dp_fc_tact fcta[LLB_FCV4_MAP_ACTS];
 };
 

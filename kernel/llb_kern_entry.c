@@ -143,6 +143,8 @@ proc_inl3:
 
         xf->il34m.source = tcp->source;
         xf->il34m.dest = tcp->dest;
+        xf->il34m.seq = tcp->seq;
+        xf->il34m.ack = tcp->ack_seq;
       } else if (xf->il34m.nw_proto == IPPROTO_UDP) {
         struct udphdr *udp = DP_ADD_PTR(iph, iphl);
 
@@ -224,6 +226,8 @@ proc_inl3:
 
       xf->il34m.source = tcp->source;
       xf->il34m.dest = tcp->dest;
+      xf->il34m.seq = tcp->seq;
+      xf->il34m.ack = tcp->ack_seq;
     } else if (xf->il34m.nw_proto == IPPROTO_UDP) {
       struct udphdr *udp = DP_ADD_PTR(ip6, sizeof(*ip6));
 
@@ -612,6 +616,8 @@ dp_parse_packet(void *md,
 
         xf->l34m.source = tcp->source;
         xf->l34m.dest = tcp->dest;
+        xf->l34m.seq = tcp->seq;
+        xf->l34m.ack = tcp->ack_seq;
       } else if (xf->l34m.nw_proto == IPPROTO_UDP) {
         struct udphdr *udp = DP_ADD_PTR(iph, iphl);
 
@@ -727,6 +733,8 @@ dp_parse_packet(void *md,
   
       xf->l34m.source = tcp->source;
       xf->l34m.dest = tcp->dest;
+      xf->l34m.seq = tcp->seq;
+      xf->l34m.ack = tcp->ack_seq;
     } else if (xf->l34m.nw_proto == IPPROTO_UDP) {
       struct udphdr *udp = DP_ADD_PTR(ip6, sizeof(*ip6));
 

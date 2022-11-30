@@ -32,7 +32,7 @@ calc_csum(unsigned short *addr, unsigned int count)
 }
 
 void
-compute_tcp_checksum(struct iphdr *pIph, unsigned short *ipPayload)
+calc_tcp_checksum(struct iphdr *pIph, unsigned short *ipPayload)
 {
     register unsigned long sum = 0;
     unsigned short tcpLen = ntohs(pIph->tot_len) - (pIph->ihl<<2);

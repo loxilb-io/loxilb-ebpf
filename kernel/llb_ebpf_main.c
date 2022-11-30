@@ -11,6 +11,7 @@
 #include <bpf/bpf_endian.h>
 
 #define HAVE_DP_FC 1
+#define HAVE_DP_EXTCT 1
 
 #include "llb_kern_entry.c"
 

@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 <Dip J, dipj@netlox.io>
+ * Copyright (c) 2022 NetLOX Inc
  *
  * SPDX short identifier: BSD-3-Clause
  */

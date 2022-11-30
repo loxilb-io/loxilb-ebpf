@@ -421,6 +421,7 @@ dp_ing_slow_main(void *ctx,  struct xfi *xf)
   /* No nonsense no loop */
   fa->ca.ftrap = 0;
   fa->ca.cidx = 0;
+  fa->zone = 0;
   fa->its = bpf_ktime_get_ns();
   fa->fcta[0].ca.act_type = 0;
   fa->fcta[1].ca.act_type = 0;
@@ -466,6 +467,7 @@ dp_ing_slow_main(void *ctx,  struct xfi *xf)
       !(xf->pm.phit & LLB_DP_SESS_HIT) &&
       xf->qm.polid == 0 &&
       xf->pm.mirr == 0) {
+    fa->zone = xf->pm.zone;
     dp_insert_fcv4(ctx, xf, fa);
   }
 #endif

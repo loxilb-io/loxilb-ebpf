@@ -4,6 +4,43 @@
  * 
  * SPDX-License-Identifier: (GPL-2.0 OR BSD-2-Clause)
  */
+
+#ifdef HAVE_DP_EXTCT
+#define NEED_CT_IN_FC(x) ((x)->l34m.nw_proto == IPPROTO_TCP)
+#else
+#define NEED_CT_IN_FC(x) (0)
+#endif
+
+static int __always_inline
+dp_do_fcv4_ct_helper(struct xfi *xf) 
+{
+  struct dp_ctv4_key key;
+  struct dp_aclv4_tact *act;
+
+  ACL4_KEY_GEN(&key, xf);
+
+  act = bpf_map_lookup_elem(&acl_v4_map, &key);
+  if (!act) {
+    LL_DBG_PRINTK("[FCH4] miss");
+    return -1;
+  }
+
+  /* We dont do much strict tracking after EST state.
+   * But need to maintain certain ct info
+   */
+  switch (act->ca.act_type) {
+  case DP_SET_NOP:
+  case DP_SET_SNAT:
+  case DP_SET_DNAT:
+    act->ctd.pi.t.tcp_cts[CT_DIR_IN].seq = bpf_ntohl(xf->l34m.seq);
+    break;
+  default:
+    break;
+  }
+
+  return 0;
+}
+
 static int  __always_inline
 dp_mk_fcv4_key(struct xfi *xf, struct dp_fcv4_key *key)
 {
@@ -79,6 +116,8 @@ dp_do_fcv4_lkup(void *ctx, struct xfi *xf)
   if (acts->ca.ftrap)
     return 0; 
 
+  xf->pm.zone = acts->zone;
+
   if (acts->fcta[DP_SET_RM_VXLAN].ca.act_type == DP_SET_RM_VXLAN) {
     LL_FC_PRINTK("[FCH4] strip-vxlan-act\n");
     ta = &acts->fcta[DP_SET_RM_VXLAN];
@@ -147,12 +186,17 @@ dp_do_fcv4_lkup(void *ctx, struct xfi *xf)
     return 0;
   }
 
+  if (NEED_CT_IN_FC(xf)) {
+    dp_do_fcv4_ct_helper(xf);
+  }
+
+  dp_do_map_stats(ctx, xf, LL_DP_ACLV4_STATS_MAP, acts->ca.cidx);
+
   xf->pm.phit |= LLB_DP_FC_HIT;
   LL_FC_PRINTK("[FCH4] oport %d\n",  xf->pm.oport);
   dp_unparse_packet_always(ctx, xf);
   dp_unparse_packet(ctx, xf);
 
-  dp_do_map_stats(ctx, xf, LL_DP_ACLV4_STATS_MAP, acts->ca.cidx);
   xf->pm.oport = acts->ca.oif;
 
   return ret;

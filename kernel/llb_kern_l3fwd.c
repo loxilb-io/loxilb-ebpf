@@ -247,6 +247,12 @@ dp_do_aclv4_lkup(void *ctx, struct xfi *xf, void *fa_)
     LLBS_PPLN_DROP(xf);
   }
 
+#ifdef HAVE_DP_EXTCT
+  if (xf->l34m.nw_proto == IPPROTO_TCP) {
+    act->ctd.pi.t.tcp_cts[CT_DIR_IN].seq = bpf_ntohl(xf->l34m.seq);
+  }
+#endif
+
   dp_do_map_stats(ctx, xf, LL_DP_ACLV4_STATS_MAP, act->ca.cidx);
 #if 0
   /* Note that this might result in consistency problems 

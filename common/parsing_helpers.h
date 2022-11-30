@@ -288,4 +288,31 @@ struct sctp_cookie {
   __be32 cookie;
 };
 
+struct mkrt_args {
+  uint32_t seq;
+  uint8_t fin:1;
+  uint8_t syn:1;
+  uint8_t rst:1;
+  uint8_t psh:1;
+  uint8_t ack:1;
+  uint8_t urg:1;
+  uint8_t res:2;
+};
+
+struct mkr_args {
+  uint8_t v6;
+  uint32_t dip[4];
+  uint32_t sip[4];
+  uint16_t sport;
+  uint16_t dport;
+  uint8_t protocol;
+
+  union {
+    struct mkrt_args t;
+  };
+};
+
+int create_raw_tcp(void *packet, size_t *plen, struct mkr_args *args);
+int create_send_raw_tcp(struct mkr_args *args);
+
 #endif /* __PARSING_HELPERS_H */
