@@ -142,6 +142,17 @@ dp_pipe_set_nat(void *ctx, struct xfi *xf,
   return 0;
 }
 
+#define ACL4_KEY_GEN(k, xf)         \
+do {                                \
+  (k)->daddr = xf->l34m.ip.daddr;   \
+  (k)->saddr = xf->l34m.ip.saddr;   \
+  (k)->sport = xf->l34m.source;     \
+  (k)->dport = xf->l34m.dest;       \
+  (k)->l4proto = xf->l34m.nw_proto; \
+  (k)->zone = xf->pm.zone;          \
+  (k)->r = 0;                       \
+}while(0)
+
 static int __always_inline
 dp_do_aclv4_lkup(void *ctx, struct xfi *xf, void *fa_)
 {
@@ -151,13 +162,7 @@ dp_do_aclv4_lkup(void *ctx, struct xfi *xf, void *fa_)
   struct dp_fc_tacts *fa = fa_;
 #endif
 
-  key.daddr = xf->l34m.ip.daddr;
-  key.saddr = xf->l34m.ip.saddr;
-  key.sport = xf->l34m.source;
-  key.dport = xf->l34m.dest;
-  key.l4proto = xf->l34m.nw_proto;
-  key.zone = xf->pm.zone;
-  key.r = 0;
+  ACL4_KEY_GEN(&key, xf);
 
   LL_DBG_PRINTK("[ACL4] -- Lookup\n");
   LL_DBG_PRINTK("[ACL4] key-sz %d\n", sizeof(key));
