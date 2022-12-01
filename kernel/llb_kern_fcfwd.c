@@ -5,19 +5,13 @@
  * SPDX-License-Identifier: (GPL-2.0 OR BSD-2-Clause)
  */
 
-#ifdef HAVE_DP_EXTCT
-#define NEED_CT_IN_FC(x) ((x)->l34m.nw_proto == IPPROTO_TCP)
-#else
-#define NEED_CT_IN_FC(x) (0)
-#endif
-
 static int __always_inline
 dp_do_fcv4_ct_helper(struct xfi *xf) 
 {
   struct dp_ctv4_key key;
   struct dp_aclv4_tact *act;
 
-  ACL4_KEY_GEN(&key, xf);
+  ACLCT4_KEY_GEN(&key, xf);
 
   act = bpf_map_lookup_elem(&acl_v4_map, &key);
   if (!act) {
@@ -32,7 +26,8 @@ dp_do_fcv4_ct_helper(struct xfi *xf)
   case DP_SET_NOP:
   case DP_SET_SNAT:
   case DP_SET_DNAT:
-    act->ctd.pi.t.tcp_cts[CT_DIR_IN].seq = bpf_ntohl(xf->l34m.seq);
+    act->ctd.pi.t.tcp_cts[CT_DIR_IN].pseq = xf->l34m.seq;
+    act->ctd.pi.t.tcp_cts[CT_DIR_IN].pack = xf->l34m.ack;
     break;
   default:
     break;
@@ -186,9 +181,7 @@ dp_do_fcv4_lkup(void *ctx, struct xfi *xf)
     return 0;
   }
 
-  if (NEED_CT_IN_FC(xf)) {
-    dp_do_fcv4_ct_helper(xf);
-  }
+  DP_RUN_CT_HELPER(xf);
 
   dp_do_map_stats(ctx, xf, LL_DP_ACLV4_STATS_MAP, acts->ca.cidx);
 

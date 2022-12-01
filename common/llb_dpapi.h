@@ -125,6 +125,8 @@ struct dp_cmn_act {
   __u8 ftrap;
   __u16 oif;
   __u32 cidx;
+  __u32 fwrid;
+  __u32 mark;
 };
 
 struct dp_rt_l2nh_act {
@@ -447,10 +449,12 @@ typedef enum {
 } ct_tcp_state_t;
 
 typedef struct {
-  __u32 hstate;
-  __u32 seq;
+  __u16 hstate;
 #define CT_TCP_INIT_ACK_THRESHOLD 3
   __u16 init_acks;
+  __u32 seq;
+  __be32 pack;
+  __be32 pseq;
 } ct_tcp_pinfd_t;
 
 typedef struct {
@@ -570,6 +574,7 @@ struct dp_aclv4_tact {
                          */
   struct bpf_spin_lock lock;
   struct dp_ctv4_dat ctd;
+  __u64 ito;            /* Inactive timeout */
   __u64 lts;            /* Last used timestamp */
   union {
     struct dp_rdr_act port_act;
@@ -641,6 +646,7 @@ struct dp_natv4_key {
 
 struct dp_natv4_tacts {
   struct dp_cmn_act ca;
+  uint64_t ito;
   struct bpf_spin_lock lock;
   uint32_t nxfrm;
   uint16_t sel_hint;

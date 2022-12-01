@@ -99,6 +99,7 @@ dp_do_nat4_rule_lkup(void *ctx, struct xfi *xf)
         xf->nm.nrip = nxfrm_act->nat_rip;
         xf->nm.nxport = nxfrm_act->nat_xport;
         xf->nm.sel_aid = sel;
+        xf->nm.ito = act->ito;
         xf->pm.rule_id =  act->ca.cidx;
         LL_DBG_PRINTK("[NAT4] ACT %x\n", xf->pm.nf);
         /* Special case related to host-dnat */

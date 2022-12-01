@@ -36,6 +36,63 @@ struct {
 
 #endif
 
+#define ACLCT4_KEY_GEN(k, xf)         \
+do {                                \
+  (k)->daddr = xf->l34m.ip.daddr;   \
+  (k)->saddr = xf->l34m.ip.saddr;   \
+  (k)->sport = xf->l34m.source;     \
+  (k)->dport = xf->l34m.dest;       \
+  (k)->l4proto = xf->l34m.nw_proto; \
+  (k)->zone = xf->pm.zone;          \
+  (k)->r = 0;                       \
+}while(0)
+
+#define dp_run_ctact_helper(x, a) \
+do {                              \
+  switch ((a)->ca.act_type) {     \
+  case DP_SET_NOP:                \
+  case DP_SET_SNAT:               \
+  case DP_SET_DNAT:               \
+    (a)->ctd.pi.t.tcp_cts[CT_DIR_IN].pseq = (x)->l34m.seq;   \
+    (a)->ctd.pi.t.tcp_cts[CT_DIR_IN].pack = (x)->l34m.ack;   \
+    break;                        \
+  default:                        \
+    break;                        \
+  }                               \
+} while(0)
+
+static int __always_inline
+dp_run_ct_helper(struct xfi *xf)
+{
+  struct dp_ctv4_key key;
+  struct dp_aclv4_tact *act;
+
+  ACLCT4_KEY_GEN(&key, xf);
+
+  act = bpf_map_lookup_elem(&acl_v4_map, &key);
+  if (!act) {
+    LL_DBG_PRINTK("[FCH4] miss");
+    return -1;
+  }
+
+  /* We dont do much strict tracking after EST state.
+   * But need to maintain minimal ctinfo
+   */
+  dp_run_ctact_helper(xf, act);
+  return 0;
+}
+
+#ifdef HAVE_DP_EXTCT
+#define DP_RUN_CT_HELPER(x)                \
+do {                                       \
+  if ((x)->l34m.nw_proto == IPPROTO_TCP) { \
+    dp_run_ct_helper(x);                   \
+  }                                        \
+} while(0)
+#else
+#define DP_RUN_CT_HELPER(x)
+#endif
+
 static __u32
 dp_ct_get_newctr(void)
 {
@@ -223,9 +280,13 @@ dp_ct_tcp_sm(void *ctx, struct xfi *xf,
   bpf_spin_lock(&atdat->lock);
 
   if (dir == CT_DIR_IN) {
+    tdat->pi.t.tcp_cts[0].pseq = t->seq;
+    tdat->pi.t.tcp_cts[0].pack = t->ack_seq;
     tdat->pb.bytes += xf->pm.l3_len;
     tdat->pb.packets += 1;
   } else {
+    xtdat->pi.t.tcp_cts[0].pseq = t->seq;
+    xtdat->pi.t.tcp_cts[0].pack = t->ack_seq;
     xtdat->pb.bytes += xf->pm.l3_len;
     xtdat->pb.packets += 1;
   }
@@ -867,6 +928,7 @@ dp_ctv4_in(void *ctx, struct xfi *xf)
     adat->ca.ftrap = 0;
     adat->ca.oif = 0;
     adat->ca.cidx = dp_ct_get_newctr();
+    adat->ca.fwrid = xf->pm.fw_rid;
     memset(&adat->ctd.pi, 0, sizeof(ct_pinf_t));
     if (xi->nat_flags) {
       adat->ca.act_type = xi->nat_flags & (LLB_NAT_DST|LLB_NAT_HDST) ?
@@ -877,6 +939,7 @@ dp_ctv4_in(void *ctx, struct xfi *xf)
       adat->nat_act.doct = 1;
       adat->nat_act.rid = xf->pm.rule_id;
       adat->nat_act.aid = xf->nm.sel_aid;
+      adat->ito = xf->nm.ito;
     } else {
       adat->ca.act_type = DP_SET_DO_CT;
     }
@@ -891,6 +954,7 @@ dp_ctv4_in(void *ctx, struct xfi *xf)
     axdat->ca.ftrap = 0;
     axdat->ca.oif = 0;
     axdat->ca.cidx = adat->ca.cidx + 1;
+    axdat->ca.fwrid = xf->pm.fw_rid;
     memset(&axdat->ctd.pi, 0, sizeof(ct_pinf_t));
     if (xxi->nat_flags) { 
       axdat->ca.act_type = xxi->nat_flags & (LLB_NAT_DST|LLB_NAT_HDST) ?
@@ -901,6 +965,7 @@ dp_ctv4_in(void *ctx, struct xfi *xf)
       axdat->nat_act.doct = 1;
       axdat->nat_act.rid = xf->pm.rule_id;
       axdat->nat_act.aid = xf->nm.sel_aid;
+      axdat->ito = xf->nm.ito;
     } else {
       axdat->ca.act_type = DP_SET_DO_CT;
     }

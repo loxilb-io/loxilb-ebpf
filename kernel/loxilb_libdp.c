@@ -31,6 +31,7 @@
 
 #include "loxilb_libdp.h"
 #include "../common/pdi.h"
+#include "../common/common_frame.h"
 
 #ifndef PATH_MAX
 #define PATH_MAX  4096
@@ -1265,6 +1266,33 @@ ctm_proto_xfk_init(struct dp_ctv4_key *key,
   return 0;
 }
 
+static void
+ll_send_ct4_ep_reset(struct dp_ctv4_key *ep, struct dp_aclv4_tact *adat)
+{
+  struct mkr_args r;
+  ct_tcp_pinf_t *ts = &adat->ctd.pi.t;
+
+  if (ep->l4proto != IPPROTO_TCP) {
+    return;
+  }
+
+  if (ts->state != CT_TCP_EST) {
+    return;
+  }
+
+  memset(&r, 0, sizeof(r));
+
+  r.sip[0] = ntohl(ep->daddr);
+  r.dip[0] = ntohl(ep->saddr);
+  r.sport = ntohs(ep->dport);
+  r.dport = ntohs(ep->sport);
+  r.protocol = ep->l4proto;
+  r.t.seq = ntohl(adat->ctd.pi.t.tcp_cts[CT_DIR_IN].pack);
+  r.t.rst = 1;
+
+  create_xmit_raw_tcp(&r);
+}
+
 static int
 ll_aclct4_map_ent_has_aged(int tid, void *k, void *ita)
 {
@@ -1308,6 +1336,7 @@ ll_aclct4_map_ent_has_aged(int tid, void *k, void *ita)
          dstr, ntohs(xkey.sport),
          sstr, ntohs(xkey.dport),  
          xkey.l4proto); 
+    ll_send_ct4_ep_reset(key, adat);
     llb_clear_map_stats(LL_DP_ACLV4_STATS_MAP, adat->ca.cidx);
     return 1;
   }
@@ -1360,6 +1389,10 @@ ll_aclct4_map_ent_has_aged(int tid, void *k, void *ita)
 
   if (curr_ns < latest_ns) return 0;
 
+  if (est && adat->ito != 0) {
+    to = adat->ito;
+  }
+
   /* CT is allocated both for current and reverse direction */
   llb_fetch_map_stats_used(LL_DP_ACLV4_STATS_MAP, adat->ca.cidx, 1, &used1);
   llb_fetch_map_stats_used(LL_DP_ACLV4_STATS_MAP, adat->ca.cidx+1, 1, &used2);
@@ -1369,6 +1402,7 @@ ll_aclct4_map_ent_has_aged(int tid, void *k, void *ita)
          sstr, ntohs(key->sport),
          dstr, ntohs(key->dport),  
          key->l4proto, dat->rid, est, has_nat, used1 || used2);
+    ll_send_ct4_ep_reset(key, adat);
     llb_clear_map_stats(LL_DP_ACLV4_STATS_MAP, adat->ca.cidx);
     return 1;
   }

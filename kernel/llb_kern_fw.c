@@ -118,6 +118,7 @@ dp_do_fw4_main(void *ctx, struct xfi *xf)
 
 done:
   dp_do_map_stats(ctx, xf, LL_DP_FW4_STATS_MAP, act->ca.cidx);
+  xf->pm.fw_rid = act->ca.cidx;
 
   RETURN_TO_MP();
   return DP_DROP;

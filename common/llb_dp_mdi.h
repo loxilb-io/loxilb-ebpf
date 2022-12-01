@@ -109,7 +109,7 @@ struct dp_pi_mdi {
     __u16            tun_off;
     __u16            fw_mid;
     __u16            fw_lid;
-    __u32            xfrm_mark;
+    __u32            fw_rid;
 }__attribute__((packed));
 
 struct dp_fr_mdi {
@@ -193,6 +193,7 @@ struct dp_nat_mdi {
     __u8            ct_sts;       /* Conntrack state */
     __u8            sel_aid;
     __u32           res;
+    __u64           ito;
 };
 
 struct dp_key_mdi {
