@@ -569,6 +569,13 @@ struct {
         __uint(max_entries, 1);
 } xfck SEC(".maps");
 
+struct {
+        __uint(type,        BPF_MAP_TYPE_ARRAY);
+        __type(key,         __u32);
+        __type(value,       __u32);
+        __uint(max_entries, LLB_CRC32C_ENTRIES);
+} crc32c_map SEC(".maps");
+
 #endif
 
 static void __always_inline
@@ -642,17 +649,17 @@ dp_do_map_stats(struct xdp_md *ctx,
 static void __always_inline
 dp_ipv4_new_csum(struct iphdr *iph)
 {
-    __u16 *iph16 = (__u16 *)iph;
-    __u32 csum;
-    int i;
+  __u16 *iph16 = (__u16 *)iph;
+  __u32 csum;
+  int i;
 
-    iph->check = 0;
+  iph->check = 0;
 
 #pragma clang loop unroll(full)
-    for (i = 0, csum = 0; i < sizeof(*iph) >> 1; i++)
-        csum += *iph16++;
+  for (i = 0, csum = 0; i < sizeof(*iph) >> 1; i++)
+    csum += *iph16++;
 
-    iph->check = ~((csum & 0xffff) + (csum >> 16));
+  iph->check = ~((csum & 0xffff) + (csum >> 16));
 }
 
 #ifdef LL_TC_EBPF
@@ -1157,6 +1164,12 @@ dp_get_pkt_hash(void *md)
   return bpf_get_hash_recalc(md);
 }
 
+static int __always_inline
+dp_pktbuf_read(void *md, __u32 off, void *tobuf, __u32 tolen)
+{
+  return bpf_skb_load_bytes(md, off, tobuf, tolen);
+}
+
 #else /* XDP utilities */
 
 #define DP_NEED_MIRR(md) (0)
@@ -1326,6 +1339,13 @@ dp_get_pkt_hash(void *md)
 {
   /* FIXME - TODO */
   return 0;
+}
+
+static int __always_inline
+dp_pktbuf_read(void *md, __u32 off, void *buf, __u32 tolen)
+{
+  /* FIXME - TODO */
+  return -1;
 }
 
 #endif  /* End of XDP utilities */

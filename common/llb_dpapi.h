@@ -38,6 +38,7 @@
 #define LLB_SESS_MAP_ENTRIES  (20*1024)
 #define LLB_PSECS             (8)
 #define LLB_MAX_NXFRMS        (16)
+#define LLB_CRC32C_ENTRIES    (256)
 
 #define LLB_DP_FW_PGM_ID       (3)
 #define LLB_DP_CT_PGM_ID       (2)
