@@ -1365,10 +1365,12 @@ ll_aclct4_map_ent_has_aged(int tid, void *k, void *ita)
   } else if (key->l4proto == IPPROTO_UDP) {
     ct_udp_pinf_t *us = &dat->pi.u;
  
-    if (us->state == CT_UDP_UEST) {
+    if (us->state & (CT_UDP_UEST|CT_UDP_EST)) {
+      to = CT_UDP_EST_CPTO;
       est = true;
+    } else {
+      to = CT_UDP_FN_CPTO;
     }
-    to = CT_UDP_FN_CPTO;
   } else if (key->l4proto == IPPROTO_ICMP) {
     ct_icmp_pinf_t *is = &dat->pi.i;
     if (is->state == CT_ICMP_REPS) {
@@ -1380,6 +1382,7 @@ ll_aclct4_map_ent_has_aged(int tid, void *k, void *ita)
 
     if (ss->state & CT_SCTP_FIN_MASK ||
         ss->state & CT_SCTP_ERR ||
+        ss->state & CT_SCTP_INIT_MASK ||
         ss->state == CT_SCTP_CLOSED) {
       to = CT_SCTP_FN_CPTO;
     } else if (ss->state == CT_SCTP_EST) {

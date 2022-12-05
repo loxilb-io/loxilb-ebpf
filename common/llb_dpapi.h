@@ -55,8 +55,9 @@
 
 /* Hard-timeouts for ct xxx entry */
 #define CT_TCP_FN_CPTO        (10000000000)
-#define CT_SCTP_FN_CPTO       (60000000000)
-#define CT_UDP_FN_CPTO        (60000000000)
+#define CT_SCTP_FN_CPTO       (20000000000)
+#define CT_UDP_FN_CPTO        (20000000000)
+#define CT_UDP_EST_CPTO       (60000000000)
 #define CT_ICMP_FN_CPTO       (40000000000)
 
 enum llb_dp_tid {
@@ -495,6 +496,7 @@ typedef struct {
 } ct_sctp_pinfd_t;
 
 #define CT_SCTP_FIN_MASK (CT_SCTP_SHUT|CT_SCTP_SHUTA|CT_SCTP_SHUTC|CT_SCTP_ABRT)
+#define CT_SCTP_INIT_MASK (CT_SCTP_INIT|CT_SCTP_INITA|CT_SCTP_COOKIE|CT_SCTP_COOKIEA)
 
 typedef enum {
   CT_SCTP_CLOSED  = 0x0,
