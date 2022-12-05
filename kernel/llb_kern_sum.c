@@ -25,6 +25,19 @@ dp_ipv4_new_csum(struct iphdr *iph)
     iph->check = ~((csum & 0xffff) + (csum >> 16));
 }
 
+static __u32 __always_inline
+get_crc32c_map(__u32 off)
+{
+  __u32 *val;
+
+  val = bpf_map_lookup_elem(&crc32c_map, &off); 
+  if (!val) {
+    /* Not Reached */
+    return 0;
+  }
+
+  return *val;
+}
 
 static void __always_inline
 dp_sctp_csum(void *ctx, struct xfi *xf)
@@ -32,11 +45,45 @@ dp_sctp_csum(void *ctx, struct xfi *xf)
   int loop = 0;
   int off;
   int rlen;
+  __u32 crc = 0xffffffff;
+  __u8 pb;
 
-  xf->km.key[0] == ~xf->km.key[0];
+  xf->km.key[0] == ~xf->km.key[0]; // Next tail-call
   off = xf->km.key[1];
   len = xf->km.key[2];
+  if (off) {
+    crc = *(__u32 *)&xf->km.key[3];
+  }
   
   for (loop = 0; loop < DP_MAX_LOOPS_PER_TCALL; loop++) {
+    while (rlen--) {
+      ret = dp_pktbuf_read(ctx, off, &pb, sizeof(pb));
+      if (ret < 0) {
+        goto drop;
+      }
+      idx =(crc ^ pb) & 0xff;
+      tbval = get_crc32c_map(idx);
+      crc = tbval ^ (crc >> 8);
+      off++;
+    }
+    if (rlen <= 0) {
+      /* TODO Update crc in sctp */
+      /* TODO Update check in IP */
+      /* TODO Reset any flag which indicates further sctp processing */
+      /* Done */
+      RETURN_TO_MP();    
+    }
   }
+
+  /* Update state-variables */
+  xf->km.key[1] = off;
+  xf->km.key[2] = len;
+  *(__u32 *)&xf->km.key[3] = crc;
+
+  /* TODO Jump to next helper section for checksum */
+ 
+  return 0;
+drop:
+  /* Something went wrong here */
+  return DP_DROP;
 }
