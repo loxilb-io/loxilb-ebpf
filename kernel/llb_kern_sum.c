@@ -5,11 +5,30 @@
  * SPDX-License-Identifier: (GPL-2.0 OR BSD-2-Clause)
  */
 
-#define DP_MAX_LOOPS_PER_TCALL (400)
+#define DP_MAX_LOOPS_PER_TCALL (256)
 
-#define RETURN_TO_MP() bpf_tail_call(ctx, &pgm_tbl, LLB_DP_CT_PGM_ID)
+#define RETURN_TO_MP_OUT()                       \
+do {                                             \
+  xf->pm.phit |= LLB_DP_RES_HIT;                 \
+  bpf_tail_call(ctx, &pgm_tbl, LLB_DP_CT_PGM_ID);\
+} while(0)
+
 #define TCALL_CRC1() bpf_tail_call(ctx, &pgm_tbl, LLB_DP_CRC_PGM_ID1)
 #define TCALL_CRC2() bpf_tail_call(ctx, &pgm_tbl, LLB_DP_CRC_PGM_ID2)
+
+static int __always_inline
+dp_sctp_csum_tcall(void *ctx,  struct xfi *xf)
+{
+  __u32 crc = 0xffffffff;
+
+   /* Init state-variables */
+  xf->km.skey[0] = 0;
+  xf->km.skey[1] = xf->pm.l4_off;
+  xf->km.skey[2] = xf->pm.py_bytes - xf->pm.l4_off;
+  *(__u32 *)&xf->km.skey[3] = crc;
+  TCALL_CRC1();
+  return DP_DROP;
+}
 
 static __u32 __always_inline
 get_crc32c_map(__u32 off)
@@ -43,21 +62,23 @@ dp_sctp_csum(void *ctx, struct xfi *xf)
   if (off) {
     crc = *(__u32 *)&xf->km.skey[3];
   }
-  
+
   for (loop = 0; loop < DP_MAX_LOOPS_PER_TCALL; loop++) {
-    while (rlen--) {
       __u8 idx;
-      ret = dp_pktbuf_read(ctx, off, &pb, sizeof(pb));
-      if (ret < 0) {
-        goto drop;
-      }
-      idx =(crc ^ pb) & 0xff;
-      tbval = get_crc32c_map(idx);
-      crc = tbval ^ (crc >> 8);
-      off++;
-    }
-    if (rlen <= 0) {
-      /* Update crc in sctp */
+      if (rlen > 0) {
+        ret = dp_pktbuf_read(ctx, off, &pb, sizeof(pb));
+        if (ret < 0) {
+          goto drop;
+        }
+        idx =(crc ^ pb) & 0xff;
+        tbval = get_crc32c_map(idx);
+        crc = tbval ^ (crc >> 8);
+        off++;
+        rlen--;
+    } else break;
+  }
+  if (rlen <= 0) {
+     /* Update crc in sctp */
       /* Reset any flag which indicates further sctp processing */
       if (xf->l34m.nw_proto == IPPROTO_SCTP)  {
         void *dend = DP_TC_PTR(DP_PDATA_END(ctx));
@@ -75,8 +96,7 @@ dp_sctp_csum(void *ctx, struct xfi *xf)
         xf->pm.nf &= ~LLB_NAT_DST;
       }
         
-      RETURN_TO_MP();    
-    }
+      RETURN_TO_MP_OUT();
   }
 
   /* Update state-variables */
