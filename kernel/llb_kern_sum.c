@@ -8,22 +8,8 @@
 #define DP_MAX_LOOPS_PER_TCALL (400)
 
 #define RETURN_TO_MP() bpf_tail_call(ctx, &pgm_tbl, LLB_DP_CT_PGM_ID)
-
-static void __always_inline
-dp_ipv4_new_csum(struct iphdr *iph)
-{
-    __u16 *iph16 = (__u16 *)iph;
-    __u32 csum;
-    int i;
-
-    iph->check = 0;
-
-#pragma clang loop unroll(full)
-    for (i = 0, csum = 0; i < sizeof(*iph) >> 1; i++)
-        csum += *iph16++;
-
-    iph->check = ~((csum & 0xffff) + (csum >> 16));
-}
+#define TCALL_CRC1() bpf_tail_call(ctx, &pgm_tbl, LLB_DP_CRC_PGM_ID1)
+#define TCALL_CRC2() bpf_tail_call(ctx, &pgm_tbl, LLB_DP_CRC_PGM_ID2)
 
 static __u32 __always_inline
 get_crc32c_map(__u32 off)
@@ -39,24 +25,28 @@ get_crc32c_map(__u32 off)
   return *val;
 }
 
-static void __always_inline
+static int __always_inline
 dp_sctp_csum(void *ctx, struct xfi *xf)
 {
-  int loop = 0;
+  int ret;
   int off;
   int rlen;
-  __u32 crc = 0xffffffff;
+  int tcall;
+  __u32 tbval;
   __u8 pb;
+  int loop = 0;
+  __u32 crc = 0xffffffff;
 
-  xf->km.key[0] == ~xf->km.key[0]; // Next tail-call
-  off = xf->km.key[1];
-  len = xf->km.key[2];
+  tcall = ~xf->km.skey[0]; // Next tail-call
+  off = xf->km.skey[1];
+  rlen = xf->km.skey[2];
   if (off) {
-    crc = *(__u32 *)&xf->km.key[3];
+    crc = *(__u32 *)&xf->km.skey[3];
   }
   
   for (loop = 0; loop < DP_MAX_LOOPS_PER_TCALL; loop++) {
     while (rlen--) {
+      __u8 idx;
       ret = dp_pktbuf_read(ctx, off, &pb, sizeof(pb));
       if (ret < 0) {
         goto drop;
@@ -67,22 +57,41 @@ dp_sctp_csum(void *ctx, struct xfi *xf)
       off++;
     }
     if (rlen <= 0) {
-      /* TODO Update crc in sctp */
-      /* TODO Update check in IP */
-      /* TODO Reset any flag which indicates further sctp processing */
-      /* Done */
+      /* Update crc in sctp */
+      /* Reset any flag which indicates further sctp processing */
+      if (xf->l34m.nw_proto == IPPROTO_SCTP)  {
+        void *dend = DP_TC_PTR(DP_PDATA_END(ctx));
+        struct sctphdr *sctp = DP_ADD_PTR(DP_PDATA(ctx), xf->pm.l4_off);
+        int sctp_csum_off = xf->pm.l4_off + offsetof(struct sctphdr, checksum);
+        __be32 csum;
+
+        if (sctp + 1 > dend) {
+          LLBS_PPLN_DROP(xf);
+          return DP_DROP;
+        }
+        csum = bpf_htonl(crc);
+        dp_pktbuf_write(ctx, sctp_csum_off, &csum , sizeof(csum), 0); 
+        xf->pm.nf &= ~LLB_NAT_SRC;
+        xf->pm.nf &= ~LLB_NAT_DST;
+      }
+        
       RETURN_TO_MP();    
     }
   }
 
   /* Update state-variables */
-  xf->km.key[1] = off;
-  xf->km.key[2] = len;
-  *(__u32 *)&xf->km.key[3] = crc;
+  xf->km.skey[0] = tcall;
+  xf->km.skey[1] = off;
+  xf->km.skey[2] = rlen;
+  *(__u32 *)&xf->km.skey[3] = crc;
 
-  /* TODO Jump to next helper section for checksum */
+  /* Jump to next helper section for checksum */
+  if (tcall) {
+    TCALL_CRC2();
+  } else {
+    TCALL_CRC1();
+  }
  
-  return 0;
 drop:
   /* Something went wrong here */
   return DP_DROP;
