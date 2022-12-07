@@ -58,6 +58,7 @@ dp_do_nat4_rule_lkup(void *ctx, struct xfi *xf)
   struct dp_natv4_tacts *act;
   __u32 sel;
 
+  /*memset(key, 0, sizeof(*key));*/
   key->daddr = xf->l34m.ip.daddr;
   if (xf->l34m.nw_proto != IPPROTO_ICMP) {
     key->dport = xf->l34m.dest;

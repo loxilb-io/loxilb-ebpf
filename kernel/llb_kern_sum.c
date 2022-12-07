@@ -27,17 +27,17 @@ dp_sctp_csum(void *ctx, struct xfi *xf)
   int ret;
   int off;
   int rlen;
-  int tcall;
+  __u8 tcall;
   __u32 tbval;
   __u8 pb;
   int loop = 0;
   __u32 crc = 0xffffffff;
 
   tcall = ~xf->km.skey[0]; // Next tail-call
-  off = xf->km.skey[1];
-  rlen = *(__u16 *)&xf->km.skey[2];
+  off = *(__u16 *)&xf->km.skey[2];
+  rlen = *(__u16 *)&xf->km.skey[4];
   if (off) {
-    crc = *(__u32 *)&xf->km.skey[4];
+    crc = *(__u32 *)&xf->km.skey[8];
   }
 
   for (loop = 0; loop < DP_MAX_LOOPS_PER_TCALL; loop++) {
@@ -79,9 +79,9 @@ dp_sctp_csum(void *ctx, struct xfi *xf)
 
   /* Update state-variables */
   xf->km.skey[0] = tcall;
-  xf->km.skey[1] = off;
-  *(__u16 *)&xf->km.skey[2] = rlen;
-  *(__u32 *)&xf->km.skey[4] = crc;
+  *(__u16 *)&xf->km.skey[2] = off;
+  *(__u16 *)&xf->km.skey[4] = rlen;
+  *(__u32 *)&xf->km.skey[8] = crc;
 
   /* Jump to next helper section for checksum */
   if (tcall) {

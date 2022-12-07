@@ -687,20 +687,22 @@ do {                                             \
 #define TCALL_CRC2() bpf_tail_call(ctx, &pgm_tbl, LLB_DP_CRC_PGM_ID2)
 
 static int __always_inline
-dp_sctp_csum_tcall(void *ctx,  struct xfi *xf)
+dp_csum_tcall(void *ctx,  struct xfi *xf)
 {
+  int z = 0;
   __u32 crc = 0xffffffff;
 
    /* Init state-variables */
   xf->km.skey[0] = 0;
-  xf->km.skey[1] = xf->pm.l4_off;
-  *(__u16 *)&xf->km.skey[2] = xf->pm.py_bytes - xf->pm.l4_off;
-  *(__u32 *)&xf->km.skey[4] = crc;
+  *(__u16 *)&xf->km.skey[2] = xf->pm.l4_off;
+  *(__u16 *)&xf->km.skey[4] = xf->pm.py_bytes - xf->pm.l4_off;
+  *(__u32 *)&xf->km.skey[8] = crc;
+
+  bpf_map_update_elem(&xfis, &z, xf, BPF_ANY);
 
   TCALL_CRC1();
-  return DP_DROP;
+  return DP_PASS;
 }
-
 
 static int __always_inline
 dp_pkt_is_l2mcbc(struct xfi *xf, void *md)
@@ -1100,7 +1102,7 @@ dp_do_dnat(void *ctx, struct xfi *xf, __be32 xip, __be16 xport)
     }
     dp_set_sctp_dport(ctx, xf, xport);
 #ifdef HAVE_DP_SCTP_SUM
-    dp_sctp_csum_tcall(ctx, xf);
+    dp_csum_tcall(ctx, xf);
 #endif
   } else if (xf->l34m.nw_proto == IPPROTO_ICMP)  {
     if (xf->nm.nrip) {
@@ -1177,7 +1179,7 @@ dp_do_snat(void *ctx, struct xfi *xf, __be32 xip, __be16 xport)
     }
     dp_set_sctp_sport(ctx, xf, xport);
 #ifdef HAVE_DP_SCTP_SUM
-    dp_sctp_csum_tcall(ctx, xf);
+    dp_csum_tcall(ctx, xf);
 #endif
   } else if (xf->l34m.nw_proto == IPPROTO_ICMP)  {
     dp_set_icmp_src_ip(ctx, xf, xip);
