@@ -38,7 +38,10 @@
 #define LLB_SESS_MAP_ENTRIES  (20*1024)
 #define LLB_PSECS             (8)
 #define LLB_MAX_NXFRMS        (16)
+#define LLB_CRC32C_ENTRIES    (256)
 
+#define LLB_DP_CRC_PGM_ID2     (5)
+#define LLB_DP_CRC_PGM_ID1     (4)
 #define LLB_DP_FW_PGM_ID       (3)
 #define LLB_DP_CT_PGM_ID       (2)
 #define LLB_DP_PKT_SLOW_PGM_ID (1)
@@ -91,6 +94,7 @@ enum llb_dp_tid {
   LL_DP_SESS4_STATS_MAP,
   LL_DP_FW4_MAP,
   LL_DP_FW4_STATS_MAP,
+  LL_DP_CRC32C_MAP,
   LL_DP_MAX_MAP
 };
 

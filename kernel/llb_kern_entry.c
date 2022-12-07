@@ -16,6 +16,7 @@
 #include "../common/llb_dpapi.h"
 
 #include "llb_kern_cdefs.h"
+#include "llb_kern_sum.c"
 #include "llb_kern_policer.c"
 #include "llb_kern_sessfwd.c"
 #include "llb_kern_fw.c"
@@ -922,5 +923,32 @@ int tc_packet_func_fw(struct __sk_buff *md)
   return dp_do_fw_main(md, xf);
 }
 
+SEC("tc_packet_hook4")
+int tc_csum_func1(struct __sk_buff *md)
+{
+  int val = 0;
+  struct xfi *xf;
+
+  xf = bpf_map_lookup_elem(&xfis, &val);
+  if (!xf) {
+    return DP_DROP;
+  }
+
+  return dp_sctp_csum(md, xf);
+}
+
+SEC("tc_packet_hook5")
+int tc_csum_func2(struct __sk_buff *md)
+{
+  int val = 0;
+  struct xfi *xf;
+
+  xf = bpf_map_lookup_elem(&xfis, &val);
+  if (!xf) {
+    return DP_DROP;
+  }
+
+  return dp_sctp_csum(md, xf);
+}
 
 #endif

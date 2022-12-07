@@ -569,6 +569,13 @@ struct {
         __uint(max_entries, 1);
 } xfck SEC(".maps");
 
+struct {
+        __uint(type,        BPF_MAP_TYPE_ARRAY);
+        __type(key,         __u32);
+        __type(value,       __u32);
+        __uint(max_entries, LLB_CRC32C_ENTRIES);
+} crc32c_map SEC(".maps");
+
 #endif
 
 static void __always_inline
@@ -642,17 +649,17 @@ dp_do_map_stats(struct xdp_md *ctx,
 static void __always_inline
 dp_ipv4_new_csum(struct iphdr *iph)
 {
-    __u16 *iph16 = (__u16 *)iph;
-    __u32 csum;
-    int i;
+  __u16 *iph16 = (__u16 *)iph;
+  __u32 csum;
+  int i;
 
-    iph->check = 0;
+  iph->check = 0;
 
 #pragma clang loop unroll(full)
-    for (i = 0, csum = 0; i < sizeof(*iph) >> 1; i++)
-        csum += *iph16++;
+  for (i = 0, csum = 0; i < sizeof(*iph) >> 1; i++)
+    csum += *iph16++;
 
-    iph->check = ~((csum & 0xffff) + (csum >> 16));
+  iph->check = ~((csum & 0xffff) + (csum >> 16));
 }
 
 #ifdef LL_TC_EBPF
@@ -669,6 +676,33 @@ dp_ipv4_new_csum(struct iphdr *iph)
 #define DP_PDATA(md) (((struct __sk_buff *)md)->data)
 #define DP_PDATA_END(md) (((struct __sk_buff *)md)->data_end)
 #define DP_MDATA(md) (((struct __sk_buff *)md)->data_meta)
+
+#define RETURN_TO_MP_OUT()                       \
+do {                                             \
+  xf->pm.phit |= LLB_DP_RES_HIT;                 \
+  bpf_tail_call(ctx, &pgm_tbl, LLB_DP_CT_PGM_ID);\
+} while(0)
+
+#define TCALL_CRC1() bpf_tail_call(ctx, &pgm_tbl, LLB_DP_CRC_PGM_ID1)
+#define TCALL_CRC2() bpf_tail_call(ctx, &pgm_tbl, LLB_DP_CRC_PGM_ID2)
+
+static int __always_inline
+dp_csum_tcall(void *ctx,  struct xfi *xf)
+{
+  int z = 0;
+  __u32 crc = 0xffffffff;
+
+   /* Init state-variables */
+  xf->km.skey[0] = 0;
+  *(__u16 *)&xf->km.skey[2] = xf->pm.l4_off;
+  *(__u16 *)&xf->km.skey[4] = xf->pm.py_bytes - xf->pm.l4_off;
+  *(__u32 *)&xf->km.skey[8] = crc;
+
+  bpf_map_update_elem(&xfis, &z, xf, BPF_ANY);
+
+  TCALL_CRC1();
+  return DP_PASS;
+}
 
 static int __always_inline
 dp_pkt_is_l2mcbc(struct xfi *xf, void *md)
@@ -1067,6 +1101,9 @@ dp_do_dnat(void *ctx, struct xfi *xf, __be32 xip, __be16 xport)
       dp_set_sctp_dst_ip(ctx, xf, xip);
     }
     dp_set_sctp_dport(ctx, xf, xport);
+#ifdef HAVE_DP_SCTP_SUM
+    dp_csum_tcall(ctx, xf);
+#endif
   } else if (xf->l34m.nw_proto == IPPROTO_ICMP)  {
     if (xf->nm.nrip) {
       dp_set_icmp_src_ip(ctx, xf, xf->nm.nrip);
@@ -1141,6 +1178,9 @@ dp_do_snat(void *ctx, struct xfi *xf, __be32 xip, __be16 xport)
       }
     }
     dp_set_sctp_sport(ctx, xf, xport);
+#ifdef HAVE_DP_SCTP_SUM
+    dp_csum_tcall(ctx, xf);
+#endif
   } else if (xf->l34m.nw_proto == IPPROTO_ICMP)  {
     dp_set_icmp_src_ip(ctx, xf, xip);
     if (xf->nm.nrip) {
@@ -1157,6 +1197,18 @@ dp_get_pkt_hash(void *md)
   return bpf_get_hash_recalc(md);
 }
 
+static int __always_inline
+dp_pktbuf_read(void *md, __u32 off, void *tobuf, __u32 tolen)
+{
+  return bpf_skb_load_bytes(md, off, tobuf, tolen);
+}
+
+static int __always_inline
+dp_pktbuf_write(void *md, __u32 off, void *frmbuf, __u32 frmlen, __u64 flags)
+{
+  return bpf_skb_store_bytes(md, off, frmbuf, frmlen, flags);
+}
+
 #else /* XDP utilities */
 
 #define DP_NEED_MIRR(md) (0)
@@ -1164,6 +1216,10 @@ dp_get_pkt_hash(void *md)
 #define DP_REDIRECT XDP_REDIRECT
 #define DP_DROP     XDP_DROP
 #define DP_PASS     XDP_PASS
+
+#define TCALL_CRC1()
+#define TCALL_CRC2()
+#define RETURN_TO_MP_OUT()
 
 static int __always_inline
 dp_pkt_is_l2mcbc(struct xfi *xf, void *md)
@@ -1326,6 +1382,20 @@ dp_get_pkt_hash(void *md)
 {
   /* FIXME - TODO */
   return 0;
+}
+
+static int __always_inline
+dp_pktbuf_read(void *md, __u32 off, void *buf, __u32 tolen)
+{
+  /* FIXME - TODO */
+  return -1;
+}
+
+static int __always_inline
+dp_pktbuf_write(void *md, __u32 off, void *frmbuf, __u32 frmlen, __u64 flags)
+{
+  /* FIXME - TODO */
+  return -1;
 }
 
 #endif  /* End of XDP utilities */

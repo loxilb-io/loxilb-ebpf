@@ -219,6 +219,27 @@ out:
   return map_fd;
 }
 
+static void
+llb_setup_crc32c_map(int mapfd)
+{
+  int i;
+  uint32_t crc;
+
+  // Generate crc32c table
+  for (i = 0; i < 256; i++) {
+    crc = i;
+    crc = crc & 1 ? (crc >> 1) ^ 0x82f63b78 : crc >> 1;
+    crc = crc & 1 ? (crc >> 1) ^ 0x82f63b78 : crc >> 1;
+    crc = crc & 1 ? (crc >> 1) ^ 0x82f63b78 : crc >> 1;
+    crc = crc & 1 ? (crc >> 1) ^ 0x82f63b78 : crc >> 1;
+    crc = crc & 1 ? (crc >> 1) ^ 0x82f63b78 : crc >> 1;
+    crc = crc & 1 ? (crc >> 1) ^ 0x82f63b78 : crc >> 1;
+    crc = crc & 1 ? (crc >> 1) ^ 0x82f63b78 : crc >> 1;
+    crc = crc & 1 ? (crc >> 1) ^ 0x82f63b78 : crc >> 1;
+    bpf_map_update_elem(mapfd, &i, &crc, BPF_ANY);
+  }
+}
+
 static int
 llb_dflt_sec_map2fd_all(struct bpf_object *bpf_obj)
 {
@@ -250,11 +271,17 @@ llb_dflt_sec_map2fd_all(struct bpf_object *bpf_obj)
           key = 2;
         } else  if (strcmp(section, "tc_packet_hook3") == 0) {
           key = 3;
+        } else  if (strcmp(section, "tc_packet_hook4") == 0) {
+          key = 4;
+        } else  if (strcmp(section, "tc_packet_hook5") == 0) {
+          key = 5;
         } else key = -1;
         if (key >= 0) {
           bpf_map_update_elem(fd, &key, &bfd, BPF_ANY);
         }
       }
+    } else if (i == LL_DP_CRC32C_MAP) {
+      llb_setup_crc32c_map(fd);
     }
   }
 
@@ -531,6 +558,10 @@ llb_xh_init(llb_dp_struct_t *xh)
   xh->maps[LL_DP_FW4_STATS_MAP].max_entries = LLB_FW4_MAP_ENTRIES;
   xh->maps[LL_DP_FW4_STATS_MAP].pbs = calloc(LLB_FW4_MAP_ENTRIES,
                                             sizeof(struct dp_pbc_stats));
+
+  xh->maps[LL_DP_CRC32C_MAP].map_name = "crc32c_map";
+  xh->maps[LL_DP_CRC32C_MAP].has_pb   = 0;
+  xh->maps[LL_DP_CRC32C_MAP].max_entries = LLB_CRC32C_ENTRIES;
 
   strcpy(xh->psecs[0].name, LLB_SECTION_PASS);
   strcpy(xh->psecs[1].name, XDP_LL_SEC_DEFAULT);
