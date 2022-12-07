@@ -280,7 +280,7 @@ llb_dflt_sec_map2fd_all(struct bpf_object *bpf_obj)
           bpf_map_update_elem(fd, &key, &bfd, BPF_ANY);
         }
       }
-    } else if (fd == LL_DP_CRC32C_MAP) {
+    } else if (i == LL_DP_CRC32C_MAP) {
       llb_setup_crc32c_map(fd);
     }
   }

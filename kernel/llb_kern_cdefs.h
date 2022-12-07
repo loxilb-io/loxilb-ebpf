@@ -677,6 +677,31 @@ dp_ipv4_new_csum(struct iphdr *iph)
 #define DP_PDATA_END(md) (((struct __sk_buff *)md)->data_end)
 #define DP_MDATA(md) (((struct __sk_buff *)md)->data_meta)
 
+#define RETURN_TO_MP_OUT()                       \
+do {                                             \
+  xf->pm.phit |= LLB_DP_RES_HIT;                 \
+  bpf_tail_call(ctx, &pgm_tbl, LLB_DP_CT_PGM_ID);\
+} while(0)
+
+#define TCALL_CRC1() bpf_tail_call(ctx, &pgm_tbl, LLB_DP_CRC_PGM_ID1)
+#define TCALL_CRC2() bpf_tail_call(ctx, &pgm_tbl, LLB_DP_CRC_PGM_ID2)
+
+static int __always_inline
+dp_sctp_csum_tcall(void *ctx,  struct xfi *xf)
+{
+  __u32 crc = 0xffffffff;
+
+   /* Init state-variables */
+  xf->km.skey[0] = 0;
+  xf->km.skey[1] = xf->pm.l4_off;
+  *(__u16 *)&xf->km.skey[2] = xf->pm.py_bytes - xf->pm.l4_off;
+  *(__u32 *)&xf->km.skey[4] = crc;
+
+  TCALL_CRC1();
+  return DP_DROP;
+}
+
+
 static int __always_inline
 dp_pkt_is_l2mcbc(struct xfi *xf, void *md)
 {
@@ -1074,6 +1099,9 @@ dp_do_dnat(void *ctx, struct xfi *xf, __be32 xip, __be16 xport)
       dp_set_sctp_dst_ip(ctx, xf, xip);
     }
     dp_set_sctp_dport(ctx, xf, xport);
+#ifdef HAVE_DP_SCTP_SUM
+    dp_sctp_csum_tcall(ctx, xf);
+#endif
   } else if (xf->l34m.nw_proto == IPPROTO_ICMP)  {
     if (xf->nm.nrip) {
       dp_set_icmp_src_ip(ctx, xf, xf->nm.nrip);
@@ -1148,6 +1176,9 @@ dp_do_snat(void *ctx, struct xfi *xf, __be32 xip, __be16 xport)
       }
     }
     dp_set_sctp_sport(ctx, xf, xport);
+#ifdef HAVE_DP_SCTP_SUM
+    dp_sctp_csum_tcall(ctx, xf);
+#endif
   } else if (xf->l34m.nw_proto == IPPROTO_ICMP)  {
     dp_set_icmp_src_ip(ctx, xf, xip);
     if (xf->nm.nrip) {
@@ -1183,6 +1214,10 @@ dp_pktbuf_write(void *md, __u32 off, void *frmbuf, __u32 frmlen, __u64 flags)
 #define DP_REDIRECT XDP_REDIRECT
 #define DP_DROP     XDP_DROP
 #define DP_PASS     XDP_PASS
+
+#define TCALL_CRC1()
+#define TCALL_CRC2()
+#define RETURN_TO_MP_OUT()
 
 static int __always_inline
 dp_pkt_is_l2mcbc(struct xfi *xf, void *md)

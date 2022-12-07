@@ -7,29 +7,6 @@
 
 #define DP_MAX_LOOPS_PER_TCALL (256)
 
-#define RETURN_TO_MP_OUT()                       \
-do {                                             \
-  xf->pm.phit |= LLB_DP_RES_HIT;                 \
-  bpf_tail_call(ctx, &pgm_tbl, LLB_DP_CT_PGM_ID);\
-} while(0)
-
-#define TCALL_CRC1() bpf_tail_call(ctx, &pgm_tbl, LLB_DP_CRC_PGM_ID1)
-#define TCALL_CRC2() bpf_tail_call(ctx, &pgm_tbl, LLB_DP_CRC_PGM_ID2)
-
-static int __always_inline
-dp_sctp_csum_tcall(void *ctx,  struct xfi *xf)
-{
-  __u32 crc = 0xffffffff;
-
-   /* Init state-variables */
-  xf->km.skey[0] = 0;
-  xf->km.skey[1] = xf->pm.l4_off;
-  xf->km.skey[2] = xf->pm.py_bytes - xf->pm.l4_off;
-  *(__u32 *)&xf->km.skey[3] = crc;
-  TCALL_CRC1();
-  return DP_DROP;
-}
-
 static __u32 __always_inline
 get_crc32c_map(__u32 off)
 {
@@ -58,9 +35,9 @@ dp_sctp_csum(void *ctx, struct xfi *xf)
 
   tcall = ~xf->km.skey[0]; // Next tail-call
   off = xf->km.skey[1];
-  rlen = xf->km.skey[2];
+  rlen = *(__u16 *)&xf->km.skey[2];
   if (off) {
-    crc = *(__u32 *)&xf->km.skey[3];
+    crc = *(__u32 *)&xf->km.skey[4];
   }
 
   for (loop = 0; loop < DP_MAX_LOOPS_PER_TCALL; loop++) {
@@ -90,7 +67,8 @@ dp_sctp_csum(void *ctx, struct xfi *xf)
           LLBS_PPLN_DROP(xf);
           return DP_DROP;
         }
-        csum = bpf_htonl(crc);
+        //csum = bpf_htonl(crc ^ 0xffffffff);
+        csum = (crc ^ 0xffffffff);
         dp_pktbuf_write(ctx, sctp_csum_off, &csum , sizeof(csum), 0); 
         xf->pm.nf &= ~LLB_NAT_SRC;
         xf->pm.nf &= ~LLB_NAT_DST;
@@ -102,8 +80,8 @@ dp_sctp_csum(void *ctx, struct xfi *xf)
   /* Update state-variables */
   xf->km.skey[0] = tcall;
   xf->km.skey[1] = off;
-  xf->km.skey[2] = rlen;
-  *(__u32 *)&xf->km.skey[3] = crc;
+  *(__u16 *)&xf->km.skey[2] = rlen;
+  *(__u32 *)&xf->km.skey[4] = crc;
 
   /* Jump to next helper section for checksum */
   if (tcall) {
