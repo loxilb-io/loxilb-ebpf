@@ -1469,6 +1469,8 @@ dp_pop_outer_metadata(void *md, struct xfi *xf, int l2tun)
   xf->pm.tcp_flags = xf->pm.itcp_flags;
   xf->pm.l4fin = xf->pm.il4fin;
   xf->pm.l3_off = xf->pm.il3_off;
+  xf->pm.l3_len = xf->pm.il3_len;
+  xf->pm.l3_plen = xf->pm.il3_plen;
   xf->pm.l4_off = xf->pm.il4_off;
   xf->il34m.valid = 0;
   xf->tm.tun_decap = 1;

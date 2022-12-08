@@ -105,6 +105,8 @@ proc_inl3:
       return -1;
     }
 
+    xf->pm.il3_len = bpf_ntohs(iph->tot_len);
+    xf->pm.il3_plen = xf->pm.il3_len - iphl;
     xf->pm.il3_off = DP_DIFF_PTR(iph, DP_PDATA(md));
 
     xf->il34m.valid = 1;
@@ -209,6 +211,8 @@ proc_inl3:
       return -1;
     }
 
+    xf->pm.il3_plen = bpf_ntohs(ip6->payload_len);
+    xf->pm.il3_len =  xf->pm.il3_plen + sizeof(*ip6);
     xf->pm.il4_off = DP_DIFF_PTR(DP_ADD_PTR(ip6, sizeof(*ip6)), DP_PDATA(md));
 
     xf->il34m.valid = 1;

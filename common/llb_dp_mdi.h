@@ -107,6 +107,9 @@ struct dp_pi_mdi {
     __u8             il4fin:4;
     __u16            l3_len;
     __u16            l3_plen;
+    __u16            il3_len;
+    __u16            il3_plen;
+    __u32            pad;
     __u16            tun_off;
     __u16            fw_mid;
     __u16            fw_lid;
