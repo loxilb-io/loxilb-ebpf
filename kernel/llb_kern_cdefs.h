@@ -695,7 +695,7 @@ dp_csum_tcall(void *ctx,  struct xfi *xf)
    /* Init state-variables */
   xf->km.skey[0] = 0;
   *(__u16 *)&xf->km.skey[2] = xf->pm.l4_off;
-  *(__u16 *)&xf->km.skey[4] = xf->pm.py_bytes - xf->pm.l4_off;
+  *(__u16 *)&xf->km.skey[4] = xf->pm.l3_plen;
   *(__u32 *)&xf->km.skey[8] = crc;
 
   bpf_map_update_elem(&xfis, &z, xf, BPF_ANY);

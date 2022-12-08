@@ -99,17 +99,18 @@ struct dp_pi_mdi {
 #define LLB_NAT_HDST          0x04
 #define LLB_NAT_HSRC          0x08
     __u8             nf;
-    __u32            rule_id;   
+    __u32            rule_id;
     __u8             il3_off;
     __u8             il4_off;
     __u8             itcp_flags;
     __u8             l4fin:4;
     __u8             il4fin:4;
     __u16            l3_len;
+    __u16            l3_plen;
     __u16            tun_off;
     __u16            fw_mid;
     __u16            fw_lid;
-    __u32            fw_rid;
+    __u16            fw_rid;
 }__attribute__((packed));
 
 struct dp_fr_mdi {

@@ -574,6 +574,7 @@ dp_parse_packet(void *md,
     }
 
     xf->pm.l3_len = bpf_ntohs(iph->tot_len);
+    xf->pm.l3_plen = xf->pm.l3_len - iphl;
 
     xf->l34m.valid = 1;
     xf->l34m.tos = iph->tos & 0xfc;
@@ -625,7 +626,6 @@ dp_parse_packet(void *md,
         if (udp + 1 > dend) {
           return 0;
         }
-
 
         xf->l34m.source = udp->source;
         xf->l34m.dest = udp->dest;
@@ -702,7 +702,8 @@ dp_parse_packet(void *md,
       return -1;
     }
 
-    xf->pm.l3_len = bpf_ntohs(ip6->payload_len) + sizeof(*ip6);
+    xf->pm.l3_plen = bpf_ntohs(ip6->payload_len);
+    xf->pm.l3_len =  xf->pm.l3_plen + sizeof(*ip6);
 
     xf->l34m.valid = 1;
     xf->l34m.tos = ((ip6->priority << 4) |
