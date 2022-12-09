@@ -174,6 +174,7 @@ dp_do_aclv4_lkup(void *ctx, struct xfi *xf, void *fa_)
 
 #ifdef HAVE_DP_FC
   fa->ca.cidx = act->ca.cidx;
+  fa->ca.fwrid = act->ca.fwrid;
 #endif
 
   if (act->ca.act_type == DP_SET_DO_CT) {
@@ -242,6 +243,9 @@ dp_do_aclv4_lkup(void *ctx, struct xfi *xf, void *fa_)
   }
 #endif
 
+  if (act->ca.fwrid != 0) {
+    dp_do_map_stats(ctx, xf, LL_DP_FW4_STATS_MAP, act->ca.fwrid);
+  }
   dp_do_map_stats(ctx, xf, LL_DP_ACLV4_STATS_MAP, act->ca.cidx);
 #if 0
   /* Note that this might result in consistency problems 

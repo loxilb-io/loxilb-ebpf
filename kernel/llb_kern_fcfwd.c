@@ -183,6 +183,10 @@ dp_do_fcv4_lkup(void *ctx, struct xfi *xf)
 
   DP_RUN_CT_HELPER(xf);
 
+  if (acts->ca.fwrid != 0) {
+    dp_do_map_stats(ctx, xf, LL_DP_FW4_STATS_MAP, acts->ca.fwrid);
+  }
+
   dp_do_map_stats(ctx, xf, LL_DP_ACLV4_STATS_MAP, acts->ca.cidx);
 
   xf->pm.phit |= LLB_DP_FC_HIT;
