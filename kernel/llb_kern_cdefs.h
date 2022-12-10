@@ -848,6 +848,24 @@ dp_swap_vlan_tag(void *ctx, struct xfi *xf, __be16 vlan)
 }
 
 static int __always_inline
+dp_set_tcp_src_ip6(void *md, struct xfi *xf, __be32 *xip)
+{
+  int tcp_csum_off = xf->pm.l4_off + offsetof(struct tcphdr, check);
+  int ip_src_off = xf->pm.l3_off + offsetof(struct ipv6hdr, saddr);
+  __be32 *old_sip = xf->l34m.ipv6.saddr;
+
+  bpf_l4_csum_replace(md, tcp_csum_off, old_sip[0], xip[0], BPF_F_PSEUDO_HDR |sizeof(*xip));
+  bpf_l4_csum_replace(md, tcp_csum_off, old_sip[1], xip[1], BPF_F_PSEUDO_HDR |sizeof(*xip));
+  bpf_l4_csum_replace(md, tcp_csum_off, old_sip[2], xip[2], BPF_F_PSEUDO_HDR |sizeof(*xip));
+  bpf_l4_csum_replace(md, tcp_csum_off, old_sip[3], xip[3], BPF_F_PSEUDO_HDR |sizeof(*xip));
+  bpf_skb_store_bytes(md, ip_src_off, xip, sizeof(xf->l34m.ipv6.saddr), 0);
+
+  DP_V6ADDR_CP(xf->l34m.ipv6.saddr, xip);
+
+  return 0;
+}
+
+static int __always_inline
 dp_set_tcp_src_ip(void *md, struct xfi *xf, __be32 xip)
 {
   int ip_csum_off  = xf->pm.l3_off + offsetof(struct iphdr, check);
@@ -860,6 +878,24 @@ dp_set_tcp_src_ip(void *md, struct xfi *xf, __be32 xip)
   bpf_skb_store_bytes(md, ip_src_off, &xip, sizeof(xip), 0);
 
   xf->l34m.ip.saddr = xip;
+
+  return 0;
+}
+
+static int __always_inline
+dp_set_tcp_dst_ip6(void *md, struct xfi *xf, __be32 *xip)
+{
+  int tcp_csum_off = xf->pm.l4_off + offsetof(struct tcphdr, check);
+  int ip_dst_off = xf->pm.l3_off + offsetof(struct ipv6hdr, daddr);
+  __be32 *old_dip = xf->l34m.ipv6.daddr;
+
+  bpf_l4_csum_replace(md, tcp_csum_off, old_dip[0], xip[0], BPF_F_PSEUDO_HDR |sizeof(*xip));
+  bpf_l4_csum_replace(md, tcp_csum_off, old_dip[1], xip[1], BPF_F_PSEUDO_HDR |sizeof(*xip));
+  bpf_l4_csum_replace(md, tcp_csum_off, old_dip[2], xip[2], BPF_F_PSEUDO_HDR |sizeof(*xip));
+  bpf_l4_csum_replace(md, tcp_csum_off, old_dip[3], xip[3], BPF_F_PSEUDO_HDR |sizeof(*xip));
+  bpf_skb_store_bytes(md, ip_dst_off, xip, sizeof(xf->l34m.ipv6.daddr), 0);
+
+  DP_V6ADDR_CP(xf->l34m.ipv6.daddr, xip);
 
   return 0;
 }
@@ -909,6 +945,21 @@ dp_set_tcp_dport(void *md, struct xfi *xf, __be16 xport)
 }
 
 static int __always_inline
+dp_set_udp_src_ip6(void *md, struct xfi *xf, __be32 *xip)
+{
+  int udp_csum_off = xf->pm.l4_off + offsetof(struct udphdr, check);
+  int ip_src_off = xf->pm.l3_off + offsetof(struct ipv6hdr, saddr);
+  __be16 csum = 0;
+
+  /* UDP checksum = 0 is valid */
+  bpf_skb_store_bytes(md, udp_csum_off, &csum, sizeof(csum), 0);
+  bpf_skb_store_bytes(md, ip_src_off, xip, sizeof(xf->l34m.ipv6.saddr), 0);
+  DP_V6ADDR_CP(xf->l34m.ipv6.saddr, xip);
+
+  return 0;
+}
+
+static int __always_inline
 dp_set_udp_src_ip(void *md, struct xfi *xf, __be32 xip)
 {
   int ip_csum_off  = xf->pm.l3_off + offsetof(struct iphdr, check);
@@ -922,6 +973,21 @@ dp_set_udp_src_ip(void *md, struct xfi *xf, __be32 xip)
   bpf_l3_csum_replace(md, ip_csum_off, old_sip, xip, sizeof(xip));
   bpf_skb_store_bytes(md, ip_src_off, &xip, sizeof(xip), 0);
   xf->l34m.ip.saddr = xip;
+
+  return 0;
+}
+
+static int __always_inline
+dp_set_udp_dst_ip6(void *md, struct xfi *xf, __be32 *xip)
+{
+  int udp_csum_off = xf->pm.l4_off + offsetof(struct udphdr, check);
+  int ip_dst_off = xf->pm.l3_off + offsetof(struct ipv6hdr, daddr);
+  __be16 csum = 0;
+
+  /* UDP checksum = 0 is valid */
+  bpf_skb_store_bytes(md, udp_csum_off, &csum, sizeof(csum), 0);
+  bpf_skb_store_bytes(md, ip_dst_off, xip, sizeof(xf->l34m.ipv6.daddr), 0);
+  DP_V6ADDR_CP(xf->l34m.ipv6.daddr, xip);
 
   return 0;
 }
@@ -975,15 +1041,37 @@ dp_set_udp_dport(void *md, struct xfi *xf, __be16 xport)
 }
 
 static int __always_inline
+dp_set_icmp_src_ip6(void *md, struct xfi *xf, __be32 *xip)
+{
+  int ip_src_off = xf->pm.l3_off + offsetof(struct ipv6hdr, saddr);
+ 
+  bpf_skb_store_bytes(md, ip_src_off, xip, sizeof(struct in6_addr), 0);
+  DP_V6ADDR_CP(xf->l34m.ipv6.saddr, xip);
+
+  return 0;
+}
+
+static int __always_inline
 dp_set_icmp_src_ip(void *md, struct xfi *xf, __be32 xip)
 {
   int ip_csum_off  = xf->pm.l3_off + offsetof(struct iphdr, check);
   int ip_src_off = xf->pm.l3_off + offsetof(struct iphdr, saddr);
   __be32 old_sip = xf->l34m.ip.saddr;
-  
+ 
   bpf_l3_csum_replace(md, ip_csum_off, old_sip, xip, sizeof(xip));
   bpf_skb_store_bytes(md, ip_src_off, &xip, sizeof(xip), 0);
   xf->l34m.ip.saddr = xip;
+
+  return 0;
+}
+
+static int __always_inline
+dp_set_icmp_dst_ip6(void *md, struct xfi *xf, __be32 *xip)
+{
+  int ip_dst_off = xf->pm.l3_off + offsetof(struct ipv6hdr, daddr);
+
+  bpf_skb_store_bytes(md, ip_dst_off, xip, sizeof(struct in6_addr), 0);
+  DP_V6ADDR_CP(xf->l34m.ipv6.daddr, xip);
 
   return 0;
 }
@@ -1003,6 +1091,17 @@ dp_set_icmp_dst_ip(void *md, struct xfi *xf, __be32 xip)
 }
 
 static int __always_inline
+dp_set_sctp_src_ip6(void *md, struct xfi *xf, __be32 *xip)
+{
+  int ip_src_off = xf->pm.l3_off + offsetof(struct ipv6hdr, saddr);
+
+  bpf_skb_store_bytes(md, ip_src_off, xip, sizeof(struct in6_addr), 0);
+  DP_V6ADDR_CP(xf->l34m.ipv6.saddr, xip);
+
+  return 0;
+}
+
+static int __always_inline
 dp_set_sctp_src_ip(void *md, struct xfi *xf, __be32 xip)
 {
   int ip_csum_off  = xf->pm.l3_off + offsetof(struct iphdr, check);
@@ -1012,6 +1111,17 @@ dp_set_sctp_src_ip(void *md, struct xfi *xf, __be32 xip)
   bpf_l3_csum_replace(md, ip_csum_off, old_sip, xip, sizeof(xip));
   bpf_skb_store_bytes(md, ip_src_off, &xip, sizeof(xip), 0);
   xf->l34m.ip.saddr = xip;
+
+  return 0;
+}
+
+static int __always_inline
+dp_set_sctp_dst_ip6(void *md, struct xfi *xf, __be32 *xip)
+{
+  int ip_dst_off = xf->pm.l3_off + offsetof(struct ipv6hdr, daddr);
+ 
+  bpf_skb_store_bytes(md, ip_dst_off, xip, sizeof(struct in6_addr), 0);
+  DP_V6ADDR_CP(xf->l34m.ipv6.daddr, xip);
 
   return 0;
 }
