@@ -892,10 +892,6 @@ dp_ctv4_in(void *ctx, struct xfi *xf)
   /* CT Key */
   DP_XADDR_CP(key.daddr, xf->l34m.daddr);
   DP_XADDR_CP(key.saddr, xf->l34m.saddr);
-  bpf_printk("saddr 0x%x", key.saddr[0]);
-  bpf_printk("saddr 0x%x", key.saddr[1]);
-  bpf_printk("saddr 0x%x", key.saddr[2]);
-  bpf_printk("saddr 0x%x", key.saddr[3]);
   key.sport = xf->l34m.source;
   key.dport = xf->l34m.dest;
   key.l4proto = xf->l34m.nw_proto;
