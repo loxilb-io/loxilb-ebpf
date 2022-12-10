@@ -36,32 +36,21 @@ struct {
 
 #endif
 
-#define ACLCT6_KEY_GEN(k, xf)               \
-do {                                        \
-  (k)->daddr[0] = xf->l34m.ipv6.daddr[0];   \
-  (k)->daddr[1] = xf->l34m.ipv6.daddr[1];   \
-  (k)->daddr[2] = xf->l34m.ipv6.daddr[2];   \
-  (k)->daddr[3] = xf->l34m.ipv6.daddr[3];   \
-  (k)->saddr[0] = xf->l34m.ipv6.saddr[0];   \
-  (k)->saddr[1] = xf->l34m.ipv6.saddr[1];   \
-  (k)->saddr[2] = xf->l34m.ipv6.saddr[2];   \
-  (k)->saddr[3] = xf->l34m.ipv6.saddr[3];   \
-  (k)->sport = xf->l34m.source;             \
-  (k)->dport = xf->l34m.dest;               \
-  (k)->l4proto = xf->l34m.nw_proto;         \
-  (k)->zone = xf->pm.zone;                  \
-  (k)->r = 0;                               \
-}while(0)
-
-#define ACLCT4_KEY_GEN(k, xf)         \
-do {                                \
-  (k)->daddr = xf->l34m.ip.daddr;   \
-  (k)->saddr = xf->l34m.ip.saddr;   \
-  (k)->sport = xf->l34m.source;     \
-  (k)->dport = xf->l34m.dest;       \
-  (k)->l4proto = xf->l34m.nw_proto; \
-  (k)->zone = xf->pm.zone;          \
-  (k)->r = 0;                       \
+#define ACLCT_KEY_GEN(k, xf)                      \
+do {                                              \
+  (k)->daddr[0] = xf->l34m.ipv6.daddr[0];         \
+  (k)->daddr[1] = xf->l34m.ipv6.daddr[1];         \
+  (k)->daddr[2] = xf->l34m.ipv6.daddr[2];         \
+  (k)->daddr[3] = xf->l34m.ipv6.daddr[3];         \
+  (k)->saddr[0] = xf->l34m.ipv6.saddr[0];         \
+  (k)->saddr[1] = xf->l34m.ipv6.saddr[1];         \
+  (k)->saddr[2] = xf->l34m.ipv6.saddr[2];         \
+  (k)->saddr[3] = xf->l34m.ipv6.saddr[3];         \
+  (k)->sport = xf->l34m.source;                   \
+  (k)->dport = xf->l34m.dest;                     \
+  (k)->l4proto = xf->l34m.nw_proto;               \
+  (k)->zone = xf->pm.zone;                        \
+  (k)->v6 = xf->l2m.dl_type == ETH_P_IPV6 ? 1: 0; \
 }while(0)
 
 #define dp_run_ctact_helper(x, a) \
@@ -81,12 +70,12 @@ do {                              \
 static int __always_inline
 dp_run_ct_helper(struct xfi *xf)
 {
-  struct dp_ctv4_key key;
+  struct dp_ct_key key;
   struct dp_acl_tact *act;
 
-  ACLCT4_KEY_GEN(&key, xf);
+  ACLCT_KEY_GEN(&key, xf);
 
-  act = bpf_map_lookup_elem(&acl_v4_map, &key);
+  act = bpf_map_lookup_elem(&acl_map, &key);
   if (!act) {
     LL_DBG_PRINTK("[FCH4] miss");
     return -1;
@@ -137,24 +126,29 @@ dp_ct_get_newctr(void)
 }
 
 static int 
-dp_ct_proto_xfk_init(struct dp_ctv4_key *key,
+dp_ct_proto_xfk_init(struct dp_ct_key *key,
                      nxfrm_inf_t *xi,
-                     struct dp_ctv4_key *xkey,
+                     struct dp_ct_key *xkey,
                      nxfrm_inf_t *xxi)
 {
-  xkey->daddr = key->saddr;
-  xkey->saddr = key->daddr; 
+  DP_XADDR_CP(xkey->daddr, key->saddr);
+  DP_XADDR_CP(xkey->saddr, key->daddr);
   xkey->sport = key->dport; 
   xkey->dport = key->sport;
   xkey->l4proto = key->l4proto;
   xkey->zone = key->zone;
-  xkey->r = 0;
+  xkey->v6 = 0;
+
+  if (xi->nv6) {
+    xkey->v6 = 1;
+  }
 
   /* Apply NAT xfrm if needed */
   if (xi->nat_flags & LLB_NAT_DST) {
-    xkey->saddr = xi->nat_xip4;
-    if (xi->nat_rip4) {
-      xkey->daddr = xi->nat_rip4;
+    DP_XADDR_CP(xkey->saddr, xi->nat_xip);
+    if (!DP_XADDR_ISZR(xi->nat_rip)) {
+      DP_XADDR_CP(xkey->daddr, xi->nat_rip);
+      DP_XADDR_CP(xxi->nat_rip, key->saddr);
     }
     if (key->l4proto != IPPROTO_ICMP) {
         if (xi->nat_xport)
@@ -164,17 +158,15 @@ dp_ct_proto_xfk_init(struct dp_ctv4_key *key,
     }
 
     xxi->nat_flags = LLB_NAT_SRC;
-    xxi->nat_xip4 = key->daddr;
-    if (xi->nat_rip4) {
-      xxi->nat_rip4 = key->saddr;
-    }
+    DP_XADDR_CP(xxi->nat_xip, key->daddr);
     if (key->l4proto != IPPROTO_ICMP)
       xxi->nat_xport = key->dport;
   }
   if (xi->nat_flags & LLB_NAT_SRC) {
-    xkey->daddr = xi->nat_xip4;
-    if (xi->nat_rip4) {
-      xkey->saddr = xi->nat_rip4;
+    DP_XADDR_CP(xkey->daddr, xi->nat_xip);
+    if (!DP_XADDR_ISZR(xi->nat_rip)) {
+      DP_XADDR_CP(xkey->saddr, xi->nat_rip);
+      DP_XADDR_CP(xxi->nat_rip, key->daddr);
     }
     if (key->l4proto != IPPROTO_ICMP) {
       if (xi->nat_xport)
@@ -184,17 +176,14 @@ dp_ct_proto_xfk_init(struct dp_ctv4_key *key,
     }
 
     xxi->nat_flags = LLB_NAT_DST;
-    xxi->nat_xip4 = key->saddr;
-    if (xi->nat_rip4) {
-      xxi->nat_rip4 = key->daddr;
-    }
+    DP_XADDR_CP(xxi->nat_xip, key->saddr);
 
     if (key->l4proto != IPPROTO_ICMP)
       xxi->nat_xport = key->sport;
   }
   if (xi->nat_flags & LLB_NAT_HDST) {
-    xkey->saddr = key->saddr;
-    xkey->daddr = key->daddr;
+    DP_XADDR_CP(xkey->saddr, key->saddr);
+    DP_XADDR_CP(xkey->daddr, key->daddr);
 
     if (key->l4proto != IPPROTO_ICMP) {
       if (xi->nat_xport)
@@ -204,14 +193,14 @@ dp_ct_proto_xfk_init(struct dp_ctv4_key *key,
     }
 
     xxi->nat_flags = LLB_NAT_HSRC;
-    xxi->nat_xip4 = 0;
-    xi->nat_xip4 = 0;
+    DP_XADDR_SETZR(xxi->nat_xip);
+    DP_XADDR_SETZR(xi->nat_xip);
     if (key->l4proto != IPPROTO_ICMP)
       xxi->nat_xport = key->dport;
   }
   if (xi->nat_flags & LLB_NAT_HSRC) {
-    xkey->saddr = key->saddr;
-    xkey->daddr = key->daddr;
+    DP_XADDR_CP(xkey->saddr, key->saddr);
+    DP_XADDR_CP(xkey->daddr, key->daddr);
 
     if (key->l4proto != IPPROTO_ICMP) {
       if (xi->nat_xport)
@@ -221,8 +210,9 @@ dp_ct_proto_xfk_init(struct dp_ctv4_key *key,
     }
 
     xxi->nat_flags = LLB_NAT_HDST;
-    xxi->nat_xip4 = 0;
-    xi->nat_xip4 = 0;
+    DP_XADDR_SETZR(xxi->nat_xip);
+    DP_XADDR_SETZR(xi->nat_xip);
+
     if (key->l4proto != IPPROTO_ICMP)
       xxi->nat_xport = key->sport;
   }
@@ -231,8 +221,8 @@ dp_ct_proto_xfk_init(struct dp_ctv4_key *key,
 }
 
 static int __always_inline
-dp_ct3_sm(struct dp_ctv4_dat *tdat,
-          struct dp_ctv4_dat *xtdat,
+dp_ct3_sm(struct dp_ct_dat *tdat,
+          struct dp_ct_dat *xtdat,
           ct_dir_t dir)
 {
   ct_state_t new_state = tdat->pi.l3i.state;
@@ -273,8 +263,8 @@ dp_ct_tcp_sm(void *ctx, struct xfi *xf,
              struct dp_acl_tact *axtdat,
              ct_dir_t dir)
 {
-  struct dp_ctv4_dat *tdat = &atdat->ctd;
-  struct dp_ctv4_dat *xtdat = &axtdat->ctd;
+  struct dp_ct_dat *tdat = &atdat->ctd;
+  struct dp_ct_dat *xtdat = &axtdat->ctd;
   ct_tcp_pinf_t *ts = &tdat->pi.t;
   ct_tcp_pinf_t *rts = &xtdat->pi.t;
   void *dend = DP_TC_PTR(DP_PDATA_END(ctx));
@@ -502,8 +492,8 @@ dp_ct_udp_sm(void *ctx, struct xfi *xf,
              struct dp_acl_tact *axtdat,
              ct_dir_t dir)
 {
-  struct dp_ctv4_dat *tdat = &atdat->ctd;
-  struct dp_ctv4_dat *xtdat = &axtdat->ctd;
+  struct dp_ct_dat *tdat = &atdat->ctd;
+  struct dp_ct_dat *xtdat = &axtdat->ctd;
   ct_udp_pinf_t *us = &tdat->pi.u;
   ct_udp_pinf_t *xus = &xtdat->pi.u;
   uint32_t nstate = us->state;
@@ -560,8 +550,8 @@ dp_ct_icmp_sm(void *ctx, struct xfi *xf,
               struct dp_acl_tact *axtdat,
               ct_dir_t dir)
 {
-  struct dp_ctv4_dat *tdat = &atdat->ctd;
-  struct dp_ctv4_dat *xtdat = &axtdat->ctd;
+  struct dp_ct_dat *tdat = &atdat->ctd;
+  struct dp_ct_dat *xtdat = &axtdat->ctd;
   ct_icmp_pinf_t *is = &tdat->pi.i;
   ct_icmp_pinf_t *xis = &xtdat->pi.i;
   void *dend = DP_TC_PTR(DP_PDATA_END(ctx));
@@ -656,8 +646,8 @@ dp_ct_sctp_sm(void *ctx, struct xfi *xf,
               struct dp_acl_tact *axtdat,
               ct_dir_t dir)
 {
-  struct dp_ctv4_dat *tdat = &atdat->ctd;
-  struct dp_ctv4_dat *xtdat = &axtdat->ctd;
+  struct dp_ct_dat *tdat = &atdat->ctd;
+  struct dp_ct_dat *xtdat = &axtdat->ctd;
   ct_sctp_pinf_t *ss = &tdat->pi.s;
   ct_sctp_pinf_t *xss = &xtdat->pi.s;
   uint32_t nstate = 0;
@@ -874,8 +864,8 @@ struct {
 static int __always_inline
 dp_ctv4_in(void *ctx, struct xfi *xf)
 {
-  struct dp_ctv4_key key;
-  struct dp_ctv4_key xkey;
+  struct dp_ct_key key;
+  struct dp_ct_key xkey;
   struct dp_acl_tact *adat;
   struct dp_acl_tact *axdat;
   struct dp_acl_tact *atdat;
@@ -900,13 +890,13 @@ dp_ctv4_in(void *ctx, struct xfi *xf)
   xxi = &axdat->ctd.xi;
  
   /* CT Key */
-  key.daddr = xf->l34m.ip.daddr;
-  key.saddr = xf->l34m.ip.saddr;
+  DP_XADDR_CP(key.daddr, xf->l34m.ipv6.daddr);
+  DP_XADDR_CP(key.saddr, xf->l34m.ipv6.saddr);
   key.sport = xf->l34m.source;
   key.dport = xf->l34m.dest;
   key.l4proto = xf->l34m.nw_proto;
   key.zone = xf->pm.zone;
-  key.r = 0;
+  key.v6 = xf->l2m.dl_type == ETH_P_IPV6 ? 1: 0;
 
   if (key.l4proto != IPPROTO_TCP &&
       key.l4proto != IPPROTO_UDP &&
@@ -916,17 +906,17 @@ dp_ctv4_in(void *ctx, struct xfi *xf)
   }
 
   xi->nat_flags = xf->pm.nf;
-  xi->nat_xip4   = xf->nm.nxip4;
-  xi->nat_rip4   = xf->nm.nrip4;
+  DP_XADDR_CP(xi->nat_xip, xf->nm.nxip);
+  DP_XADDR_CP(xi->nat_rip, xf->nm.nrip);
   xi->nat_xport = xf->nm.nxport;
 
   xxi->nat_flags = 0;
-  xxi->nat_xip4 = 0;
-  xxi->nat_rip4 = 0;
   xxi->nat_xport = 0;
+  DP_XADDR_SETZR(xxi->nat_xip);
+  DP_XADDR_SETZR(xxi->nat_rip);
 
   if (xf->pm.nf & (LLB_NAT_DST|LLB_NAT_SRC)) {
-    if (xi->nat_xip4 == 0) {
+    if (DP_XADDR_ISZR(xi->nat_xip)) {
       if (xf->pm.nf == LLB_NAT_DST) {
         xi->nat_flags = LLB_NAT_HDST;
       } else if (xf->pm.nf == LLB_NAT_SRC){
@@ -937,8 +927,8 @@ dp_ctv4_in(void *ctx, struct xfi *xf)
 
   dp_ct_proto_xfk_init(&key, xi, &xkey, xxi);
 
-  atdat = bpf_map_lookup_elem(&acl_v4_map, &key);
-  axtdat = bpf_map_lookup_elem(&acl_v4_map, &xkey);
+  atdat = bpf_map_lookup_elem(&acl_map, &key);
+  axtdat = bpf_map_lookup_elem(&acl_map, &xkey);
   if (atdat == NULL || axtdat == NULL) {
 
     LL_DBG_PRINTK("[CTRK] new-ct4");
@@ -950,12 +940,13 @@ dp_ctv4_in(void *ctx, struct xfi *xf)
     if (xi->nat_flags) {
       adat->ca.act_type = xi->nat_flags & (LLB_NAT_DST|LLB_NAT_HDST) ?
                              DP_SET_DNAT: DP_SET_SNAT;
-      adat->nat_act.xip = xi->nat_xip4;
-      adat->nat_act.rip = xi->nat_rip4;
+      DP_XADDR_CP(adat->nat_act.xip,  xi->nat_xip);
+      DP_XADDR_CP(adat->nat_act.rip, xi->nat_rip);
       adat->nat_act.xport = xi->nat_xport;
       adat->nat_act.doct = 1;
       adat->nat_act.rid = xf->pm.rule_id;
       adat->nat_act.aid = xf->nm.sel_aid;
+      adat->nat_act.nv6 = xf->nm.nv6 ? 1:0;
       adat->ito = xf->nm.ito;
     } else {
       adat->ca.act_type = DP_SET_DO_CT;
@@ -966,7 +957,7 @@ dp_ctv4_in(void *ctx, struct xfi *xf)
     adat->ctd.rid = xf->pm.rule_id;
     adat->ctd.aid = xf->nm.sel_aid;
     adat->ctd.smr = CT_SMR_INIT;
-    bpf_map_update_elem(&acl_v4_map, &key, adat, BPF_ANY);
+    bpf_map_update_elem(&acl_map, &key, adat, BPF_ANY);
 
     axdat->ca.ftrap = 0;
     axdat->ca.oif = 0;
@@ -976,12 +967,13 @@ dp_ctv4_in(void *ctx, struct xfi *xf)
     if (xxi->nat_flags) { 
       axdat->ca.act_type = xxi->nat_flags & (LLB_NAT_DST|LLB_NAT_HDST) ?
                              DP_SET_DNAT: DP_SET_SNAT;
-      axdat->nat_act.xip = xxi->nat_xip4;
-      axdat->nat_act.rip = xxi->nat_rip4;
+      DP_XADDR_CP(axdat->nat_act.xip, xxi->nat_xip);
+      DP_XADDR_CP(axdat->nat_act.rip, xxi->nat_rip);
       axdat->nat_act.xport = xxi->nat_xport;
       axdat->nat_act.doct = 1;
       axdat->nat_act.rid = xf->pm.rule_id;
       axdat->nat_act.aid = xf->nm.sel_aid;
+      axdat->nat_act.nv6 = xf->nm.nv6 ? 1:0;
       axdat->ito = xf->nm.ito;
     } else {
       axdat->ca.act_type = DP_SET_DO_CT;
@@ -991,10 +983,10 @@ dp_ctv4_in(void *ctx, struct xfi *xf)
     axdat->ctd.smr = CT_SMR_INIT;
     axdat->ctd.rid = adat->ctd.rid;
     axdat->ctd.aid = adat->ctd.aid;
-    bpf_map_update_elem(&acl_v4_map, &xkey, axdat, BPF_ANY);
+    bpf_map_update_elem(&acl_map, &xkey, axdat, BPF_ANY);
 
-    atdat = bpf_map_lookup_elem(&acl_v4_map, &key);
-    axtdat = bpf_map_lookup_elem(&acl_v4_map, &xkey);
+    atdat = bpf_map_lookup_elem(&acl_map, &key);
+    axtdat = bpf_map_lookup_elem(&acl_map, &xkey);
 
   }
 

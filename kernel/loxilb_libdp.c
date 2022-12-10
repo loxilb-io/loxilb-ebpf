@@ -433,22 +433,16 @@ llb_xh_init(llb_dp_struct_t *xh)
   xh->maps[LL_DP_TMAC_STATS_MAP].pbs = calloc(LLB_TMAC_MAP_ENTRIES,
                                             sizeof(struct dp_pbc_stats));
 
-  xh->maps[LL_DP_ACLV4_MAP].map_name = "acl_v4_map";
-  xh->maps[LL_DP_ACLV4_MAP].has_pb   = 0;
-  xh->maps[LL_DP_ACLV4_MAP].max_entries = LLB_ACLV4_MAP_ENTRIES;
+  xh->maps[LL_DP_ACL_MAP].map_name = "acl_map";
+  xh->maps[LL_DP_ACL_MAP].has_pb   = 0;
+  xh->maps[LL_DP_ACL_MAP].max_entries = LLB_ACL_MAP_ENTRIES;
 
-  xh->maps[LL_DP_ACLV4_STATS_MAP].map_name = "acl_v4_stats_map";
-  xh->maps[LL_DP_ACLV4_STATS_MAP].has_pb   = 1;
-  xh->maps[LL_DP_ACLV4_STATS_MAP].max_entries = LLB_ACLV4_MAP_ENTRIES;
-  xh->maps[LL_DP_ACLV4_STATS_MAP].pbs = calloc(LLB_ACLV4_MAP_ENTRIES,
+  xh->maps[LL_DP_ACL_STATS_MAP].map_name = "acl_stats_map";
+  xh->maps[LL_DP_ACL_STATS_MAP].has_pb   = 1;
+  xh->maps[LL_DP_ACL_STATS_MAP].max_entries = LLB_ACL_MAP_ENTRIES;
+  xh->maps[LL_DP_ACL_STATS_MAP].pbs = calloc(LLB_ACL_MAP_ENTRIES,
                                             sizeof(struct dp_pbc_stats));
-  assert(xh->maps[LL_DP_ACLV4_STATS_MAP].pbs);
-
-  xh->maps[LL_DP_ACLV6_STATS_MAP].map_name = "acl_v6_stats_map";
-  xh->maps[LL_DP_ACLV6_STATS_MAP].has_pb   = 1;
-  xh->maps[LL_DP_ACLV6_STATS_MAP].max_entries = LLB_ACLV6_MAP_ENTRIES;
-  xh->maps[LL_DP_ACLV6_STATS_MAP].pbs = calloc(LLB_ACLV6_MAP_ENTRIES,
-                                            sizeof(struct dp_pbc_stats));
+  assert(xh->maps[LL_DP_ACL_STATS_MAP].pbs);
 
   xh->maps[LL_DP_RTV4_MAP].map_name = "rt_v4_map";
   xh->maps[LL_DP_RTV4_MAP].has_pb   = 1;
@@ -460,6 +454,11 @@ llb_xh_init(llb_dp_struct_t *xh)
   xh->maps[LL_DP_RTV4_STATS_MAP].max_entries   = LLB_RTV4_MAP_ENTRIES;
   xh->maps[LL_DP_RTV4_STATS_MAP].pbs = calloc(LLB_RTV4_MAP_ENTRIES,
                                             sizeof(struct dp_pbc_stats));
+
+  xh->maps[LL_DP_RTV6_MAP].map_name = "rt_v6_map";
+  xh->maps[LL_DP_RTV6_MAP].has_pb   = 1;
+  xh->maps[LL_DP_RTV6_MAP].pb_xtid  = LL_DP_RTV6_STATS_MAP;
+  xh->maps[LL_DP_RTV6_MAP].max_entries = LLB_RTV6_MAP_ENTRIES;
 
   xh->maps[LL_DP_RTV6_STATS_MAP].map_name = "rt_v6_stats_map";
   xh->maps[LL_DP_RTV6_STATS_MAP].has_pb   = 1;
@@ -518,9 +517,9 @@ llb_xh_init(llb_dp_struct_t *xh)
   xh->maps[LL_DP_FCV4_MAP].has_pb   = 0;
   xh->maps[LL_DP_FCV4_MAP].max_entries = LLB_FCV4_MAP_ENTRIES;
 
-  xh->maps[LL_DP_CTV4_MAP].map_name = "ct_v4_map";
-  xh->maps[LL_DP_CTV4_MAP].has_pb   = 0;
-  xh->maps[LL_DP_CTV4_MAP].max_entries = LLB_CTV4_MAP_ENTRIES;
+  xh->maps[LL_DP_CT_MAP].map_name = "ct_map";
+  xh->maps[LL_DP_CT_MAP].has_pb   = 0;
+  xh->maps[LL_DP_CT_MAP].max_entries = LLB_CT_MAP_ENTRIES;
 
   xh->maps[LL_DP_NAT4_MAP].map_name = "nat_v4_map";
   xh->maps[LL_DP_NAT4_MAP].has_pb   = 1;
@@ -1047,11 +1046,11 @@ ll_map_elem_cmp_cidx(int tid, void *k, void *ita)
 
   cidx = *(uint32_t *)it->uarg;
 
-  if (tid == LL_DP_CTV4_MAP) {
-    struct dp_ctv4_dat *dat = it->val;
+  if (tid == LL_DP_CT_MAP) {
+    struct dp_ct_dat *dat = it->val;
     if (dat->rid == cidx) return 1;
 
-  } else if (tid == LL_DP_ACLV4_MAP || 
+  } else if (tid == LL_DP_ACL_MAP || 
              tid == LL_DP_TMAC_MAP ||
              tid == LL_DP_RTV4_MAP) {
     struct dp_cmn_act *ca = it->val;
@@ -1164,9 +1163,9 @@ llb_del_map_elem(int tbl, void *k)
   /* Need some post-processing for certain maps */
   if (tbl == LL_DP_NAT4_MAP) {
     if (cidx > 0) {
-      /*llb_del_map_elem_with_cidx(LL_DP_CTV4_MAP, cidx);*/
-      llb_del_map_elem_with_cidx(LL_DP_ACLV4_MAP, cidx);
-      llb_clear_map_stats(LL_DP_ACLV4_STATS_MAP, cidx);
+      /*llb_del_map_elem_with_cidx(LL_DP_CT_MAP, cidx);*/
+      llb_del_map_elem_with_cidx(LL_DP_ACL_MAP, cidx);
+      llb_clear_map_stats(LL_DP_ACL_STATS_MAP, cidx);
     }
   }
 
@@ -1242,23 +1241,27 @@ typedef struct ct_arg_struct
 } ct_arg_struct_t;
 
 static int
-ctm_proto_xfk_init(struct dp_ctv4_key *key,
+ctm_proto_xfk_init(struct dp_ct_key *key,
                    nxfrm_inf_t *xi,
-                   struct dp_ctv4_key *xkey)
+                   struct dp_ct_key *xkey)
 {
-  xkey->daddr = key->saddr;
-  xkey->saddr = key->daddr;
+  DP_XADDR_CP(xkey->daddr, key->saddr);
+  DP_XADDR_CP(xkey->saddr, key->daddr);
   xkey->sport = key->dport;
   xkey->dport = key->sport;
   xkey->l4proto = key->l4proto;
   xkey->zone = key->zone;
-  xkey->r = 0;
+  xkey->v6 = 0;
+
+  if (xi->nv6) {
+    xkey->v6 = 1;
+  } 
 
   /* Apply NAT xfrm if needed */
   if (xi->nat_flags & LLB_NAT_DST) {
-    xkey->saddr = xi->nat_xip4;
-    if (xi->nat_rip4) {
-      xkey->daddr = xi->nat_rip4;
+    DP_XADDR_CP(xkey->saddr, xi->nat_xip);
+    if (!DP_XADDR_ISZR(xi->nat_rip)) {
+      DP_XADDR_CP(xkey->daddr, xi->nat_rip);
     }
     if (key->l4proto != IPPROTO_ICMP) {
         if (xi->nat_xport)
@@ -1266,9 +1269,9 @@ ctm_proto_xfk_init(struct dp_ctv4_key *key,
     }
   }
   if (xi->nat_flags & LLB_NAT_SRC) {
-    xkey->daddr = xi->nat_xip4;
-    if (xi->nat_rip4) {
-      xkey->saddr = xi->nat_rip4;
+    DP_XADDR_CP(xkey->daddr, xi->nat_xip);
+    if (!DP_XADDR_ISZR(xi->nat_rip)) {
+      DP_XADDR_CP(xkey->saddr, xi->nat_rip);
     }
     if (key->l4proto != IPPROTO_ICMP) {
       if (xi->nat_xport)
@@ -1276,8 +1279,8 @@ ctm_proto_xfk_init(struct dp_ctv4_key *key,
     }
   }
   if (xi->nat_flags & LLB_NAT_HDST) {
-    xkey->saddr = key->saddr;
-    xkey->daddr = key->daddr;
+    DP_XADDR_CP(xkey->saddr, key->saddr);
+    DP_XADDR_CP(xkey->daddr, key->daddr);
 
     if (key->l4proto != IPPROTO_ICMP) {
       if (xi->nat_xport)
@@ -1285,8 +1288,8 @@ ctm_proto_xfk_init(struct dp_ctv4_key *key,
     }
   }
   if (xi->nat_flags & LLB_NAT_HSRC) {
-    xkey->saddr = key->saddr;
-    xkey->daddr = key->daddr;
+    DP_XADDR_CP(xkey->saddr, key->saddr);
+    DP_XADDR_CP(xkey->daddr, key->daddr);
 
     if (key->l4proto != IPPROTO_ICMP) {
       if (xi->nat_xport)
@@ -1298,12 +1301,12 @@ ctm_proto_xfk_init(struct dp_ctv4_key *key,
 }
 
 static void
-ll_send_ct4_ep_reset(struct dp_ctv4_key *ep, struct dp_acl_tact *adat)
+ll_send_ct4_ep_reset(struct dp_ct_key *ep, struct dp_acl_tact *adat)
 {
   struct mkr_args r;
   ct_tcp_pinf_t *ts = &adat->ctd.pi.t;
 
-  if (ep->l4proto != IPPROTO_TCP) {
+  if (ep->l4proto != IPPROTO_TCP && ep->v6) {
     return;
   }
 
@@ -1313,8 +1316,8 @@ ll_send_ct4_ep_reset(struct dp_ctv4_key *ep, struct dp_acl_tact *adat)
 
   memset(&r, 0, sizeof(r));
 
-  r.sip[0] = ntohl(ep->daddr);
-  r.dip[0] = ntohl(ep->saddr);
+  r.sip[0] = ntohl(ep->daddr[0]);
+  r.dip[0] = ntohl(ep->saddr[0]);
   r.sport = ntohs(ep->dport);
   r.dport = ntohs(ep->sport);
   r.protocol = ep->l4proto;
@@ -1328,9 +1331,9 @@ static int
 ll_aclct4_map_ent_has_aged(int tid, void *k, void *ita)
 {
   dp_map_ita_t *it = ita;
-  struct dp_ctv4_key *key = k;
-  struct dp_ctv4_key xkey;
-  struct dp_ctv4_dat *dat;
+  struct dp_ct_key *key = k;
+  struct dp_ct_key xkey;
+  struct dp_ct_dat *dat;
   struct dp_acl_tact *adat;
   struct dp_acl_tact axdat;
   ct_arg_struct_t *as;
@@ -1361,14 +1364,14 @@ ll_aclct4_map_ent_has_aged(int tid, void *k, void *ita)
 
   ctm_proto_xfk_init(key, &adat->ctd.xi, &xkey);
 
-  t = &xh->maps[LL_DP_ACLV4_MAP];
+  t = &xh->maps[LL_DP_ACL_MAP];
   if (bpf_map_lookup_elem(t->map_fd, &xkey, &axdat) != 0) {
     printf("rdir ct4 not found %s:%d -> %s:%d (%d)\n",
          dstr, ntohs(xkey.sport),
          sstr, ntohs(xkey.dport),  
          xkey.l4proto); 
     ll_send_ct4_ep_reset(key, adat);
-    llb_clear_map_stats(LL_DP_ACLV4_STATS_MAP, adat->ca.cidx);
+    llb_clear_map_stats(LL_DP_ACL_STATS_MAP, adat->ca.cidx);
     return 1;
   }
 
@@ -1428,8 +1431,8 @@ ll_aclct4_map_ent_has_aged(int tid, void *k, void *ita)
   }
 
   /* CT is allocated both for current and reverse direction */
-  llb_fetch_map_stats_used(LL_DP_ACLV4_STATS_MAP, adat->ca.cidx, 1, &used1);
-  llb_fetch_map_stats_used(LL_DP_ACLV4_STATS_MAP, adat->ca.cidx+1, 1, &used2);
+  llb_fetch_map_stats_used(LL_DP_ACL_STATS_MAP, adat->ca.cidx, 1, &used1);
+  llb_fetch_map_stats_used(LL_DP_ACL_STATS_MAP, adat->ca.cidx+1, 1, &used2);
 
   if (curr_ns - latest_ns > to && !used1 && !used2) {
     printf("##%s:%d -> %s:%d (%d):%u (Aged:%d:%d:%d)\n",
@@ -1437,7 +1440,7 @@ ll_aclct4_map_ent_has_aged(int tid, void *k, void *ita)
          dstr, ntohs(key->dport),  
          key->l4proto, dat->rid, est, has_nat, used1 || used2);
     ll_send_ct4_ep_reset(key, adat);
-    llb_clear_map_stats(LL_DP_ACLV4_STATS_MAP, adat->ca.cidx);
+    llb_clear_map_stats(LL_DP_ACL_STATS_MAP, adat->ca.cidx);
     return 1;
   }
 
@@ -1448,7 +1451,7 @@ static void
 ll_age_aclct4map(void)
 {
   dp_map_ita_t it;
-  struct dp_ctv4_key next_key;
+  struct dp_ct_key next_key;
   struct dp_acl_tact *adat;
   ct_arg_struct_t *as;
   uint64_t ns = __get_os_nsecs_now();
@@ -1469,7 +1472,7 @@ ll_age_aclct4map(void)
   it.val = adat;
   it.uarg = as;
 
-  llb_map_loop_and_delete(LL_DP_ACLV4_MAP, ll_aclct4_map_ent_has_aged, &it);
+  llb_map_loop_and_delete(LL_DP_ACL_MAP, ll_aclct4_map_ent_has_aged, &it);
   if (adat) free(adat);
   if (as) free(as);
 }
@@ -1481,7 +1484,7 @@ llb_age_map_entries(int tbl)
   case LL_DP_FCV4_MAP:
     ll_age_fcmap();
     break;
-  case LL_DP_CTV4_MAP:
+  case LL_DP_CT_MAP:
     ll_age_aclct4map();
     break;
   default:
@@ -1492,15 +1495,15 @@ llb_age_map_entries(int tbl)
 }
 
 static int
-ll_aclct4_map_ent_rm_related(int tid, void *k, void *ita)
+ll_aclct_map_ent_rm_related(int tid, void *k, void *ita)
 {
   int i = 0;
-  struct dp_ctv4_key *key = k;
+  struct dp_ct_key *key = k;
   dp_map_ita_t *it = ita;
   struct dp_acl_tact *adat;
   ct_arg_struct_t *as;
-  char dstr[INET_ADDRSTRLEN];
-  char sstr[INET_ADDRSTRLEN];
+  char dstr[INET6_ADDRSTRLEN];
+  char sstr[INET6_ADDRSTRLEN];
 
   if (!it|| !it->uarg || !it->val) return 0;
 
@@ -1513,14 +1516,19 @@ ll_aclct4_map_ent_rm_related(int tid, void *k, void *ita)
 
   for (i = 0; i < as->n_aids; i++) {
     if (adat->ctd.aid == as->aid[i]) {
-      inet_ntop(AF_INET, &key->saddr, sstr, INET_ADDRSTRLEN);
-      inet_ntop(AF_INET, &key->daddr, dstr, INET_ADDRSTRLEN);
-      printf("related ct4 rm %s:%d -> %s:%d (%d)\n",
+      if (!key->v6) {
+        inet_ntop(AF_INET, &key->saddr[0], sstr, INET_ADDRSTRLEN);
+        inet_ntop(AF_INET, &key->daddr[0], dstr, INET_ADDRSTRLEN);
+      } else {
+        inet_ntop(AF_INET6, &key->saddr[0], sstr, INET6_ADDRSTRLEN);
+        inet_ntop(AF_INET6, &key->daddr[0], dstr, INET6_ADDRSTRLEN);
+      }
+      printf("related ct rm %s:%d -> %s:%d (%d)\n",
          sstr, ntohs(key->sport),
          dstr, ntohs(key->dport),
          key->l4proto);
 
-      llb_clear_map_stats(LL_DP_ACLV4_STATS_MAP, adat->ca.cidx);
+      llb_clear_map_stats(LL_DP_ACL_STATS_MAP, adat->ca.cidx);
 
       return 1;
     }
@@ -1534,7 +1542,7 @@ ll_map_aclct4_rm_related(uint32_t rid, uint32_t *aids, int naid)
 {
   dp_map_ita_t it;
   int i = 0;
-  struct dp_ctv4_key next_key;
+  struct dp_ct_key next_key;
   struct dp_acl_tact *adat;
   ct_arg_struct_t *as;
   uint64_t ns = __get_os_nsecs_now();
@@ -1561,7 +1569,7 @@ ll_map_aclct4_rm_related(uint32_t rid, uint32_t *aids, int naid)
   }
   as->n_aids = naid;
 
-  llb_map_loop_and_delete(LL_DP_ACLV4_MAP, ll_aclct4_map_ent_rm_related, &it);
+  llb_map_loop_and_delete(LL_DP_ACL_MAP, ll_aclct_map_ent_rm_related, &it);
   if (adat) free(adat);
   if (as) free(as);
 }

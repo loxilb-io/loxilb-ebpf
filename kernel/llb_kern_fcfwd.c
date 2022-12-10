@@ -8,12 +8,12 @@
 static int __always_inline
 dp_do_fcv4_ct_helper(struct xfi *xf) 
 {
-  struct dp_ctv4_key key;
+  struct dp_ct_key key;
   struct dp_acl_tact *act;
 
-  ACLCT4_KEY_GEN(&key, xf);
+  ACLCT_KEY_GEN(&key, xf);
 
-  act = bpf_map_lookup_elem(&acl_v4_map, &key);
+  act = bpf_map_lookup_elem(&acl_map, &key);
   if (!act) {
     LL_DBG_PRINTK("[FCH4] miss");
     return -1;
@@ -187,7 +187,7 @@ dp_do_fcv4_lkup(void *ctx, struct xfi *xf)
     dp_do_map_stats(ctx, xf, LL_DP_FW4_STATS_MAP, acts->ca.fwrid);
   }
 
-  dp_do_map_stats(ctx, xf, LL_DP_ACLV4_STATS_MAP, acts->ca.cidx);
+  dp_do_map_stats(ctx, xf, LL_DP_ACL_STATS_MAP, acts->ca.cidx);
 
   xf->pm.phit |= LLB_DP_FC_HIT;
   LL_FC_PRINTK("[FCH4] oport %d\n",  xf->pm.oport);

@@ -80,22 +80,22 @@ dp_do_rtv6(void *ctx, struct xfi *xf, void *fa_)
   key->l.prefixlen = 128; /* 128-bit prefix */
 
   if (xf->pm.nf & LLB_NAT_DST) {
-    if (DP_V6ADDR_IS_ZERO(xf->nm.nxip)) {
-      DP_V6ADDR_CP(key->addr, xf->l34m.ipv6.saddr);
+    if (DP_XADDR_ISZR(xf->nm.nxip)) {
+      DP_XADDR_CP(key->addr, xf->l34m.ipv6.saddr);
     } else {
-      DP_V6ADDR_CP(key->addr, xf->nm.nxip);
+      DP_XADDR_CP(key->addr, xf->nm.nxip);
     }
   } else {
     if (xf->pm.nf & LLB_NAT_SRC) {
-      if (!DP_V6ADDR_IS_ZERO(xf->nm.nrip)) {
-        DP_V6ADDR_CP(key->addr, xf->nm.nrip);
-      } else if (DP_V6ADDR_IS_ZERO(xf->nm.nxip)) {
-        DP_V6ADDR_CP(key->addr, xf->l34m.ipv6.saddr);
+      if (!DP_XADDR_ISZR(xf->nm.nrip)) {
+        DP_XADDR_CP(key->addr, xf->nm.nrip);
+      } else if (DP_XADDR_ISZR(xf->nm.nxip)) {
+        DP_XADDR_CP(key->addr, xf->l34m.ipv6.saddr);
       } else {
-        DP_V6ADDR_CP(key->addr, xf->l34m.ipv6.daddr);
+        DP_XADDR_CP(key->addr, xf->l34m.ipv6.daddr);
       }
     } else {
-        DP_V6ADDR_CP(key->addr, xf->l34m.ipv6.daddr);
+        DP_XADDR_CP(key->addr, xf->l34m.ipv6.daddr);
     }
   }
 
@@ -168,16 +168,17 @@ dp_pipe_set_nat(void *ctx, struct xfi *xf,
                 struct dp_nat_act *na, int do_snat)
 {
   xf->pm.nf = do_snat ? LLB_NAT_SRC : LLB_NAT_DST;
-  xf->nm.nxip4 = na->xip;
-  xf->nm.nrip4 = na->rip;
+  DP_XADDR_CP(xf->nm.nxip, na->xip);
+  DP_XADDR_CP(xf->nm.nrip, na->rip);
   xf->nm.nxport = na->xport;
+  xf->nm.nv6 = na->nv6 ? 1 : 0;
   LL_DBG_PRINTK("[ACL4] NAT ACT %x\n", xf->pm.nf);
 
   return 0;
 }
 
 static int __always_inline
-dp_do_acl_cmn(void *ctx, struct xfi *xf, void *fa_, 
+dp_do_acl_ops(void *ctx, struct xfi *xf, void *fa_, 
               struct dp_acl_tact *act)
 {
 #ifdef HAVE_DP_FC
@@ -266,7 +267,7 @@ dp_do_acl_cmn(void *ctx, struct xfi *xf, void *fa_,
   if (act->ca.fwrid != 0) {
     dp_do_map_stats(ctx, xf, LL_DP_FW4_STATS_MAP, act->ca.fwrid);
   }
-  dp_do_map_stats(ctx, xf, LL_DP_ACLV4_STATS_MAP, act->ca.cidx);
+  dp_do_map_stats(ctx, xf, LL_DP_ACL_STATS_MAP, act->ca.cidx);
 #if 0
   /* Note that this might result in consistency problems 
    * between packet and byte counts at times but this should be 
@@ -283,51 +284,29 @@ ct_trk:
 }
 
 
-
 static int __always_inline
-dp_do_aclv6(void *ctx, struct xfi *xf, void *fa_)
+dp_do_ing_acl(void *ctx, struct xfi *xf, void *fa_)
 {
-  struct dp_ctv6_key key;
+  struct dp_ct_key key;
   struct dp_acl_tact *act;
 
-  ACLCT6_KEY_GEN(&key, xf);
-
-  LL_DBG_PRINTK("[ACL6] -- Lookup\n");
-
-  xf->pm.table_id = LL_DP_ACLV6_MAP;
-
-  act = bpf_map_lookup_elem(&acl_v6_map, &key);
-  if (!act) {
-    LL_DBG_PRINTK("[ACL6] miss");
-    return -1;
-  }
-
-  return dp_do_acl_cmn(ctx, xf, fa_, act);
-}
-
-static int __always_inline
-dp_do_ing_aclv4(void *ctx, struct xfi *xf, void *fa_)
-{
-  struct dp_ctv4_key key;
-  struct dp_acl_tact *act;
-
-  ACLCT4_KEY_GEN(&key, xf);
+  ACLCT_KEY_GEN(&key, xf);
 
   LL_DBG_PRINTK("[ACL4] -- Lookup\n");
   LL_DBG_PRINTK("[ACL4] key-sz %d\n", sizeof(key));
-  LL_DBG_PRINTK("[ACL4] daddr %x\n", key.daddr);
-  LL_DBG_PRINTK("[ACL4] saddr %d\n", key.saddr);
+  LL_DBG_PRINTK("[ACL4] daddr %x\n", key.daddr[0]);
+  LL_DBG_PRINTK("[ACL4] saddr %d\n", key.saddr[0]);
   LL_DBG_PRINTK("[ACL4] sport %d\n", key.sport);
   LL_DBG_PRINTK("[ACL4] dport %d\n", key.dport);
   LL_DBG_PRINTK("[ACL4] l4proto %d\n", key.l4proto);
 
-  xf->pm.table_id = LL_DP_ACLV4_MAP;
-  act = bpf_map_lookup_elem(&acl_v4_map, &key);
+  xf->pm.table_id = LL_DP_ACL_MAP;
+  act = bpf_map_lookup_elem(&acl_map, &key);
   if (!act) {
     LL_DBG_PRINTK("[ACL4] miss");
   }
 
-  return dp_do_acl_cmn(ctx, xf, fa_, act);
+  return dp_do_acl_ops(ctx, xf, fa_, act);
 }
 
 static void __always_inline
@@ -354,7 +333,7 @@ dp_ing_ipv4(void *ctx,  struct xfi *xf, void *fa_)
   if (xf->tm.tunnel_id && xf->tm.tun_type == LLB_TUN_GTP) {
     dp_do_sess4_lkup(ctx, xf);
   }
-  dp_do_ing_aclv4(ctx, xf, fa_);
+  dp_do_ing_acl(ctx, xf, fa_);
   dp_do_ipv4_fwd(ctx, xf, fa_);
 
   return 0;
