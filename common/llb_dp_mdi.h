@@ -134,6 +134,9 @@ struct dp_l2_mdi {
     __u32            r2;
 };
 
+#define saddr4 saddr[0]
+#define daddr4 daddr[0]
+
 struct dp_l34_mdi {
     __u8             tos;
     __u8             nw_proto;
@@ -147,17 +150,8 @@ struct dp_l34_mdi {
     __u32            seq;
     __u32            ack;
 
-    union {
-        struct ipf {
-            __u32    saddr;
-            __u32    daddr;
-        }ip;
-        struct ip6f {
-            __u32    saddr[4];
-            __u32    daddr[4];
-
-        }ipv6;
-    };
+    __u32            saddr[4];
+    __u32            daddr[4];
 };
 
 struct dp_tun_mdi {

@@ -38,14 +38,14 @@ struct {
 
 #define ACLCT_KEY_GEN(k, xf)                      \
 do {                                              \
-  (k)->daddr[0] = xf->l34m.ipv6.daddr[0];         \
-  (k)->daddr[1] = xf->l34m.ipv6.daddr[1];         \
-  (k)->daddr[2] = xf->l34m.ipv6.daddr[2];         \
-  (k)->daddr[3] = xf->l34m.ipv6.daddr[3];         \
-  (k)->saddr[0] = xf->l34m.ipv6.saddr[0];         \
-  (k)->saddr[1] = xf->l34m.ipv6.saddr[1];         \
-  (k)->saddr[2] = xf->l34m.ipv6.saddr[2];         \
-  (k)->saddr[3] = xf->l34m.ipv6.saddr[3];         \
+  (k)->daddr[0] = xf->l34m.daddr[0];         \
+  (k)->daddr[1] = xf->l34m.daddr[1];         \
+  (k)->daddr[2] = xf->l34m.daddr[2];         \
+  (k)->daddr[3] = xf->l34m.daddr[3];         \
+  (k)->saddr[0] = xf->l34m.saddr[0];         \
+  (k)->saddr[1] = xf->l34m.saddr[1];         \
+  (k)->saddr[2] = xf->l34m.saddr[2];         \
+  (k)->saddr[3] = xf->l34m.saddr[3];         \
   (k)->sport = xf->l34m.source;                   \
   (k)->dport = xf->l34m.dest;                     \
   (k)->l4proto = xf->l34m.nw_proto;               \
@@ -890,8 +890,12 @@ dp_ctv4_in(void *ctx, struct xfi *xf)
   xxi = &axdat->ctd.xi;
  
   /* CT Key */
-  DP_XADDR_CP(key.daddr, xf->l34m.ipv6.daddr);
-  DP_XADDR_CP(key.saddr, xf->l34m.ipv6.saddr);
+  DP_XADDR_CP(key.daddr, xf->l34m.daddr);
+  DP_XADDR_CP(key.saddr, xf->l34m.saddr);
+  bpf_printk("saddr 0x%x", key.saddr[0]);
+  bpf_printk("saddr 0x%x", key.saddr[1]);
+  bpf_printk("saddr 0x%x", key.saddr[2]);
+  bpf_printk("saddr 0x%x", key.saddr[3]);
   key.sport = xf->l34m.source;
   key.dport = xf->l34m.dest;
   key.l4proto = xf->l34m.nw_proto;

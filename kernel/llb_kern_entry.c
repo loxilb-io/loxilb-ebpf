@@ -86,8 +86,8 @@ proc_inl3:
 
     if (arp->ar_pro == bpf_htons(ETH_P_IP) &&
         arp->ar_pln == 4) {
-      xf->il34m.ip.saddr = arp->ar_spa;
-      xf->l34m.ip.daddr = arp->ar_tpa;
+      xf->il34m.saddr4 = arp->ar_spa;
+      xf->l34m.daddr4 = arp->ar_tpa;
     }
     xf->il34m.nw_proto = bpf_ntohs(arp->ar_op) & 0xff;
     return 1;
@@ -112,8 +112,8 @@ proc_inl3:
     xf->il34m.valid = 1;
     xf->il34m.tos = iph->tos & 0xfc;
     xf->il34m.nw_proto = iph->protocol;
-    xf->il34m.ip.saddr = iph->saddr;
-    xf->il34m.ip.daddr = iph->daddr;
+    xf->il34m.saddr4 = iph->saddr;
+    xf->il34m.daddr4 = iph->daddr;
 
     if (!ip_is_fragment(iph)) {
 
@@ -219,8 +219,8 @@ proc_inl3:
     xf->il34m.tos = ((ip6->priority << 4) |
                  ((ip6->flow_lbl[0] & 0xf0) >> 4)) & 0xfc;
     xf->il34m.nw_proto = ip6->nexthdr;
-    memcpy(&xf->il34m.ipv6.saddr, &ip6->saddr, sizeof(ip6->saddr));
-    memcpy(&xf->il34m.ipv6.daddr, &ip6->daddr, sizeof(ip6->daddr));
+    memcpy(&xf->il34m.saddr, &ip6->saddr, sizeof(ip6->saddr));
+    memcpy(&xf->il34m.daddr, &ip6->daddr, sizeof(ip6->daddr));
 
     if (xf->il34m.nw_proto == IPPROTO_TCP) {
       struct tcphdr *tcp = DP_ADD_PTR(ip6, sizeof(*ip6));
@@ -544,8 +544,8 @@ dp_parse_packet(void *md,
 
     if (arp->ar_pro == bpf_htons(ETH_P_IP) && 
         arp->ar_pln == 4) {
-      xf->l34m.ip.saddr = arp->ar_spa;
-      xf->l34m.ip.daddr = arp->ar_tpa;
+      xf->l34m.saddr4 = arp->ar_spa;
+      xf->l34m.daddr4 = arp->ar_tpa;
     }
     xf->l34m.nw_proto = bpf_ntohs(arp->ar_op) & 0xff;
     LLBS_PPLN_TRAPC(xf, LLB_PIPE_RC_PARSER);
@@ -583,8 +583,8 @@ dp_parse_packet(void *md,
     xf->l34m.valid = 1;
     xf->l34m.tos = iph->tos & 0xfc;
     xf->l34m.nw_proto = iph->protocol;
-    xf->l34m.ip.saddr = iph->saddr;
-    xf->l34m.ip.daddr = iph->daddr;
+    xf->l34m.saddr4 = iph->saddr;
+    xf->l34m.daddr4 = iph->daddr;
 
     /* Earlier we used to have the following check here :
      * !ip_is_fragment(iph) || ip_is_first_fragment(iph))
@@ -713,8 +713,8 @@ dp_parse_packet(void *md,
     xf->l34m.tos = ((ip6->priority << 4) |
                  ((ip6->flow_lbl[0] & 0xf0) >> 4)) & 0xfc;
     xf->l34m.nw_proto = ip6->nexthdr;
-    memcpy(&xf->l34m.ipv6.saddr, &ip6->saddr, sizeof(ip6->saddr));
-    memcpy(&xf->l34m.ipv6.daddr, &ip6->daddr, sizeof(ip6->daddr));
+    memcpy(&xf->l34m.saddr, &ip6->saddr, sizeof(ip6->saddr));
+    memcpy(&xf->l34m.daddr, &ip6->daddr, sizeof(ip6->daddr));
 
     xf->pm.l4_off = DP_DIFF_PTR(DP_ADD_PTR(ip6, sizeof(*ip6)), eth);
     if (xf->l34m.nw_proto == IPPROTO_TCP) {

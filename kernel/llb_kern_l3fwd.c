@@ -47,15 +47,15 @@ dp_rtv4_get_ipkey(struct xfi *xf)
   __u32 ipkey;
 
   if (xf->pm.nf & LLB_NAT_DST) {
-    ipkey = xf->nm.nxip4?:xf->l34m.ip.saddr;
+    ipkey = xf->nm.nxip4?:xf->l34m.saddr4;
   } else {
     if (xf->pm.nf & LLB_NAT_SRC) {
       if (xf->nm.nrip4) {
         ipkey = xf->nm.nrip4;
       } else if (xf->nm.nxip4 == 0) {
-        ipkey = xf->l34m.ip.saddr;
+        ipkey = xf->l34m.saddr4;
       } else {
-        ipkey = xf->l34m.ip.daddr;
+        ipkey = xf->l34m.daddr4;
       }
     } else {
       if (xf->tm.new_tunnel_id && xf->tm.tun_type == LLB_TUN_GTP) {
@@ -64,7 +64,7 @@ dp_rtv4_get_ipkey(struct xfi *xf)
          */
         ipkey = xf->tm.tun_rip;
       } else {
-        ipkey = xf->l34m.ip.daddr;
+        ipkey = xf->l34m.daddr4;
       }
     }
   }
@@ -81,7 +81,7 @@ dp_do_rtv6(void *ctx, struct xfi *xf, void *fa_)
 
   if (xf->pm.nf & LLB_NAT_DST) {
     if (DP_XADDR_ISZR(xf->nm.nxip)) {
-      DP_XADDR_CP(key->addr, xf->l34m.ipv6.saddr);
+      DP_XADDR_CP(key->addr, xf->l34m.saddr);
     } else {
       DP_XADDR_CP(key->addr, xf->nm.nxip);
     }
@@ -90,12 +90,12 @@ dp_do_rtv6(void *ctx, struct xfi *xf, void *fa_)
       if (!DP_XADDR_ISZR(xf->nm.nrip)) {
         DP_XADDR_CP(key->addr, xf->nm.nrip);
       } else if (DP_XADDR_ISZR(xf->nm.nxip)) {
-        DP_XADDR_CP(key->addr, xf->l34m.ipv6.saddr);
+        DP_XADDR_CP(key->addr, xf->l34m.saddr);
       } else {
-        DP_XADDR_CP(key->addr, xf->l34m.ipv6.daddr);
+        DP_XADDR_CP(key->addr, xf->l34m.daddr);
       }
     } else {
-        DP_XADDR_CP(key->addr, xf->l34m.ipv6.daddr);
+        DP_XADDR_CP(key->addr, xf->l34m.daddr);
     }
   }
 

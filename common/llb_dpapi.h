@@ -642,16 +642,6 @@ struct dp_acl_tacts {
 };
 typedef struct dp_acl_tacts dp_acl_tacts_t;
 
-struct dp_ctv6_key {
-  __u32 daddr[4];
-  __u32 saddr[4];
-  __u16 sport;
-  __u16 dport;
-  __u16 zone;
-  __u8  l4proto;
-  __u8  r;
-};
-
 struct dp_ct_key {
   __u32 daddr[4];
   __u32 saddr[4];

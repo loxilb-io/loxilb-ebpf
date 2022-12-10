@@ -830,15 +830,15 @@ dp_set_tcp_src_ip6(void *md, struct xfi *xf, __be32 *xip)
 {
   int tcp_csum_off = xf->pm.l4_off + offsetof(struct tcphdr, check);
   int ip_src_off = xf->pm.l3_off + offsetof(struct ipv6hdr, saddr);
-  __be32 *old_sip = xf->l34m.ipv6.saddr;
+  __be32 *old_sip = xf->l34m.saddr;
 
   bpf_l4_csum_replace(md, tcp_csum_off, old_sip[0], xip[0], BPF_F_PSEUDO_HDR |sizeof(*xip));
   bpf_l4_csum_replace(md, tcp_csum_off, old_sip[1], xip[1], BPF_F_PSEUDO_HDR |sizeof(*xip));
   bpf_l4_csum_replace(md, tcp_csum_off, old_sip[2], xip[2], BPF_F_PSEUDO_HDR |sizeof(*xip));
   bpf_l4_csum_replace(md, tcp_csum_off, old_sip[3], xip[3], BPF_F_PSEUDO_HDR |sizeof(*xip));
-  bpf_skb_store_bytes(md, ip_src_off, xip, sizeof(xf->l34m.ipv6.saddr), 0);
+  bpf_skb_store_bytes(md, ip_src_off, xip, sizeof(xf->l34m.saddr), 0);
 
-  DP_XADDR_CP(xf->l34m.ipv6.saddr, xip);
+  DP_XADDR_CP(xf->l34m.saddr, xip);
 
   return 0;
 }
@@ -849,13 +849,13 @@ dp_set_tcp_src_ip(void *md, struct xfi *xf, __be32 xip)
   int ip_csum_off  = xf->pm.l3_off + offsetof(struct iphdr, check);
   int tcp_csum_off = xf->pm.l4_off + offsetof(struct tcphdr, check);
   int ip_src_off = xf->pm.l3_off + offsetof(struct iphdr, saddr);
-  __be32 old_sip = xf->l34m.ip.saddr;
+  __be32 old_sip = xf->l34m.saddr4;
 
   bpf_l4_csum_replace(md, tcp_csum_off, old_sip, xip, BPF_F_PSEUDO_HDR |sizeof(xip));
   bpf_l3_csum_replace(md, ip_csum_off, old_sip, xip, sizeof(xip));
   bpf_skb_store_bytes(md, ip_src_off, &xip, sizeof(xip), 0);
 
-  xf->l34m.ip.saddr = xip;
+  xf->l34m.saddr4 = xip;
 
   return 0;
 }
@@ -865,15 +865,15 @@ dp_set_tcp_dst_ip6(void *md, struct xfi *xf, __be32 *xip)
 {
   int tcp_csum_off = xf->pm.l4_off + offsetof(struct tcphdr, check);
   int ip_dst_off = xf->pm.l3_off + offsetof(struct ipv6hdr, daddr);
-  __be32 *old_dip = xf->l34m.ipv6.daddr;
+  __be32 *old_dip = xf->l34m.daddr;
 
   bpf_l4_csum_replace(md, tcp_csum_off, old_dip[0], xip[0], BPF_F_PSEUDO_HDR |sizeof(*xip));
   bpf_l4_csum_replace(md, tcp_csum_off, old_dip[1], xip[1], BPF_F_PSEUDO_HDR |sizeof(*xip));
   bpf_l4_csum_replace(md, tcp_csum_off, old_dip[2], xip[2], BPF_F_PSEUDO_HDR |sizeof(*xip));
   bpf_l4_csum_replace(md, tcp_csum_off, old_dip[3], xip[3], BPF_F_PSEUDO_HDR |sizeof(*xip));
-  bpf_skb_store_bytes(md, ip_dst_off, xip, sizeof(xf->l34m.ipv6.daddr), 0);
+  bpf_skb_store_bytes(md, ip_dst_off, xip, sizeof(xf->l34m.daddr), 0);
 
-  DP_XADDR_CP(xf->l34m.ipv6.daddr, xip);
+  DP_XADDR_CP(xf->l34m.daddr, xip);
 
   return 0;
 }
@@ -884,12 +884,12 @@ dp_set_tcp_dst_ip(void *md, struct xfi *xf, __be32 xip)
   int ip_csum_off  = xf->pm.l3_off + offsetof(struct iphdr, check);
   int tcp_csum_off = xf->pm.l4_off + offsetof(struct tcphdr, check);
   int ip_dst_off = xf->pm.l3_off + offsetof(struct iphdr, daddr);
-  __be32 old_dip = xf->l34m.ip.daddr;
+  __be32 old_dip = xf->l34m.daddr4;
 
   bpf_l4_csum_replace(md, tcp_csum_off, old_dip, xip, BPF_F_PSEUDO_HDR | sizeof(xip));
   bpf_l3_csum_replace(md, ip_csum_off, old_dip, xip, sizeof(xip));
   bpf_skb_store_bytes(md, ip_dst_off, &xip, sizeof(xip), 0);
-  xf->l34m.ip.daddr = xip;
+  xf->l34m.daddr4 = xip;
 
   return 0;
 }
@@ -931,8 +931,8 @@ dp_set_udp_src_ip6(void *md, struct xfi *xf, __be32 *xip)
 
   /* UDP checksum = 0 is valid */
   bpf_skb_store_bytes(md, udp_csum_off, &csum, sizeof(csum), 0);
-  bpf_skb_store_bytes(md, ip_src_off, xip, sizeof(xf->l34m.ipv6.saddr), 0);
-  DP_XADDR_CP(xf->l34m.ipv6.saddr, xip);
+  bpf_skb_store_bytes(md, ip_src_off, xip, sizeof(xf->l34m.saddr), 0);
+  DP_XADDR_CP(xf->l34m.saddr, xip);
 
   return 0;
 }
@@ -944,13 +944,13 @@ dp_set_udp_src_ip(void *md, struct xfi *xf, __be32 xip)
   int udp_csum_off = xf->pm.l4_off + offsetof(struct udphdr, check);
   int ip_src_off = xf->pm.l3_off + offsetof(struct iphdr, saddr);
   __be16 csum = 0;
-  __be32 old_sip = xf->l34m.ip.saddr;
+  __be32 old_sip = xf->l34m.saddr4;
   
   /* UDP checksum = 0 is valid */
   bpf_skb_store_bytes(md, udp_csum_off, &csum, sizeof(csum), 0);
   bpf_l3_csum_replace(md, ip_csum_off, old_sip, xip, sizeof(xip));
   bpf_skb_store_bytes(md, ip_src_off, &xip, sizeof(xip), 0);
-  xf->l34m.ip.saddr = xip;
+  xf->l34m.saddr4 = xip;
 
   return 0;
 }
@@ -964,8 +964,8 @@ dp_set_udp_dst_ip6(void *md, struct xfi *xf, __be32 *xip)
 
   /* UDP checksum = 0 is valid */
   bpf_skb_store_bytes(md, udp_csum_off, &csum, sizeof(csum), 0);
-  bpf_skb_store_bytes(md, ip_dst_off, xip, sizeof(xf->l34m.ipv6.daddr), 0);
-  DP_XADDR_CP(xf->l34m.ipv6.daddr, xip);
+  bpf_skb_store_bytes(md, ip_dst_off, xip, sizeof(xf->l34m.daddr), 0);
+  DP_XADDR_CP(xf->l34m.daddr, xip);
 
   return 0;
 }
@@ -977,13 +977,13 @@ dp_set_udp_dst_ip(void *md, struct xfi *xf, __be32 xip)
   int udp_csum_off = xf->pm.l4_off + offsetof(struct udphdr, check);
   int ip_dst_off = xf->pm.l3_off + offsetof(struct iphdr, daddr);
   __be16 csum = 0;
-  __be32 old_dip = xf->l34m.ip.daddr;
+  __be32 old_dip = xf->l34m.daddr4;
   
   /* UDP checksum = 0 is valid */
   bpf_skb_store_bytes(md, udp_csum_off, &csum, sizeof(csum), 0);
     bpf_l3_csum_replace(md, ip_csum_off, old_dip, xip, sizeof(xip));
   bpf_skb_store_bytes(md, ip_dst_off, &xip, sizeof(xip), 0);
-  xf->l34m.ip.daddr = xip;
+  xf->l34m.daddr4 = xip;
 
   return 0;
 }
@@ -1024,7 +1024,7 @@ dp_set_icmp_src_ip6(void *md, struct xfi *xf, __be32 *xip)
   int ip_src_off = xf->pm.l3_off + offsetof(struct ipv6hdr, saddr);
  
   bpf_skb_store_bytes(md, ip_src_off, xip, sizeof(struct in6_addr), 0);
-  DP_XADDR_CP(xf->l34m.ipv6.saddr, xip);
+  DP_XADDR_CP(xf->l34m.saddr, xip);
 
   return 0;
 }
@@ -1034,11 +1034,11 @@ dp_set_icmp_src_ip(void *md, struct xfi *xf, __be32 xip)
 {
   int ip_csum_off  = xf->pm.l3_off + offsetof(struct iphdr, check);
   int ip_src_off = xf->pm.l3_off + offsetof(struct iphdr, saddr);
-  __be32 old_sip = xf->l34m.ip.saddr;
+  __be32 old_sip = xf->l34m.saddr4;
  
   bpf_l3_csum_replace(md, ip_csum_off, old_sip, xip, sizeof(xip));
   bpf_skb_store_bytes(md, ip_src_off, &xip, sizeof(xip), 0);
-  xf->l34m.ip.saddr = xip;
+  xf->l34m.saddr4 = xip;
 
   return 0;
 }
@@ -1049,7 +1049,7 @@ dp_set_icmp_dst_ip6(void *md, struct xfi *xf, __be32 *xip)
   int ip_dst_off = xf->pm.l3_off + offsetof(struct ipv6hdr, daddr);
 
   bpf_skb_store_bytes(md, ip_dst_off, xip, sizeof(struct in6_addr), 0);
-  DP_XADDR_CP(xf->l34m.ipv6.daddr, xip);
+  DP_XADDR_CP(xf->l34m.daddr, xip);
 
   return 0;
 }
@@ -1059,11 +1059,11 @@ dp_set_icmp_dst_ip(void *md, struct xfi *xf, __be32 xip)
 {
   int ip_csum_off  = xf->pm.l3_off + offsetof(struct iphdr, check);
   int ip_dst_off = xf->pm.l3_off + offsetof(struct iphdr, daddr);
-  __be32 old_dip = xf->l34m.ip.daddr;
+  __be32 old_dip = xf->l34m.daddr4;
   
   bpf_l3_csum_replace(md, ip_csum_off, old_dip, xip, sizeof(xip));
   bpf_skb_store_bytes(md, ip_dst_off, &xip, sizeof(xip), 0);
-  xf->l34m.ip.daddr = xip;
+  xf->l34m.daddr4 = xip;
 
   return 0;
 }
@@ -1074,7 +1074,7 @@ dp_set_sctp_src_ip6(void *md, struct xfi *xf, __be32 *xip)
   int ip_src_off = xf->pm.l3_off + offsetof(struct ipv6hdr, saddr);
 
   bpf_skb_store_bytes(md, ip_src_off, xip, sizeof(struct in6_addr), 0);
-  DP_XADDR_CP(xf->l34m.ipv6.saddr, xip);
+  DP_XADDR_CP(xf->l34m.saddr, xip);
 
   return 0;
 }
@@ -1084,11 +1084,11 @@ dp_set_sctp_src_ip(void *md, struct xfi *xf, __be32 xip)
 {
   int ip_csum_off  = xf->pm.l3_off + offsetof(struct iphdr, check);
   int ip_src_off = xf->pm.l3_off + offsetof(struct iphdr, saddr);
-  __be32 old_sip = xf->l34m.ip.saddr;
+  __be32 old_sip = xf->l34m.saddr4;
   
   bpf_l3_csum_replace(md, ip_csum_off, old_sip, xip, sizeof(xip));
   bpf_skb_store_bytes(md, ip_src_off, &xip, sizeof(xip), 0);
-  xf->l34m.ip.saddr = xip;
+  xf->l34m.saddr4 = xip;
 
   return 0;
 }
@@ -1099,7 +1099,7 @@ dp_set_sctp_dst_ip6(void *md, struct xfi *xf, __be32 *xip)
   int ip_dst_off = xf->pm.l3_off + offsetof(struct ipv6hdr, daddr);
  
   bpf_skb_store_bytes(md, ip_dst_off, xip, sizeof(struct in6_addr), 0);
-  DP_XADDR_CP(xf->l34m.ipv6.daddr, xip);
+  DP_XADDR_CP(xf->l34m.daddr, xip);
 
   return 0;
 }
@@ -1109,11 +1109,11 @@ dp_set_sctp_dst_ip(void *md, struct xfi *xf, __be32 xip)
 {
   int ip_csum_off  = xf->pm.l3_off + offsetof(struct iphdr, check);
   int ip_dst_off = xf->pm.l3_off + offsetof(struct iphdr, daddr);
-  __be32 old_dip = xf->l34m.ip.daddr;
+  __be32 old_dip = xf->l34m.daddr4;
   
   bpf_l3_csum_replace(md, ip_csum_off, old_dip, xip, sizeof(xip));
   bpf_skb_store_bytes(md, ip_dst_off, &xip, sizeof(xip), 0);
-  xf->l34m.ip.daddr = xip;
+  xf->l34m.daddr4 = xip;
 
   return 0;
 }
@@ -1160,8 +1160,8 @@ dp_do_dnat(void *ctx, struct xfi *xf, __be32 xip, __be16 xport)
 
     if (xip == 0) {
       /* Hairpin nat to host */
-      xip = xf->l34m.ip.saddr;
-      dp_set_tcp_src_ip(ctx, xf, xf->l34m.ip.daddr);
+      xip = xf->l34m.saddr4;
+      dp_set_tcp_src_ip(ctx, xf, xf->l34m.daddr4);
       dp_set_tcp_dst_ip(ctx, xf, xip);
     } else {
       if (xf->nm.nrip4) {
@@ -1180,8 +1180,8 @@ dp_do_dnat(void *ctx, struct xfi *xf, __be32 xip, __be16 xport)
 
     if (xip == 0) {
       /* Hairpin nat to host */
-      xip = xf->l34m.ip.saddr;
-      dp_set_udp_src_ip(ctx, xf, xf->l34m.ip.daddr);
+      xip = xf->l34m.saddr4;
+      dp_set_udp_src_ip(ctx, xf, xf->l34m.daddr4);
       dp_set_udp_dst_ip(ctx, xf, xip);
     } else {
       if (xf->nm.nrip4) {
@@ -1200,8 +1200,8 @@ dp_do_dnat(void *ctx, struct xfi *xf, __be32 xip, __be16 xport)
 
     if (xip == 0) {
       /* Hairpin nat to host */
-      xip = xf->l34m.ip.saddr;
-      dp_set_sctp_src_ip(ctx, xf, xf->l34m.ip.daddr);
+      xip = xf->l34m.saddr4;
+      dp_set_sctp_src_ip(ctx, xf, xf->l34m.daddr4);
       dp_set_sctp_dst_ip(ctx, xf, xip);
     } else {
       if (xf->nm.nrip4) {
@@ -1237,8 +1237,8 @@ dp_do_snat(void *ctx, struct xfi *xf, __be32 xip, __be16 xport)
 
     if (xip == 0) {
       /* Hairpin nat to host */
-      xip = xf->l34m.ip.saddr;
-      dp_set_tcp_src_ip(ctx, xf, xf->l34m.ip.daddr);
+      xip = xf->l34m.saddr4;
+      dp_set_tcp_src_ip(ctx, xf, xf->l34m.daddr4);
       dp_set_tcp_dst_ip(ctx, xf, xip);
     } else {
       dp_set_tcp_src_ip(ctx, xf, xip);
@@ -1257,8 +1257,8 @@ dp_do_snat(void *ctx, struct xfi *xf, __be32 xip, __be16 xport)
 
     if (xip == 0) {
       /* Hairpin nat to host */
-      xip = xf->l34m.ip.saddr;
-      dp_set_udp_src_ip(ctx, xf, xf->l34m.ip.daddr);
+      xip = xf->l34m.saddr4;
+      dp_set_udp_src_ip(ctx, xf, xf->l34m.daddr4);
       dp_set_udp_dst_ip(ctx, xf, xip);
     } else {
       dp_set_udp_src_ip(ctx, xf, xip);
@@ -1277,8 +1277,8 @@ dp_do_snat(void *ctx, struct xfi *xf, __be32 xip, __be16 xport)
 
     if (xip == 0) {
       /* Hairpin nat to host */
-      xip = xf->l34m.ip.saddr;
-      dp_set_sctp_src_ip(ctx, xf, xf->l34m.ip.daddr);
+      xip = xf->l34m.saddr4;
+      dp_set_sctp_src_ip(ctx, xf, xf->l34m.daddr4);
       dp_set_sctp_dst_ip(ctx, xf, xip);
     } else {
       dp_set_sctp_src_ip(ctx, xf, xip);
@@ -1783,8 +1783,8 @@ dp_do_ins_vxlan(void *md,
   xf->pm.lkup_dmac[0] = 0xff;
 
   /* Outer L3 */
-  xf->l34m.ip.saddr = sip;
-  xf->l34m.ip.daddr = rip;
+  xf->l34m.saddr4 = sip;
+  xf->l34m.daddr4 = rip;
   xf->l34m.source = udp->source;
   xf->l34m.dest = udp->dest;
   xf->pm.l3_off = sizeof(*eth);
@@ -1982,8 +1982,8 @@ dp_do_ins_gtp(void *md,
   xf->pm.lkup_dmac[0] = 0xff;
 
   /* Outer L3 */
-  xf->l34m.ip.saddr = sip;
-  xf->l34m.ip.daddr = rip;
+  xf->l34m.saddr4 = sip;
+  xf->l34m.daddr4 = rip;
   xf->l34m.source = udp->source;
   xf->l34m.dest = udp->dest;
   xf->pm.l4_off = xf->pm.l3_off + sizeof(*iph);

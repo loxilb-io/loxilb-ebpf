@@ -59,7 +59,7 @@ dp_do_nat4_rule_lkup(void *ctx, struct xfi *xf)
   __u32 sel;
 
   /*memset(key, 0, sizeof(*key));*/
-  key->daddr = xf->l34m.ip.daddr;
+  key->daddr = xf->l34m.daddr4;
   if (xf->l34m.nw_proto != IPPROTO_ICMP) {
     key->dport = xf->l34m.dest;
   } else {
@@ -104,7 +104,7 @@ dp_do_nat4_rule_lkup(void *ctx, struct xfi *xf)
         xf->pm.rule_id =  act->ca.cidx;
         LL_DBG_PRINTK("[NAT4] ACT %x\n", xf->pm.nf);
         /* Special case related to host-dnat */
-        if (xf->l34m.ip.saddr == xf->nm.nxip4 && xf->pm.nf == LLB_NAT_DST) {
+        if (xf->l34m.saddr4 == xf->nm.nxip4 && xf->pm.nf == LLB_NAT_DST) {
           xf->nm.nxip4 = 0;
         }
       }
