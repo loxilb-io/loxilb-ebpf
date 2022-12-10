@@ -916,8 +916,8 @@ dp_ctv4_in(void *ctx, struct xfi *xf)
   }
 
   xi->nat_flags = xf->pm.nf;
-  xi->NAT_XIP   = xf->nm.nxip;
-  xi->NAT_RIP   = xf->nm.nrip;
+  xi->NAT_XIP   = xf->nm.NXIP;
+  xi->NAT_RIP   = xf->nm.NRIP;
   xi->nat_xport = xf->nm.nxport;
 
   xxi->nat_flags = 0;

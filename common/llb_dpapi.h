@@ -72,6 +72,7 @@ enum llb_dp_tid {
   LL_DP_ACLV4_MAP,
   LL_DP_ACLV6_MAP,
   LL_DP_RTV4_MAP,
+  LL_DP_RTV6_MAP,
   LL_DP_NH_MAP,
   LL_DP_DMAC_MAP,
   LL_DP_TX_INTF_MAP,
@@ -224,6 +225,13 @@ struct dp_nh_tact {
     struct dp_rt_l2vxnh_act rt_l2vxnh;
   };
 };
+
+struct dp_rtv6_key {
+  struct bpf_lpm_trie_key l;
+  union {
+    __u32 addr[4]; 
+  };
+}__attribute__((packed));
 
 struct dp_rtv4_key {
   struct bpf_lpm_trie_key l;

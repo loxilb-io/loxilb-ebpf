@@ -34,10 +34,10 @@ dp_do_sess4_lkup(void *ctx, struct xfi *xf)
     key.teid = bpf_ntohl(xf->tm.tunnel_id);
   } else {
     if (xf->pm.nf == LLB_NAT_SRC) {
-      key.saddr = xf->nm.nxip;
+      key.saddr = xf->nm.NXIP;
       key.daddr = xf->l34m.ip.daddr;
     } else if (xf->pm.nf == LLB_NAT_DST) {
-      key.daddr = xf->nm.nxip;
+      key.daddr = xf->nm.NXIP;
       key.saddr = xf->l34m.ip.saddr;
     } else {
       key.daddr = xf->l34m.ip.daddr;

@@ -47,12 +47,12 @@ dp_rtv4_get_ipkey(struct xfi *xf)
   __u32 ipkey;
 
   if (xf->pm.nf & LLB_NAT_DST) {
-    ipkey = xf->nm.nxip?:xf->l34m.ip.saddr;
+    ipkey = xf->nm.NXIP?:xf->l34m.ip.saddr;
   } else {
     if (xf->pm.nf & LLB_NAT_SRC) {
-      if (xf->nm.nrip) {
-        ipkey = xf->nm.nrip;
-      } else if (xf->nm.nxip == 0) {
+      if (xf->nm.NRIP) {
+        ipkey = xf->nm.NRIP;
+      } else if (xf->nm.NXIP == 0) {
         ipkey = xf->l34m.ip.saddr;
       } else {
         ipkey = xf->l34m.ip.daddr;
@@ -72,7 +72,41 @@ dp_rtv4_get_ipkey(struct xfi *xf)
 }
 
 static int __always_inline
-dp_do_rtv4_lkup(void *ctx, struct xfi *xf, void *fa_)
+dp_do_rtv6(void *ctx, struct xfi *xf, void *fa_)
+{
+  struct dp_rtv6_key *key = (void *)xf->km.skey;
+  //struct dp_rt_tact *act;
+
+  key->l.prefixlen = 128; /* 128-bit prefix */
+
+  if (xf->pm.nf & LLB_NAT_DST) {
+    if (DP_V6ADDR_IS_ZERO(xf->nm.nxip)) {
+      DP_V6ADDR_CP(key->addr, xf->l34m.ipv6.saddr);
+    } else {
+      DP_V6ADDR_CP(key->addr, xf->nm.nxip);
+    }
+  } else {
+    if (xf->pm.nf & LLB_NAT_SRC) {
+      if (!DP_V6ADDR_IS_ZERO(xf->nm.nrip)) {
+        DP_V6ADDR_CP(key->addr, xf->nm.nrip);
+      } else if (DP_V6ADDR_IS_ZERO(xf->nm.nxip)) {
+        DP_V6ADDR_CP(key->addr, xf->l34m.ipv6.saddr);
+      } else {
+        DP_V6ADDR_CP(key->addr, xf->l34m.ipv6.daddr);
+      }
+    } else {
+        DP_V6ADDR_CP(key->addr, xf->l34m.ipv6.daddr);
+    }
+  }
+
+  LL_DBG_PRINTK("[RT6FW] --Lookup\n");
+
+  xf->pm.table_id = LL_DP_RTV6_MAP;
+  return 0;
+}
+
+static int __always_inline
+dp_do_rtv4(void *ctx, struct xfi *xf, void *fa_)
 {
   //struct dp_rtv4_key key = { 0 };
   struct dp_rtv4_key *key = (void *)xf->km.skey;
@@ -134,8 +168,8 @@ dp_pipe_set_nat(void *ctx, struct xfi *xf,
                 struct dp_nat_act *na, int do_snat)
 {
   xf->pm.nf = do_snat ? LLB_NAT_SRC : LLB_NAT_DST;
-  xf->nm.nxip = na->xip;
-  xf->nm.nrip = na->rip;
+  xf->nm.NXIP = na->xip;
+  xf->nm.NRIP = na->rip;
   xf->nm.nxport = na->xport;
   LL_DBG_PRINTK("[ACL4] NAT ACT %x\n", xf->pm.nf);
 
@@ -272,7 +306,7 @@ dp_do_aclv6(void *ctx, struct xfi *xf, void *fa_)
 }
 
 static int __always_inline
-dp_do_aclv4(void *ctx, struct xfi *xf, void *fa_)
+dp_do_ing_aclv4(void *ctx, struct xfi *xf, void *fa_)
 {
   struct dp_ctv4_key key;
   struct dp_acl_tact *act;
@@ -309,7 +343,7 @@ dp_do_ipv4_fwd(void *ctx,  struct xfi *xf, void *fa_)
      * we honor this and dont do further l3 processing 
      */
     if ((xf->pm.pipe_act & LLB_PIPE_RDR_MASK) == 0) {
-      dp_do_rtv4_lkup(ctx, xf, fa_);
+      dp_do_rtv4(ctx, xf, fa_);
     }
   }
 }
@@ -320,7 +354,7 @@ dp_ing_ipv4(void *ctx,  struct xfi *xf, void *fa_)
   if (xf->tm.tunnel_id && xf->tm.tun_type == LLB_TUN_GTP) {
     dp_do_sess4_lkup(ctx, xf);
   }
-  dp_do_aclv4(ctx, xf, fa_);
+  dp_do_ing_aclv4(ctx, xf, fa_);
   dp_do_ipv4_fwd(ctx, xf, fa_);
 
   return 0;

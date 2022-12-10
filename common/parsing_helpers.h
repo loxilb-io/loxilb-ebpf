@@ -24,6 +24,15 @@
 #define DP_TC_PTR(x) ((void *)((long)x))
 #define DP_DIFF_PTR(x, y) (((uint8_t *)DP_TC_PTR(x)) - ((uint8_t *)DP_TC_PTR(y)))
 
+#define DP_V6ADDR_IS_ZERO(a) ((a)[0] == 0 && (a)[1] == 0 && (a)[2] == 0 && (a)[3] == 0) 
+#define DP_V6ADDR_CP(a, b)        \
+do {                              \
+  (a)[0] = (b)[0];                \
+  (a)[1] = (b)[1];                \
+  (a)[2] = (b)[2];                \
+  (a)[3] = (b)[3];                \
+} while (0)
+
 /* Header cursor to keep track of current parsing position */
 struct hdr_cursor {
 	void *pos;

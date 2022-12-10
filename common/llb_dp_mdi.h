@@ -187,9 +187,12 @@ struct dp_qos_mdi {
     __u32            polid;
 };
 
+#define NXIP nxip[0]
+#define NRIP nrip[0]
+
 struct dp_nat_mdi {
-    __u32            nxip;         /* NAT xIP */
-    __u32            nrip;         /* NAT rIP (for one-arm) */
+    __u32            nxip[4];      /* NAT xIP */
+    __u32            nrip[4];      /* NAT rIP (for one-arm) */
     __u16            nxport;       /* NAT xport */
 #define LLB_PIPE_CT_NONE  0
 #define LLB_PIPE_CT_INP   1

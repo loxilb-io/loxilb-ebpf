@@ -1076,8 +1076,8 @@ dp_do_dnat(void *ctx, struct xfi *xf, __be32 xip, __be16 xport)
       dp_set_tcp_src_ip(ctx, xf, xf->l34m.ip.daddr);
       dp_set_tcp_dst_ip(ctx, xf, xip);
     } else {
-      if (xf->nm.nrip) {
-        dp_set_tcp_src_ip(ctx, xf, xf->nm.nrip);
+      if (xf->nm.NRIP) {
+        dp_set_tcp_src_ip(ctx, xf, xf->nm.NRIP);
       }
       dp_set_tcp_dst_ip(ctx, xf, xip);
     }
@@ -1096,8 +1096,8 @@ dp_do_dnat(void *ctx, struct xfi *xf, __be32 xip, __be16 xport)
       dp_set_udp_src_ip(ctx, xf, xf->l34m.ip.daddr);
       dp_set_udp_dst_ip(ctx, xf, xip);
     } else {
-      if (xf->nm.nrip) {
-        dp_set_udp_src_ip(ctx, xf, xf->nm.nrip);
+      if (xf->nm.NRIP) {
+        dp_set_udp_src_ip(ctx, xf, xf->nm.NRIP);
       }
       dp_set_udp_dst_ip(ctx, xf, xip);
     }
@@ -1116,8 +1116,8 @@ dp_do_dnat(void *ctx, struct xfi *xf, __be32 xip, __be16 xport)
       dp_set_sctp_src_ip(ctx, xf, xf->l34m.ip.daddr);
       dp_set_sctp_dst_ip(ctx, xf, xip);
     } else {
-      if (xf->nm.nrip) {
-        dp_set_sctp_src_ip(ctx, xf, xf->nm.nrip);
+      if (xf->nm.NRIP) {
+        dp_set_sctp_src_ip(ctx, xf, xf->nm.NRIP);
       }
       dp_set_sctp_dst_ip(ctx, xf, xip);
     }
@@ -1126,8 +1126,8 @@ dp_do_dnat(void *ctx, struct xfi *xf, __be32 xip, __be16 xport)
     dp_csum_tcall(ctx, xf);
 #endif
   } else if (xf->l34m.nw_proto == IPPROTO_ICMP)  {
-    if (xf->nm.nrip) {
-      dp_set_icmp_src_ip(ctx, xf, xf->nm.nrip);
+    if (xf->nm.NRIP) {
+      dp_set_icmp_src_ip(ctx, xf, xf->nm.NRIP);
     }
     dp_set_icmp_dst_ip(ctx, xf, xip);
   }
@@ -1154,8 +1154,8 @@ dp_do_snat(void *ctx, struct xfi *xf, __be32 xip, __be16 xport)
       dp_set_tcp_dst_ip(ctx, xf, xip);
     } else {
       dp_set_tcp_src_ip(ctx, xf, xip);
-      if (xf->nm.nrip) {
-        dp_set_tcp_dst_ip(ctx, xf, xf->nm.nrip);
+      if (xf->nm.NRIP) {
+        dp_set_tcp_dst_ip(ctx, xf, xf->nm.NRIP);
       }
     }
     dp_set_tcp_sport(ctx, xf, xport);
@@ -1174,8 +1174,8 @@ dp_do_snat(void *ctx, struct xfi *xf, __be32 xip, __be16 xport)
       dp_set_udp_dst_ip(ctx, xf, xip);
     } else {
       dp_set_udp_src_ip(ctx, xf, xip);
-      if (xf->nm.nrip) {
-        dp_set_udp_dst_ip(ctx, xf, xf->nm.nrip);
+      if (xf->nm.NRIP) {
+        dp_set_udp_dst_ip(ctx, xf, xf->nm.NRIP);
       }
     }
     dp_set_udp_sport(ctx, xf, xport);
@@ -1194,8 +1194,8 @@ dp_do_snat(void *ctx, struct xfi *xf, __be32 xip, __be16 xport)
       dp_set_sctp_dst_ip(ctx, xf, xip);
     } else {
       dp_set_sctp_src_ip(ctx, xf, xip);
-      if (xf->nm.nrip) {
-        dp_set_sctp_dst_ip(ctx, xf, xf->nm.nrip);
+      if (xf->nm.NRIP) {
+        dp_set_sctp_dst_ip(ctx, xf, xf->nm.NRIP);
       }
     }
     dp_set_sctp_sport(ctx, xf, xport);
@@ -1204,8 +1204,8 @@ dp_do_snat(void *ctx, struct xfi *xf, __be32 xip, __be16 xport)
 #endif
   } else if (xf->l34m.nw_proto == IPPROTO_ICMP)  {
     dp_set_icmp_src_ip(ctx, xf, xip);
-    if (xf->nm.nrip) {
-      dp_set_icmp_dst_ip(ctx, xf, xf->nm.nrip);
+    if (xf->nm.NRIP) {
+      dp_set_icmp_dst_ip(ctx, xf, xf->nm.NRIP);
     }
   }
 
