@@ -1256,9 +1256,9 @@ ctm_proto_xfk_init(struct dp_ctv4_key *key,
 
   /* Apply NAT xfrm if needed */
   if (xi->nat_flags & LLB_NAT_DST) {
-    xkey->saddr = xi->NAT_XIP;
-    if (xi->NAT_RIP) {
-      xkey->daddr = xi->NAT_RIP;
+    xkey->saddr = xi->nat_xip4;
+    if (xi->nat_rip4) {
+      xkey->daddr = xi->nat_rip4;
     }
     if (key->l4proto != IPPROTO_ICMP) {
         if (xi->nat_xport)
@@ -1266,9 +1266,9 @@ ctm_proto_xfk_init(struct dp_ctv4_key *key,
     }
   }
   if (xi->nat_flags & LLB_NAT_SRC) {
-    xkey->daddr = xi->NAT_XIP;
-    if (xi->NAT_RIP) {
-      xkey->saddr = xi->NAT_RIP;
+    xkey->daddr = xi->nat_xip4;
+    if (xi->nat_rip4) {
+      xkey->saddr = xi->nat_rip4;
     }
     if (key->l4proto != IPPROTO_ICMP) {
       if (xi->nat_xport)

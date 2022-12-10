@@ -220,14 +220,14 @@ dp_unparse_packet_always(void *ctx,  struct xfi *xf)
 
   if (xf->pm.nf & LLB_NAT_SRC) {
     LL_DBG_PRINTK("[DEPR] LL_SNAT 0x%lx:%x\n",
-                 xf->nm.NXIP, xf->nm.nxport);
-    if (dp_do_snat(ctx, xf, xf->nm.NXIP, xf->nm.nxport) != 0) {
+                 xf->nm.nxip4, xf->nm.nxport);
+    if (dp_do_snat(ctx, xf, xf->nm.nxip4, xf->nm.nxport) != 0) {
       return DP_DROP;
     }
   } else if (xf->pm.nf & LLB_NAT_DST) {
     LL_DBG_PRINTK("[DEPR] LL_DNAT 0x%x\n",
-                  xf->nm.NXIP, xf->nm.nxport);
-    if (dp_do_dnat(ctx, xf, xf->nm.NXIP, xf->nm.nxport) != 0) {
+                  xf->nm.nxip4, xf->nm.nxport);
+    if (dp_do_dnat(ctx, xf, xf->nm.nxip4, xf->nm.nxport) != 0) {
       return DP_DROP;
     }
   }

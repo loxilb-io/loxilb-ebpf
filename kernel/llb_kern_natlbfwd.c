@@ -96,16 +96,16 @@ dp_do_nat4_rule_lkup(void *ctx, struct xfi *xf)
 
       if (nxfrm_act < act + 1) {
         xf->pm.nf = act->ca.act_type == DP_SET_SNAT ? LLB_NAT_SRC : LLB_NAT_DST;
-        xf->nm.NXIP = nxfrm_act->NAT_XIP;
-        xf->nm.NRIP = nxfrm_act->NAT_RIP;
+        xf->nm.nxip4 = nxfrm_act->nat_xip4;
+        xf->nm.nrip4 = nxfrm_act->nat_rip4;
         xf->nm.nxport = nxfrm_act->nat_xport;
         xf->nm.sel_aid = sel;
         xf->nm.ito = act->ito;
         xf->pm.rule_id =  act->ca.cidx;
         LL_DBG_PRINTK("[NAT4] ACT %x\n", xf->pm.nf);
         /* Special case related to host-dnat */
-        if (xf->l34m.ip.saddr == xf->nm.NXIP && xf->pm.nf == LLB_NAT_DST) {
-          xf->nm.NXIP = 0;
+        if (xf->l34m.ip.saddr == xf->nm.nxip4 && xf->pm.nf == LLB_NAT_DST) {
+          xf->nm.nxip4 = 0;
         }
       }
     }

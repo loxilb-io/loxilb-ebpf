@@ -47,12 +47,12 @@ dp_rtv4_get_ipkey(struct xfi *xf)
   __u32 ipkey;
 
   if (xf->pm.nf & LLB_NAT_DST) {
-    ipkey = xf->nm.NXIP?:xf->l34m.ip.saddr;
+    ipkey = xf->nm.nxip4?:xf->l34m.ip.saddr;
   } else {
     if (xf->pm.nf & LLB_NAT_SRC) {
-      if (xf->nm.NRIP) {
-        ipkey = xf->nm.NRIP;
-      } else if (xf->nm.NXIP == 0) {
+      if (xf->nm.nrip4) {
+        ipkey = xf->nm.nrip4;
+      } else if (xf->nm.nxip4 == 0) {
         ipkey = xf->l34m.ip.saddr;
       } else {
         ipkey = xf->l34m.ip.daddr;
@@ -168,8 +168,8 @@ dp_pipe_set_nat(void *ctx, struct xfi *xf,
                 struct dp_nat_act *na, int do_snat)
 {
   xf->pm.nf = do_snat ? LLB_NAT_SRC : LLB_NAT_DST;
-  xf->nm.NXIP = na->xip;
-  xf->nm.NRIP = na->rip;
+  xf->nm.nxip4 = na->xip;
+  xf->nm.nrip4 = na->rip;
   xf->nm.nxport = na->xport;
   LL_DBG_PRINTK("[ACL4] NAT ACT %x\n", xf->pm.nf);
 

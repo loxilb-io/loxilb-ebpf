@@ -555,6 +555,9 @@ typedef struct {
   ct_l3inf_t l3i;
 } ct_pinf_t;
 
+#define nat_xip4 nat_xip[0]
+#define nat_rip4 nat_rip[0]
+
 struct mf_xfrm_inf
 {
   /* LLB_NAT_XXX flags */
@@ -563,9 +566,7 @@ struct mf_xfrm_inf
   uint16_t wprio;
   uint16_t v6;
   uint16_t nat_xport;
-#define NAT_XIP nat_xip[0]
   uint32_t nat_xip[4];
-#define NAT_RIP nat_rip[0]
   uint32_t nat_rip[4];
 };
 typedef struct mf_xfrm_inf nxfrm_inf_t;

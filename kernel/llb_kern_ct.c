@@ -152,9 +152,9 @@ dp_ct_proto_xfk_init(struct dp_ctv4_key *key,
 
   /* Apply NAT xfrm if needed */
   if (xi->nat_flags & LLB_NAT_DST) {
-    xkey->saddr = xi->NAT_XIP;
-    if (xi->NAT_RIP) {
-      xkey->daddr = xi->NAT_RIP;
+    xkey->saddr = xi->nat_xip4;
+    if (xi->nat_rip4) {
+      xkey->daddr = xi->nat_rip4;
     }
     if (key->l4proto != IPPROTO_ICMP) {
         if (xi->nat_xport)
@@ -164,17 +164,17 @@ dp_ct_proto_xfk_init(struct dp_ctv4_key *key,
     }
 
     xxi->nat_flags = LLB_NAT_SRC;
-    xxi->NAT_XIP = key->daddr;
-    if (xi->NAT_RIP) {
-      xxi->NAT_RIP = key->saddr;
+    xxi->nat_xip4 = key->daddr;
+    if (xi->nat_rip4) {
+      xxi->nat_rip4 = key->saddr;
     }
     if (key->l4proto != IPPROTO_ICMP)
       xxi->nat_xport = key->dport;
   }
   if (xi->nat_flags & LLB_NAT_SRC) {
-    xkey->daddr = xi->NAT_XIP;
-    if (xi->NAT_RIP) {
-      xkey->saddr = xi->NAT_RIP;
+    xkey->daddr = xi->nat_xip4;
+    if (xi->nat_rip4) {
+      xkey->saddr = xi->nat_rip4;
     }
     if (key->l4proto != IPPROTO_ICMP) {
       if (xi->nat_xport)
@@ -184,9 +184,9 @@ dp_ct_proto_xfk_init(struct dp_ctv4_key *key,
     }
 
     xxi->nat_flags = LLB_NAT_DST;
-    xxi->NAT_XIP = key->saddr;
-    if (xi->NAT_RIP) {
-      xxi->NAT_RIP = key->daddr;
+    xxi->nat_xip4 = key->saddr;
+    if (xi->nat_rip4) {
+      xxi->nat_rip4 = key->daddr;
     }
 
     if (key->l4proto != IPPROTO_ICMP)
@@ -204,8 +204,8 @@ dp_ct_proto_xfk_init(struct dp_ctv4_key *key,
     }
 
     xxi->nat_flags = LLB_NAT_HSRC;
-    xxi->NAT_XIP = 0;
-    xi->NAT_XIP = 0;
+    xxi->nat_xip4 = 0;
+    xi->nat_xip4 = 0;
     if (key->l4proto != IPPROTO_ICMP)
       xxi->nat_xport = key->dport;
   }
@@ -221,8 +221,8 @@ dp_ct_proto_xfk_init(struct dp_ctv4_key *key,
     }
 
     xxi->nat_flags = LLB_NAT_HDST;
-    xxi->NAT_XIP = 0;
-    xi->NAT_XIP = 0;
+    xxi->nat_xip4 = 0;
+    xi->nat_xip4 = 0;
     if (key->l4proto != IPPROTO_ICMP)
       xxi->nat_xport = key->sport;
   }
@@ -916,17 +916,17 @@ dp_ctv4_in(void *ctx, struct xfi *xf)
   }
 
   xi->nat_flags = xf->pm.nf;
-  xi->NAT_XIP   = xf->nm.NXIP;
-  xi->NAT_RIP   = xf->nm.NRIP;
+  xi->nat_xip4   = xf->nm.nxip4;
+  xi->nat_rip4   = xf->nm.nrip4;
   xi->nat_xport = xf->nm.nxport;
 
   xxi->nat_flags = 0;
-  xxi->NAT_XIP = 0;
-  xxi->NAT_RIP = 0;
+  xxi->nat_xip4 = 0;
+  xxi->nat_rip4 = 0;
   xxi->nat_xport = 0;
 
   if (xf->pm.nf & (LLB_NAT_DST|LLB_NAT_SRC)) {
-    if (xi->NAT_XIP == 0) {
+    if (xi->nat_xip4 == 0) {
       if (xf->pm.nf == LLB_NAT_DST) {
         xi->nat_flags = LLB_NAT_HDST;
       } else if (xf->pm.nf == LLB_NAT_SRC){
@@ -950,8 +950,8 @@ dp_ctv4_in(void *ctx, struct xfi *xf)
     if (xi->nat_flags) {
       adat->ca.act_type = xi->nat_flags & (LLB_NAT_DST|LLB_NAT_HDST) ?
                              DP_SET_DNAT: DP_SET_SNAT;
-      adat->nat_act.xip = xi->NAT_XIP;
-      adat->nat_act.rip = xi->NAT_RIP;
+      adat->nat_act.xip = xi->nat_xip4;
+      adat->nat_act.rip = xi->nat_rip4;
       adat->nat_act.xport = xi->nat_xport;
       adat->nat_act.doct = 1;
       adat->nat_act.rid = xf->pm.rule_id;
@@ -976,8 +976,8 @@ dp_ctv4_in(void *ctx, struct xfi *xf)
     if (xxi->nat_flags) { 
       axdat->ca.act_type = xxi->nat_flags & (LLB_NAT_DST|LLB_NAT_HDST) ?
                              DP_SET_DNAT: DP_SET_SNAT;
-      axdat->nat_act.xip = xxi->NAT_XIP;
-      axdat->nat_act.rip = xxi->NAT_RIP;
+      axdat->nat_act.xip = xxi->nat_xip4;
+      axdat->nat_act.rip = xxi->nat_rip4;
       axdat->nat_act.xport = xxi->nat_xport;
       axdat->nat_act.doct = 1;
       axdat->nat_act.rid = xf->pm.rule_id;

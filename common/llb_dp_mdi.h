@@ -187,8 +187,8 @@ struct dp_qos_mdi {
     __u32            polid;
 };
 
-#define NXIP nxip[0]
-#define NRIP nrip[0]
+#define nxip4 nxip[0]
+#define nrip4 nrip[0]
 
 struct dp_nat_mdi {
     __u32            nxip[4];      /* NAT xIP */
@@ -197,7 +197,8 @@ struct dp_nat_mdi {
 #define LLB_PIPE_CT_NONE  0
 #define LLB_PIPE_CT_INP   1
 #define LLB_PIPE_CT_EST   2
-    __u8            ct_sts;       /* Conntrack state */
+    __u8            ct_sts:4;      /* Conntrack state */
+    __u8            nv6:4;
     __u8            sel_aid;
     __u32           res;
     __u64           ito;
