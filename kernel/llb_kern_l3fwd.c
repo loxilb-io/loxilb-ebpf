@@ -5,7 +5,7 @@
  * SPDX-License-Identifier: (GPL-2.0 OR BSD-2-Clause)
  */
 static int __always_inline
-dp_do_rtv4_fwd(void *ctx, struct xfi *xf)
+dp_do_rt4_fwdops(void *ctx, struct xfi *xf)
 {
   struct iphdr *iph = DP_TC_PTR(DP_PDATA(ctx) + xf->pm.l3_off);
   void *dend = DP_TC_PTR(DP_PDATA_END(ctx));
@@ -16,6 +16,31 @@ dp_do_rtv4_fwd(void *ctx, struct xfi *xf)
   }
   ip_decrease_ttl(iph);
   return 0;
+}
+
+static int __always_inline
+dp_do_rt6_fwdops(void *ctx, struct xfi *xf)
+{
+  struct ipv6hdr *ip6h = DP_TC_PTR(DP_PDATA(ctx) + xf->pm.l3_off);
+  void *dend = DP_TC_PTR(DP_PDATA_END(ctx));
+
+  if (ip6h + 1 > dend)  {
+    LLBS_PPLN_DROP(xf);
+    return -1;
+  }
+  ip6h->hop_limit--;
+  return 0;
+}
+
+static int __always_inline
+dp_do_rt_fwdops(void *ctx, struct xfi *xf)
+{
+  if (xf->l2m.dl_type == ETH_P_IP) {
+    return dp_do_rt4_fwdops(ctx, xf);
+  } else if (xf->l2m.dl_type == ETH_P_IPV6) {
+    return dp_do_rt6_fwdops(ctx, xf);
+  }
+  return DP_DROP;
 }
 
 static int __always_inline
@@ -72,10 +97,42 @@ dp_rtv4_get_ipkey(struct xfi *xf)
 }
 
 static int __always_inline
+dp_do_rtops(void *ctx, struct xfi *xf, void *fa_, struct dp_rt_tact *act)
+{
+  LL_DBG_PRINTK("[RTFW] action %d pipe %x\n",
+                 act->ca.act_type, xf->pm.pipe_act);
+
+  if (act->ca.act_type == DP_SET_DROP) {
+    LLBS_PPLN_DROP(xf);
+  } else if (act->ca.act_type == DP_SET_TOCP) {
+    LLBS_PPLN_TRAP(xf);
+  } else if (act->ca.act_type == DP_SET_RDR_PORT) {
+    struct dp_rdr_act *ra = &act->port_act;
+    LLBS_PPLN_RDR(xf);
+    xf->pm.oport = ra->oport;
+  } else if (act->ca.act_type == DP_SET_RT_NHNUM) {
+    struct dp_rt_nh_act *rnh = &act->rt_nh;
+    xf->pm.nh_num = rnh->nh_num;
+    return dp_do_rt_fwdops(ctx, xf);
+  } /*else if (act->ca.act_type == DP_SET_L3RT_TUN_NH) {
+#ifdef HAVE_DP_FC
+    struct dp_fc_tact *ta = &fa->fcta[DP_SET_L3RT_TUN_NH];
+    ta->ca.act_type = DP_SET_L3RT_TUN_NH;
+    memcpy(&ta->nh_act,  &act->rt_nh, sizeof(act->rt_nh));
+#endif
+    return dp_pipe_set_l32_tun_nh(ctx, xf, &act->rt_nh);
+  } */ else {
+    LLBS_PPLN_DROP(xf);
+  }
+
+  return 0;
+}
+
+static int __always_inline
 dp_do_rtv6(void *ctx, struct xfi *xf, void *fa_)
 {
   struct dp_rtv6_key *key = (void *)xf->km.skey;
-  //struct dp_rt_tact *act;
+  struct dp_rt_tact *act;
 
   key->l.prefixlen = 128; /* 128-bit prefix */
 
@@ -102,7 +159,18 @@ dp_do_rtv6(void *ctx, struct xfi *xf, void *fa_)
   LL_DBG_PRINTK("[RT6FW] --Lookup\n");
 
   xf->pm.table_id = LL_DP_RTV6_MAP;
-  return 0;
+
+  act = bpf_map_lookup_elem(&rt_v6_map, key);
+  if (!act) {
+    /* Default action - Nothing to do */
+    xf->pm.nf &= ~LLB_NAT_SRC;
+    return 0;
+  }
+
+  xf->pm.phit |= LLB_XDP_RT_HIT;
+  dp_do_map_stats(ctx, xf, LL_DP_RTV6_STATS_MAP, act->ca.cidx);
+
+  return dp_do_rtops(ctx, xf, fa_, act);
 }
 
 static int __always_inline
@@ -134,33 +202,7 @@ dp_do_rtv4(void *ctx, struct xfi *xf, void *fa_)
   xf->pm.phit |= LLB_XDP_RT_HIT;
   dp_do_map_stats(ctx, xf, LL_DP_RTV4_STATS_MAP, act->ca.cidx);
 
-  LL_DBG_PRINTK("[RTFW] action %d pipe %x\n",
-                 act->ca.act_type, xf->pm.pipe_act);
-
-  if (act->ca.act_type == DP_SET_DROP) {
-    LLBS_PPLN_DROP(xf);
-  } else if (act->ca.act_type == DP_SET_TOCP) {
-    LLBS_PPLN_TRAP(xf);
-  } else if (act->ca.act_type == DP_SET_RDR_PORT) {
-    struct dp_rdr_act *ra = &act->port_act;
-    LLBS_PPLN_RDR(xf);
-    xf->pm.oport = ra->oport;
-  } else if (act->ca.act_type == DP_SET_RT_NHNUM) {
-    struct dp_rt_nh_act *rnh = &act->rt_nh;
-    xf->pm.nh_num = rnh->nh_num;
-    return dp_do_rtv4_fwd(ctx, xf);
-  } /*else if (act->ca.act_type == DP_SET_L3RT_TUN_NH) {
-#ifdef HAVE_DP_FC
-    struct dp_fc_tact *ta = &fa->fcta[DP_SET_L3RT_TUN_NH];
-    ta->ca.act_type = DP_SET_L3RT_TUN_NH;
-    memcpy(&ta->nh_act,  &act->rt_nh, sizeof(act->rt_nh));
-#endif
-    return dp_pipe_set_l32_tun_nh(ctx, xf, &act->rt_nh);
-  } */ else {
-    LLBS_PPLN_DROP(xf);
-  }
-
-  return 0;
+  return dp_do_rtops(ctx, xf, fa_, act);
 }
 
 static int __always_inline
@@ -178,8 +220,8 @@ dp_pipe_set_nat(void *ctx, struct xfi *xf,
 }
 
 static int __always_inline
-dp_do_acl_ops(void *ctx, struct xfi *xf, void *fa_, 
-              struct dp_acl_tact *act)
+dp_do_aclops(void *ctx, struct xfi *xf, void *fa_, 
+             struct dp_acl_tact *act)
 {
 #ifdef HAVE_DP_FC
   struct dp_fc_tacts *fa = fa_;
@@ -283,7 +325,6 @@ ct_trk:
   return dp_tail_call(ctx, xf, fa_, LLB_DP_CT_PGM_ID);
 }
 
-
 static int __always_inline
 dp_do_ing_acl(void *ctx, struct xfi *xf, void *fa_)
 {
@@ -306,7 +347,7 @@ dp_do_ing_acl(void *ctx, struct xfi *xf, void *fa_)
     LL_DBG_PRINTK("[ACL4] miss");
   }
 
-  return dp_do_acl_ops(ctx, xf, fa_, act);
+  return dp_do_aclops(ctx, xf, fa_, act);
 }
 
 static void __always_inline
