@@ -36,6 +36,23 @@ struct {
 
 #endif
 
+#define ACLCT6_KEY_GEN(k, xf)               \
+do {                                        \
+  (k)->daddr[0] = xf->l34m.ipv6.daddr[0];   \
+  (k)->daddr[1] = xf->l34m.ipv6.daddr[1];   \
+  (k)->daddr[2] = xf->l34m.ipv6.daddr[2];   \
+  (k)->daddr[3] = xf->l34m.ipv6.daddr[3];   \
+  (k)->saddr[0] = xf->l34m.ipv6.saddr[0];   \
+  (k)->saddr[1] = xf->l34m.ipv6.saddr[1];   \
+  (k)->saddr[2] = xf->l34m.ipv6.saddr[2];   \
+  (k)->saddr[3] = xf->l34m.ipv6.saddr[3];   \
+  (k)->sport = xf->l34m.source;             \
+  (k)->dport = xf->l34m.dest;               \
+  (k)->l4proto = xf->l34m.nw_proto;         \
+  (k)->zone = xf->pm.zone;                  \
+  (k)->r = 0;                               \
+}while(0)
+
 #define ACLCT4_KEY_GEN(k, xf)         \
 do {                                \
   (k)->daddr = xf->l34m.ip.daddr;   \
@@ -65,7 +82,7 @@ static int __always_inline
 dp_run_ct_helper(struct xfi *xf)
 {
   struct dp_ctv4_key key;
-  struct dp_aclv4_tact *act;
+  struct dp_acl_tact *act;
 
   ACLCT4_KEY_GEN(&key, xf);
 
@@ -135,9 +152,9 @@ dp_ct_proto_xfk_init(struct dp_ctv4_key *key,
 
   /* Apply NAT xfrm if needed */
   if (xi->nat_flags & LLB_NAT_DST) {
-    xkey->saddr = xi->nat_xip;
-    if (xi->nat_rip) {
-      xkey->daddr = xi->nat_rip;
+    xkey->saddr = xi->NAT_XIP;
+    if (xi->NAT_RIP) {
+      xkey->daddr = xi->NAT_RIP;
     }
     if (key->l4proto != IPPROTO_ICMP) {
         if (xi->nat_xport)
@@ -147,17 +164,17 @@ dp_ct_proto_xfk_init(struct dp_ctv4_key *key,
     }
 
     xxi->nat_flags = LLB_NAT_SRC;
-    xxi->nat_xip = key->daddr;
-    if (xi->nat_rip) {
-      xxi->nat_rip = key->saddr;
+    xxi->NAT_XIP = key->daddr;
+    if (xi->NAT_RIP) {
+      xxi->NAT_RIP = key->saddr;
     }
     if (key->l4proto != IPPROTO_ICMP)
       xxi->nat_xport = key->dport;
   }
   if (xi->nat_flags & LLB_NAT_SRC) {
-    xkey->daddr = xi->nat_xip;
-    if (xi->nat_rip) {
-      xkey->saddr = xi->nat_rip;
+    xkey->daddr = xi->NAT_XIP;
+    if (xi->NAT_RIP) {
+      xkey->saddr = xi->NAT_RIP;
     }
     if (key->l4proto != IPPROTO_ICMP) {
       if (xi->nat_xport)
@@ -167,9 +184,9 @@ dp_ct_proto_xfk_init(struct dp_ctv4_key *key,
     }
 
     xxi->nat_flags = LLB_NAT_DST;
-    xxi->nat_xip = key->saddr;
-    if (xi->nat_rip) {
-      xxi->nat_rip = key->daddr;
+    xxi->NAT_XIP = key->saddr;
+    if (xi->NAT_RIP) {
+      xxi->NAT_RIP = key->daddr;
     }
 
     if (key->l4proto != IPPROTO_ICMP)
@@ -187,8 +204,8 @@ dp_ct_proto_xfk_init(struct dp_ctv4_key *key,
     }
 
     xxi->nat_flags = LLB_NAT_HSRC;
-    xxi->nat_xip = 0;
-    xi->nat_xip = 0;
+    xxi->NAT_XIP = 0;
+    xi->NAT_XIP = 0;
     if (key->l4proto != IPPROTO_ICMP)
       xxi->nat_xport = key->dport;
   }
@@ -204,8 +221,8 @@ dp_ct_proto_xfk_init(struct dp_ctv4_key *key,
     }
 
     xxi->nat_flags = LLB_NAT_HDST;
-    xxi->nat_xip = 0;
-    xi->nat_xip = 0;
+    xxi->NAT_XIP = 0;
+    xi->NAT_XIP = 0;
     if (key->l4proto != IPPROTO_ICMP)
       xxi->nat_xport = key->sport;
   }
@@ -252,8 +269,8 @@ dp_ct3_sm(struct dp_ctv4_dat *tdat,
 
 static int __always_inline
 dp_ct_tcp_sm(void *ctx, struct xfi *xf, 
-             struct dp_aclv4_tact *atdat,
-             struct dp_aclv4_tact *axtdat,
+             struct dp_acl_tact *atdat,
+             struct dp_acl_tact *axtdat,
              ct_dir_t dir)
 {
   struct dp_ctv4_dat *tdat = &atdat->ctd;
@@ -481,8 +498,8 @@ end:
 
 static int __always_inline
 dp_ct_udp_sm(void *ctx, struct xfi *xf,
-             struct dp_aclv4_tact *atdat,
-             struct dp_aclv4_tact *axtdat,
+             struct dp_acl_tact *atdat,
+             struct dp_acl_tact *axtdat,
              ct_dir_t dir)
 {
   struct dp_ctv4_dat *tdat = &atdat->ctd;
@@ -539,8 +556,8 @@ dp_ct_udp_sm(void *ctx, struct xfi *xf,
 
 static int __always_inline
 dp_ct_icmp_sm(void *ctx, struct xfi *xf, 
-              struct dp_aclv4_tact *atdat,
-              struct dp_aclv4_tact *axtdat,
+              struct dp_acl_tact *atdat,
+              struct dp_acl_tact *axtdat,
               ct_dir_t dir)
 {
   struct dp_ctv4_dat *tdat = &atdat->ctd;
@@ -635,8 +652,8 @@ end:
 
 static int __always_inline
 dp_ct_sctp_sm(void *ctx, struct xfi *xf, 
-              struct dp_aclv4_tact *atdat,
-              struct dp_aclv4_tact *axtdat,
+              struct dp_acl_tact *atdat,
+              struct dp_acl_tact *axtdat,
               ct_dir_t dir)
 {
   struct dp_ctv4_dat *tdat = &atdat->ctd;
@@ -813,8 +830,8 @@ end:
 
 static int
 dp_ct_sm(void *ctx, struct xfi *xf,
-         struct dp_aclv4_tact *atdat,
-         struct dp_aclv4_tact *axtdat,
+         struct dp_acl_tact *atdat,
+         struct dp_acl_tact *axtdat,
          ct_dir_t dir)
 {
   int sm_ret = 0;
@@ -850,7 +867,7 @@ dp_ct_sm(void *ctx, struct xfi *xf,
 struct {
         __uint(type,        BPF_MAP_TYPE_PERCPU_ARRAY);
         __type(key,         int);
-        __type(value,       struct dp_aclv4_tact);
+        __type(value,       struct dp_acl_tact);
         __uint(max_entries, 2);
 } xctk SEC(".maps");
 
@@ -859,10 +876,10 @@ dp_ctv4_in(void *ctx, struct xfi *xf)
 {
   struct dp_ctv4_key key;
   struct dp_ctv4_key xkey;
-  struct dp_aclv4_tact *adat;
-  struct dp_aclv4_tact *axdat;
-  struct dp_aclv4_tact *atdat;
-  struct dp_aclv4_tact *axtdat;
+  struct dp_acl_tact *adat;
+  struct dp_acl_tact *axdat;
+  struct dp_acl_tact *atdat;
+  struct dp_acl_tact *axtdat;
   nxfrm_inf_t *xi;
   nxfrm_inf_t *xxi;
   ct_dir_t cdir = CT_DIR_IN;
@@ -899,17 +916,17 @@ dp_ctv4_in(void *ctx, struct xfi *xf)
   }
 
   xi->nat_flags = xf->pm.nf;
-  xi->nat_xip   = xf->nm.nxip;
-  xi->nat_rip   = xf->nm.nrip;
+  xi->NAT_XIP   = xf->nm.nxip;
+  xi->NAT_RIP   = xf->nm.nrip;
   xi->nat_xport = xf->nm.nxport;
 
   xxi->nat_flags = 0;
-  xxi->nat_xip = 0;
-  xxi->nat_rip = 0;
+  xxi->NAT_XIP = 0;
+  xxi->NAT_RIP = 0;
   xxi->nat_xport = 0;
 
   if (xf->pm.nf & (LLB_NAT_DST|LLB_NAT_SRC)) {
-    if (xi->nat_xip == 0) {
+    if (xi->NAT_XIP == 0) {
       if (xf->pm.nf == LLB_NAT_DST) {
         xi->nat_flags = LLB_NAT_HDST;
       } else if (xf->pm.nf == LLB_NAT_SRC){
@@ -933,8 +950,8 @@ dp_ctv4_in(void *ctx, struct xfi *xf)
     if (xi->nat_flags) {
       adat->ca.act_type = xi->nat_flags & (LLB_NAT_DST|LLB_NAT_HDST) ?
                              DP_SET_DNAT: DP_SET_SNAT;
-      adat->nat_act.xip = xi->nat_xip;
-      adat->nat_act.rip = xi->nat_rip;
+      adat->nat_act.xip = xi->NAT_XIP;
+      adat->nat_act.rip = xi->NAT_RIP;
       adat->nat_act.xport = xi->nat_xport;
       adat->nat_act.doct = 1;
       adat->nat_act.rid = xf->pm.rule_id;
@@ -959,8 +976,8 @@ dp_ctv4_in(void *ctx, struct xfi *xf)
     if (xxi->nat_flags) { 
       axdat->ca.act_type = xxi->nat_flags & (LLB_NAT_DST|LLB_NAT_HDST) ?
                              DP_SET_DNAT: DP_SET_SNAT;
-      axdat->nat_act.xip = xxi->nat_xip;
-      axdat->nat_act.rip = xxi->nat_rip;
+      axdat->nat_act.xip = xxi->NAT_XIP;
+      axdat->nat_act.rip = xxi->NAT_RIP;
       axdat->nat_act.xport = xxi->nat_xport;
       axdat->nat_act.doct = 1;
       axdat->nat_act.rid = xf->pm.rule_id;

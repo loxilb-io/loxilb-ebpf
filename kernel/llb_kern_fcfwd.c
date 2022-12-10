@@ -9,7 +9,7 @@ static int __always_inline
 dp_do_fcv4_ct_helper(struct xfi *xf) 
 {
   struct dp_ctv4_key key;
-  struct dp_aclv4_tact *act;
+  struct dp_acl_tact *act;
 
   ACLCT4_KEY_GEN(&key, xf);
 

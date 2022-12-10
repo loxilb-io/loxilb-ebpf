@@ -18,7 +18,7 @@
 #define LLB_RTV4_MAP_ENTRIES  (32*1024)
 #define LLB_RTV4_PREF_LEN     (48)
 #define LLB_ACLV4_MAP_ENTRIES (256*1024)
-#define LLB_ACLV6_MAP_ENTRIES (2*1024)
+#define LLB_ACLV6_MAP_ENTRIES (4*1024)
 #define LLB_RTV6_MAP_ENTRIES  (2*1024)
 #define LLB_TMAC_MAP_ENTRIES  (2*1024)
 #define LLB_DMAC_MAP_ENTRIES  (8*1024)
@@ -70,6 +70,7 @@ enum llb_dp_tid {
   LL_DP_SMAC_MAP,
   LL_DP_TMAC_MAP,
   LL_DP_ACLV4_MAP,
+  LL_DP_ACLV6_MAP,
   LL_DP_RTV4_MAP,
   LL_DP_NH_MAP,
   LL_DP_DMAC_MAP,
@@ -552,10 +553,12 @@ struct mf_xfrm_inf
   uint8_t nat_flags;
   uint8_t inactive;
   uint16_t wprio;
-  uint16_t res;
+  uint16_t v6;
   uint16_t nat_xport;
-  uint32_t nat_xip;
-  uint32_t nat_rip;
+#define NAT_XIP nat_xip[0]
+  uint32_t nat_xip[4];
+#define NAT_RIP nat_rip[0]
+  uint32_t nat_rip[4];
 };
 typedef struct mf_xfrm_inf nxfrm_inf_t;
 
@@ -569,7 +572,7 @@ struct dp_ctv4_dat {
   dp_pb_stats_t pb;
 };
 
-struct dp_aclv4_tact {
+struct dp_acl_tact {
   struct dp_cmn_act ca; /* Possible actions :
                          *  DP_SET_DROP
                          *  DP_SET_TOCP
@@ -590,11 +593,11 @@ struct dp_aclv4_tact {
   };
 };
 
-struct dp_aclv4_tact_set {
+struct dp_acl_tact_set {
   uint16_t wp;
   uint16_t fc;
   uint32_t tc;
-  struct dp_aclv4_tact tact;
+  struct dp_acl_tact tact;
 };
 
 #define ACL_V4_MAX_ACT_SET     16 
@@ -603,13 +606,23 @@ struct dp_aclv4_tact_set {
 #define DP_SET_LB_WPRIO        1
 #define DP_SET_LB_RR           2
 
-struct dp_aclv4_tacts {
+struct dp_acl_tacts {
   uint16_t num_acts;
   uint16_t lb_type;
   uint32_t rdata;
-  struct dp_aclv4_tact_set act_set[ACL_V4_MAX_ACT_SET];
+  struct dp_acl_tact_set act_set[ACL_V4_MAX_ACT_SET];
 };
-typedef struct dp_aclv4_tacts dp_aclv4_tacts_t;
+typedef struct dp_acl_tacts dp_acl_tacts_t;
+
+struct dp_ctv6_key {
+  __u32 daddr[4];
+  __u32 saddr[4];
+  __u16 sport;
+  __u16 dport;
+  __u16 zone;
+  __u8  l4proto;
+  __u8  r;
+};
 
 struct dp_ctv4_key {
   __u32 daddr;

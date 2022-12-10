@@ -143,27 +143,13 @@ dp_pipe_set_nat(void *ctx, struct xfi *xf,
 }
 
 static int __always_inline
-dp_do_aclv4_lkup(void *ctx, struct xfi *xf, void *fa_)
+dp_do_acl_cmn(void *ctx, struct xfi *xf, void *fa_, 
+              struct dp_acl_tact *act)
 {
-  struct dp_ctv4_key key;
-  struct dp_aclv4_tact *act;
 #ifdef HAVE_DP_FC
   struct dp_fc_tacts *fa = fa_;
 #endif
 
-  ACLCT4_KEY_GEN(&key, xf);
-
-  LL_DBG_PRINTK("[ACL4] -- Lookup\n");
-  LL_DBG_PRINTK("[ACL4] key-sz %d\n", sizeof(key));
-  LL_DBG_PRINTK("[ACL4] daddr %x\n", key.daddr);
-  LL_DBG_PRINTK("[ACL4] saddr %d\n", key.saddr);
-  LL_DBG_PRINTK("[ACL4] sport %d\n", key.sport);
-  LL_DBG_PRINTK("[ACL4] dport %d\n", key.dport);
-  LL_DBG_PRINTK("[ACL4] l4proto %d\n", key.l4proto);
-
-  xf->pm.table_id = LL_DP_ACLV4_MAP;
-
-  act = bpf_map_lookup_elem(&acl_v4_map, &key);
   if (!act) {
     LL_DBG_PRINTK("[ACL4] miss");
     goto ct_trk;
@@ -262,6 +248,54 @@ ct_trk:
   return dp_tail_call(ctx, xf, fa_, LLB_DP_CT_PGM_ID);
 }
 
+
+
+static int __always_inline
+dp_do_aclv6(void *ctx, struct xfi *xf, void *fa_)
+{
+  struct dp_ctv6_key key;
+  struct dp_acl_tact *act;
+
+  ACLCT6_KEY_GEN(&key, xf);
+
+  LL_DBG_PRINTK("[ACL6] -- Lookup\n");
+
+  xf->pm.table_id = LL_DP_ACLV6_MAP;
+
+  act = bpf_map_lookup_elem(&acl_v6_map, &key);
+  if (!act) {
+    LL_DBG_PRINTK("[ACL6] miss");
+    return -1;
+  }
+
+  return dp_do_acl_cmn(ctx, xf, fa_, act);
+}
+
+static int __always_inline
+dp_do_aclv4(void *ctx, struct xfi *xf, void *fa_)
+{
+  struct dp_ctv4_key key;
+  struct dp_acl_tact *act;
+
+  ACLCT4_KEY_GEN(&key, xf);
+
+  LL_DBG_PRINTK("[ACL4] -- Lookup\n");
+  LL_DBG_PRINTK("[ACL4] key-sz %d\n", sizeof(key));
+  LL_DBG_PRINTK("[ACL4] daddr %x\n", key.daddr);
+  LL_DBG_PRINTK("[ACL4] saddr %d\n", key.saddr);
+  LL_DBG_PRINTK("[ACL4] sport %d\n", key.sport);
+  LL_DBG_PRINTK("[ACL4] dport %d\n", key.dport);
+  LL_DBG_PRINTK("[ACL4] l4proto %d\n", key.l4proto);
+
+  xf->pm.table_id = LL_DP_ACLV4_MAP;
+  act = bpf_map_lookup_elem(&acl_v4_map, &key);
+  if (!act) {
+    LL_DBG_PRINTK("[ACL4] miss");
+  }
+
+  return dp_do_acl_cmn(ctx, xf, fa_, act);
+}
+
 static void __always_inline
 dp_do_ipv4_fwd(void *ctx,  struct xfi *xf, void *fa_)
 {
@@ -286,7 +320,7 @@ dp_ing_ipv4(void *ctx,  struct xfi *xf, void *fa_)
   if (xf->tm.tunnel_id && xf->tm.tun_type == LLB_TUN_GTP) {
     dp_do_sess4_lkup(ctx, xf);
   }
-  dp_do_aclv4_lkup(ctx, xf, fa_);
+  dp_do_aclv4(ctx, xf, fa_);
   dp_do_ipv4_fwd(ctx, xf, fa_);
 
   return 0;

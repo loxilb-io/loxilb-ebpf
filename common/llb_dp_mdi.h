@@ -148,13 +148,13 @@ struct dp_l34_mdi {
     __u32            ack;
 
     union {
-        struct out_ip_flow {
+        struct ipf {
             __u32    saddr;
             __u32    daddr;
         }ip;
-        struct out_ipv6_flow {
-            __u8     saddr[16];
-            __u8     daddr[16];
+        struct ip6f {
+            __u32    saddr[4];
+            __u32    daddr[4];
 
         }ipv6;
     };

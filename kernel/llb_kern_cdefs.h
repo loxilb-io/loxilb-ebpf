@@ -167,7 +167,7 @@ struct bpf_map_def SEC("maps") nh_map = {
 struct bpf_map_def SEC("maps") acl_v4_map = {
   .type = BPF_MAP_TYPE_HASH,
   .key_size = sizeof(struct dp_ctv4_key),
-  .value_size = sizeof(struct dp_aclv4_tact),
+  .value_size = sizeof(struct dp_acl_tact),
   .max_entries = LLB_ACLV4_MAP_ENTRIES
 };
 
@@ -176,6 +176,20 @@ struct bpf_map_def SEC("maps") acl_v4_stats_map = {
   .key_size = sizeof(__u32),  /* Counter Index */
   .value_size = sizeof(struct dp_pb_stats),
   .max_entries = LLB_ACLV4_MAP_ENTRIES
+};
+
+struct bpf_map_def SEC("maps") acl_v6_map = {
+  .type = BPF_MAP_TYPE_HASH,
+  .key_size = sizeof(struct dp_ctv6_key),
+  .value_size = sizeof(struct dp_acl_tact),
+  .max_entries = LLB_ACLV6_MAP_ENTRIES
+};
+
+struct bpf_map_def SEC("maps") acl_v6_stats_map = {
+  .type = BPF_MAP_TYPE_PERCPU_ARRAY,
+  .key_size = sizeof(__u32),  /* Counter Index */
+  .value_size = sizeof(struct dp_pb_stats),
+  .max_entries = LLB_ACLV6_MAP_ENTRIES
 };
 
 struct bpf_map_def SEC("maps") acl_v6_stats_map = {
@@ -429,7 +443,7 @@ struct {
 struct {
         __uint(type,        BPF_MAP_TYPE_HASH);
         __type(key,         struct dp_ctv4_key);
-        __type(value,       struct dp_aclv4_tact);
+        __type(value,       struct dp_acl_tact);
         __uint(max_entries, LLB_ACLV4_MAP_ENTRIES);
 } acl_v4_map SEC(".maps");
 
@@ -439,6 +453,20 @@ struct {
         __type(value,       struct dp_pb_stats);
         __uint(max_entries, LLB_ACLV4_MAP_ENTRIES);
 } acl_v4_stats_map SEC(".maps");
+
+struct {
+        __uint(type,        BPF_MAP_TYPE_HASH);
+        __type(key,         struct dp_ctv6_key);
+        __type(value,       struct dp_acl_tact);
+        __uint(max_entries, LLB_ACLV6_MAP_ENTRIES);
+} acl_v6_map SEC(".maps");
+
+struct {
+        __uint(type,        BPF_MAP_TYPE_PERCPU_ARRAY);
+        __type(key,         __u32);
+        __type(value,       struct dp_pb_stats);
+        __uint(max_entries, LLB_ACLV6_MAP_ENTRIES);
+} acl_v6_stats_map SEC(".maps");
 
 struct {
         __uint(type,        BPF_MAP_TYPE_HASH);
@@ -453,13 +481,6 @@ struct {
         __type(value,       struct dp_pb_stats);
         __uint(max_entries, LLB_NATV4_MAP_ENTRIES);
 } nat_v4_stats_map SEC(".maps");
-
-struct {
-        __uint(type,        BPF_MAP_TYPE_PERCPU_ARRAY);
-        __type(key,         __u32);
-        __type(value,       struct dp_pb_stats);
-        __uint(max_entries, LLB_ACLV6_MAP_ENTRIES);
-} acl_v6_stats_map SEC(".maps");
 
 /*
 struct {

@@ -96,8 +96,8 @@ dp_do_nat4_rule_lkup(void *ctx, struct xfi *xf)
 
       if (nxfrm_act < act + 1) {
         xf->pm.nf = act->ca.act_type == DP_SET_SNAT ? LLB_NAT_SRC : LLB_NAT_DST;
-        xf->nm.nxip = nxfrm_act->nat_xip;
-        xf->nm.nrip = nxfrm_act->nat_rip;
+        xf->nm.nxip = nxfrm_act->NAT_XIP;
+        xf->nm.nrip = nxfrm_act->NAT_RIP;
         xf->nm.nxport = nxfrm_act->nat_xport;
         xf->nm.sel_aid = sel;
         xf->nm.ito = act->ito;

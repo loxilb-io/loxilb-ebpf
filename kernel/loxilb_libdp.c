@@ -1256,9 +1256,9 @@ ctm_proto_xfk_init(struct dp_ctv4_key *key,
 
   /* Apply NAT xfrm if needed */
   if (xi->nat_flags & LLB_NAT_DST) {
-    xkey->saddr = xi->nat_xip;
-    if (xi->nat_rip) {
-      xkey->daddr = xi->nat_rip;
+    xkey->saddr = xi->NAT_XIP;
+    if (xi->NAT_RIP) {
+      xkey->daddr = xi->NAT_RIP;
     }
     if (key->l4proto != IPPROTO_ICMP) {
         if (xi->nat_xport)
@@ -1266,9 +1266,9 @@ ctm_proto_xfk_init(struct dp_ctv4_key *key,
     }
   }
   if (xi->nat_flags & LLB_NAT_SRC) {
-    xkey->daddr = xi->nat_xip;
-    if (xi->nat_rip) {
-      xkey->saddr = xi->nat_rip;
+    xkey->daddr = xi->NAT_XIP;
+    if (xi->NAT_RIP) {
+      xkey->saddr = xi->NAT_RIP;
     }
     if (key->l4proto != IPPROTO_ICMP) {
       if (xi->nat_xport)
@@ -1298,7 +1298,7 @@ ctm_proto_xfk_init(struct dp_ctv4_key *key,
 }
 
 static void
-ll_send_ct4_ep_reset(struct dp_ctv4_key *ep, struct dp_aclv4_tact *adat)
+ll_send_ct4_ep_reset(struct dp_ctv4_key *ep, struct dp_acl_tact *adat)
 {
   struct mkr_args r;
   ct_tcp_pinf_t *ts = &adat->ctd.pi.t;
@@ -1331,8 +1331,8 @@ ll_aclct4_map_ent_has_aged(int tid, void *k, void *ita)
   struct dp_ctv4_key *key = k;
   struct dp_ctv4_key xkey;
   struct dp_ctv4_dat *dat;
-  struct dp_aclv4_tact *adat;
-  struct dp_aclv4_tact axdat;
+  struct dp_acl_tact *adat;
+  struct dp_acl_tact axdat;
   ct_arg_struct_t *as;
   uint64_t curr_ns;
   uint64_t latest_ns;
@@ -1449,7 +1449,7 @@ ll_age_aclct4map(void)
 {
   dp_map_ita_t it;
   struct dp_ctv4_key next_key;
-  struct dp_aclv4_tact *adat;
+  struct dp_acl_tact *adat;
   ct_arg_struct_t *as;
   uint64_t ns = __get_os_nsecs_now();
 
@@ -1497,7 +1497,7 @@ ll_aclct4_map_ent_rm_related(int tid, void *k, void *ita)
   int i = 0;
   struct dp_ctv4_key *key = k;
   dp_map_ita_t *it = ita;
-  struct dp_aclv4_tact *adat;
+  struct dp_acl_tact *adat;
   ct_arg_struct_t *as;
   char dstr[INET_ADDRSTRLEN];
   char sstr[INET_ADDRSTRLEN];
@@ -1535,7 +1535,7 @@ ll_map_aclct4_rm_related(uint32_t rid, uint32_t *aids, int naid)
   dp_map_ita_t it;
   int i = 0;
   struct dp_ctv4_key next_key;
-  struct dp_aclv4_tact *adat;
+  struct dp_acl_tact *adat;
   ct_arg_struct_t *as;
   uint64_t ns = __get_os_nsecs_now();
 
