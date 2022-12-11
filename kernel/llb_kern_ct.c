@@ -137,14 +137,11 @@ dp_ct_proto_xfk_init(struct dp_ct_key *key,
   xkey->dport = key->sport;
   xkey->l4proto = key->l4proto;
   xkey->zone = key->zone;
-  xkey->v6 = 0;
-
-  if (xi->nv6) {
-    xkey->v6 = 1;
-  }
+  xkey->v6 = key->v6;
 
   /* Apply NAT xfrm if needed */
   if (xi->nat_flags & LLB_NAT_DST) {
+    xkey->v6 = xi->nv6;
     DP_XADDR_CP(xkey->saddr, xi->nat_xip);
     if (!DP_XADDR_ISZR(xi->nat_rip)) {
       DP_XADDR_CP(xkey->daddr, xi->nat_rip);
@@ -163,6 +160,7 @@ dp_ct_proto_xfk_init(struct dp_ct_key *key,
       xxi->nat_xport = key->dport;
   }
   if (xi->nat_flags & LLB_NAT_SRC) {
+    xkey->v6 = xi->nv6;
     DP_XADDR_CP(xkey->daddr, xi->nat_xip);
     if (!DP_XADDR_ISZR(xi->nat_rip)) {
       DP_XADDR_CP(xkey->saddr, xi->nat_rip);
@@ -865,7 +863,7 @@ struct {
 } xctk SEC(".maps");
 
 static int __always_inline
-dp_ctv4_in(void *ctx, struct xfi *xf)
+dp_ct_in(void *ctx, struct xfi *xf)
 {
   struct dp_ct_key key;
   struct dp_ct_key xkey;
@@ -899,7 +897,7 @@ dp_ctv4_in(void *ctx, struct xfi *xf)
   key.dport = xf->l34m.dest;
   key.l4proto = xf->l34m.nw_proto;
   key.zone = xf->pm.zone;
-  key.v6 = xf->l2m.dl_type == ETH_P_IPV6 ? 1: 0;
+  key.v6 = xf->l2m.dl_type == bpf_ntohs(ETH_P_IPV6) ? 1: 0;
 
   if (key.l4proto != IPPROTO_TCP &&
       key.l4proto != IPPROTO_UDP &&
