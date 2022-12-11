@@ -61,7 +61,8 @@
 #define CT_SCTP_FN_CPTO       (20000000000)
 #define CT_UDP_FN_CPTO        (20000000000)
 #define CT_UDP_EST_CPTO       (60000000000)
-#define CT_ICMP_FN_CPTO       (40000000000)
+#define CT_ICMP_EST_CPTO      (20000000000)
+#define CT_ICMP_FN_CPTO       (10000000000)
 
 #define DP_XADDR_ISZR(a) ((a)[0] == 0 && \
                           (a)[1] == 0 && \

@@ -1251,14 +1251,11 @@ ctm_proto_xfk_init(struct dp_ct_key *key,
   xkey->dport = key->sport;
   xkey->l4proto = key->l4proto;
   xkey->zone = key->zone;
-  xkey->v6 = 0;
-
-  if (xi->nv6) {
-    xkey->v6 = 1;
-  } 
+  xkey->v6 = key->v6;
 
   /* Apply NAT xfrm if needed */
   if (xi->nat_flags & LLB_NAT_DST) {
+    xkey->v6 = xi->nv6;
     DP_XADDR_CP(xkey->saddr, xi->nat_xip);
     if (!DP_XADDR_ISZR(xi->nat_rip)) {
       DP_XADDR_CP(xkey->daddr, xi->nat_rip);
@@ -1269,6 +1266,7 @@ ctm_proto_xfk_init(struct dp_ct_key *key,
     }
   }
   if (xi->nat_flags & LLB_NAT_SRC) {
+    xkey->v6 = xi->nv6;
     DP_XADDR_CP(xkey->daddr, xi->nat_xip);
     if (!DP_XADDR_ISZR(xi->nat_rip)) {
       DP_XADDR_CP(xkey->saddr, xi->nat_rip);
@@ -1344,8 +1342,8 @@ ll_aclct4_map_ent_has_aged(int tid, void *k, void *ita)
   bool est = false;
   bool has_nat = false;
   uint64_t to = CT_V4_CPTO;
-  char dstr[INET_ADDRSTRLEN];
-  char sstr[INET_ADDRSTRLEN];
+  char dstr[INET6_ADDRSTRLEN];
+  char sstr[INET6_ADDRSTRLEN];
   llb_dp_map_t *t;
 
   if (!it|| !it->uarg || !it->val) return 0;
@@ -1355,8 +1353,13 @@ ll_aclct4_map_ent_has_aged(int tid, void *k, void *ita)
   adat = it->val;
   dat = &adat->ctd;
 
-  inet_ntop(AF_INET, &key->saddr, sstr, INET_ADDRSTRLEN);
-  inet_ntop(AF_INET, &key->daddr, dstr, INET_ADDRSTRLEN);
+  if (key->v6 == 0) {
+    inet_ntop(AF_INET, key->saddr, sstr, INET_ADDRSTRLEN);
+    inet_ntop(AF_INET, key->daddr, dstr, INET_ADDRSTRLEN);
+  } else {
+    inet_ntop(AF_INET6, key->saddr, sstr, INET6_ADDRSTRLEN);
+    inet_ntop(AF_INET6, key->daddr, dstr, INET6_ADDRSTRLEN);
+  }
 
   if (adat->ctd.xi.nat_flags) {
     has_nat = true;
@@ -1405,12 +1408,15 @@ ll_aclct4_map_ent_has_aged(int tid, void *k, void *ita)
     } else {
       to = CT_UDP_FN_CPTO;
     }
-  } else if (key->l4proto == IPPROTO_ICMP) {
+  } else if (key->l4proto == IPPROTO_ICMP ||
+             key->l4proto == IPPROTO_ICMPV6) {
     ct_icmp_pinf_t *is = &dat->pi.i;
     if (is->state == CT_ICMP_REPS) {
       est = true;
+      to = CT_ICMP_EST_CPTO;
+    } else {
+      to = CT_ICMP_FN_CPTO;
     }
-    to = CT_ICMP_FN_CPTO;
   } else if (key->l4proto == IPPROTO_SCTP) {
     ct_sctp_pinf_t *ss = &dat->pi.s;
 

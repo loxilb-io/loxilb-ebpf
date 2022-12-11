@@ -543,6 +543,99 @@ dp_ct_udp_sm(void *ctx, struct xfi *xf,
 }
 
 static int __always_inline
+dp_ct_icmp6_sm(void *ctx, struct xfi *xf,
+               struct dp_acl_tact *atdat,
+               struct dp_acl_tact *axtdat,
+               ct_dir_t dir)
+{
+  struct dp_ct_dat *tdat = &atdat->ctd;
+  struct dp_ct_dat *xtdat = &axtdat->ctd;
+  ct_icmp_pinf_t *is = &tdat->pi.i;
+  ct_icmp_pinf_t *xis = &xtdat->pi.i;
+  void *dend = DP_TC_PTR(DP_PDATA_END(ctx));
+  struct icmp6hdr *i = DP_ADD_PTR(DP_PDATA(ctx), xf->pm.l4_off);
+  uint32_t nstate;
+  uint16_t seq;
+
+  if (i + 1 > dend) {
+    LLBS_PPLN_DROP(xf);
+    return -1;
+  }
+
+  /* We fetch the sequence number even if icmp may not be
+   * echo type because we can't call another fn holding
+   * spinlock
+   */
+  seq = bpf_ntohs(i->icmp6_dataun.u_echo.sequence);
+
+  bpf_spin_lock(&atdat->lock);
+
+  if (dir == CT_DIR_IN) {
+    tdat->pb.bytes += xf->pm.l3_len;
+    tdat->pb.packets += 1;
+  } else {
+    xtdat->pb.bytes += xf->pm.l3_len;
+    xtdat->pb.packets += 1;
+  }
+
+  nstate = is->state;
+
+  switch (i->icmp6_type) {
+  case ICMPV6_DEST_UNREACH:
+    is->state |= CT_ICMP_DUNR;
+    goto end;
+  case ICMPV6_TIME_EXCEED:
+    is->state |= CT_ICMP_TTL;
+    goto end;
+  case ICMPV6_ECHO_REPLY:
+  case ICMPV6_ECHO_REQUEST:
+    /* Further state-machine processing */
+    break;
+  default:
+    is->state |= CT_ICMP_UNK;
+    goto end;
+  }
+
+  switch (is->state) {
+  case CT_ICMP_CLOSED:
+    if (i->icmp6_type != ICMPV6_ECHO_REQUEST) {
+      is->errs = 1;
+      goto end;
+    }
+    nstate = CT_ICMP_REQS;
+    is->lseq = seq;
+    break;
+  case CT_ICMP_REQS:
+    if (i->icmp6_type == ICMPV6_ECHO_REQUEST) {
+      is->lseq = seq;
+    } else if (i->icmp6_type == ICMPV6_ECHO_REPLY) {
+      if (is->lseq != seq) {
+        is->errs = 1;
+        goto end;
+      }
+      nstate = CT_ICMP_REPS;
+      is->lseq = seq;
+    }
+    break;
+  case CT_ICMP_REPS:
+    /* Connection is tracked now */
+  default:
+    break;
+  }
+
+end:
+  is->state = nstate;
+  xis->state = nstate;
+
+  bpf_spin_unlock(&atdat->lock);
+
+  if (nstate == CT_ICMP_REPS)
+    return CT_SMR_EST;
+
+  return CT_SMR_INPROG;
+}
+
+static int __always_inline
 dp_ct_icmp_sm(void *ctx, struct xfi *xf, 
               struct dp_acl_tact *atdat,
               struct dp_acl_tact *axtdat,
@@ -845,7 +938,7 @@ dp_ct_sm(void *ctx, struct xfi *xf,
     sm_ret = dp_ct_sctp_sm(ctx, xf, atdat, axtdat, dir);
     break;
   case IPPROTO_ICMPV6:
-    sm_ret = CT_SMR_EST;
+    sm_ret = dp_ct_icmp6_sm(ctx, xf, atdat, axtdat, dir);
     break;
   default:
     sm_ret = CT_SMR_UNT;
