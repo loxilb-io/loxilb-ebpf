@@ -462,11 +462,7 @@ dp_ing_slow_main(void *ctx,  struct xfi *xf)
 
 #ifdef HAVE_DP_FC
   /* fast-cache is used only when certain conditions are met */
-  if (xf->pm.pipe_act == LLB_PIPE_RDR && 
-      xf->pm.phit & LLB_DP_ACL_HIT &&
-      !(xf->pm.phit & LLB_DP_SESS_HIT) &&
-      xf->qm.polid == 0 &&
-      xf->pm.mirr == 0) {
+  if (LL_PIPE_FC_CAP(xf)) {
     fa->zone = xf->pm.zone;
     dp_insert_fcv4(ctx, xf, fa);
   }

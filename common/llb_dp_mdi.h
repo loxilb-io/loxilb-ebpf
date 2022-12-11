@@ -28,6 +28,13 @@ do {                                  \
   F->pm.rcode = C;                    \
 } while (0)
 
+#define LL_PIPE_FC_CAP(x)                     \
+  ((x)->pm.pipe_act == LLB_PIPE_RDR &&        \
+  (x)->pm.phit & LLB_DP_ACL_HIT &&            \
+  !((x)->pm.phit & LLB_DP_SESS_HIT) &&        \
+  (x)->l2m.dl_type == bpf_htons(ETH_P_IP) &&  \
+  (x)->qm.polid == 0 &&                       \
+  (x)->pm.mirr == 0)
 
 #define LL_PIPELINE_CONT(F) (!F->pm.pipe_act)
 
