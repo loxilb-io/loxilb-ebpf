@@ -503,7 +503,7 @@ dp_ing_ct_main(void *ctx,  struct xfi *xf)
     dp_do_nat(ctx, xf);
   }
 
-  bpf_printk("[CTRK] start\n");
+  LL_DBG_PRINTK("[CTRK] start\n");
 
   val = dp_ct_in(ctx, xf);
   if (val < 0) {

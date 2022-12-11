@@ -99,8 +99,8 @@ dp_rtv4_get_ipkey(struct xfi *xf)
 static int __always_inline
 dp_do_rtops(void *ctx, struct xfi *xf, void *fa_, struct dp_rt_tact *act)
 {
-  bpf_printk("[RTFW] action %d pipe %x\n",
-                 act->ca.act_type, xf->pm.pipe_act);
+  LL_DBG_PRINTK("[RTFW] action %d pipe %x\n",
+                act->ca.act_type, xf->pm.pipe_act);
 
   if (act->ca.act_type == DP_SET_DROP) {
     LLBS_PPLN_DROP(xf);
@@ -156,11 +156,11 @@ dp_do_rtv6(void *ctx, struct xfi *xf, void *fa_)
     }
   }
 
-  bpf_printk("[RT6FW] --Lookup");
-  bpf_printk("[RT6FW] --addr0 %x", key->addr[0]);
-  bpf_printk("[RT6FW] --addr1 %x", key->addr[1]);
-  bpf_printk("[RT6FW] --addr2 %x", key->addr[2]);
-  bpf_printk("[RT6FW] --addr3 %x", key->addr[3]);
+  LL_DBG_PRINTK("[RT6FW] --Lookup");
+  LL_DBG_PRINTK("[RT6FW] --addr0 %x", key->addr[0]);
+  LL_DBG_PRINTK("[RT6FW] --addr1 %x", key->addr[1]);
+  LL_DBG_PRINTK("[RT6FW] --addr2 %x", key->addr[2]);
+  LL_DBG_PRINTK("[RT6FW] --addr3 %x", key->addr[3]);
 
   xf->pm.table_id = LL_DP_RTV6_MAP;
 
@@ -168,11 +168,9 @@ dp_do_rtv6(void *ctx, struct xfi *xf, void *fa_)
   if (!act) {
     /* Default action - Nothing to do */
     xf->pm.nf &= ~LLB_NAT_SRC;
-    bpf_printk("RT Not found");
+    LL_DBG_PRINTK("RT Not found");
     return 0;
   }
-
-  bpf_printk("RT found");
 
   xf->pm.phit |= LLB_XDP_RT_HIT;
   dp_do_map_stats(ctx, xf, LL_DP_RTV6_STATS_MAP, act->ca.cidx);

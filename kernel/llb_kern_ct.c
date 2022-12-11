@@ -36,8 +36,8 @@ struct {
 
 #endif
 
-#define ACLCT_KEY_GEN(k, xf)                      \
-do {                                              \
+#define ACLCT_KEY_GEN(k, xf)                 \
+do {                                         \
   (k)->daddr[0] = xf->l34m.daddr[0];         \
   (k)->daddr[1] = xf->l34m.daddr[1];         \
   (k)->daddr[2] = xf->l34m.daddr[2];         \
@@ -46,11 +46,11 @@ do {                                              \
   (k)->saddr[1] = xf->l34m.saddr[1];         \
   (k)->saddr[2] = xf->l34m.saddr[2];         \
   (k)->saddr[3] = xf->l34m.saddr[3];         \
-  (k)->sport = xf->l34m.source;                   \
-  (k)->dport = xf->l34m.dest;                     \
-  (k)->l4proto = xf->l34m.nw_proto;               \
-  (k)->zone = xf->pm.zone;                        \
-  (k)->v6 = xf->l2m.dl_type == ETH_P_IPV6 ? 1: 0; \
+  (k)->sport = xf->l34m.source;              \
+  (k)->dport = xf->l34m.dest;                \
+  (k)->l4proto = xf->l34m.nw_proto;          \
+  (k)->zone = xf->pm.zone;                   \
+  (k)->v6 = xf->l2m.dl_type == bpf_ntohs(ETH_P_IPV6) ? 1: 0; \
 }while(0)
 
 #define dp_run_ctact_helper(x, a) \
