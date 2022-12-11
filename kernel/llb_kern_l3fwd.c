@@ -379,3 +379,31 @@ dp_ing_ipv4(void *ctx,  struct xfi *xf, void *fa_)
 
   return 0;
 }
+
+static void __always_inline
+dp_do_ipv6_fwd(void *ctx,  struct xfi *xf, void *fa_)
+{
+  /* Currently GTP with outer IPv6 is not supported */
+  //if (xf->tm.tunnel_id == 0 ||  xf->tm.tun_type != LLB_TUN_GTP) {
+  //  dp_do_sess4_lkup(ctx, xf);
+  //}
+
+  if (xf->pm.phit & LLB_DP_TMAC_HIT) {
+
+    /* If some pipeline block already set a redirect before this,
+     * we honor this and dont do further l3 processing
+     */
+    if ((xf->pm.pipe_act & LLB_PIPE_RDR_MASK) == 0) {
+      dp_do_rtv6(ctx, xf, fa_);
+    }
+  }
+}
+
+static int __always_inline
+dp_ing_ipv6(void *ctx,  struct xfi *xf, void *fa_)
+{
+  dp_do_ing_acl(ctx, xf, fa_);
+  dp_do_ipv6_fwd(ctx, xf, fa_);
+
+  return 0;
+}
