@@ -526,7 +526,7 @@ llb_xh_init(llb_dp_struct_t *xh)
   xh->maps[LL_DP_NAT_MAP].pb_xtid  = LL_DP_NAT_STATS_MAP;
   xh->maps[LL_DP_NAT_MAP].max_entries = LLB_NATV4_MAP_ENTRIES;
 
-  xh->maps[LL_DP_NAT_STATS_MAP].map_name = "nat_v4_stats_map";
+  xh->maps[LL_DP_NAT_STATS_MAP].map_name = "nat_stats_map";
   xh->maps[LL_DP_NAT_STATS_MAP].has_pb   = 1;
   xh->maps[LL_DP_NAT_STATS_MAP].max_entries = LLB_NATV4_STAT_MAP_ENTRIES;
   xh->maps[LL_DP_NAT_STATS_MAP].pbs = calloc(LLB_NATV4_STAT_MAP_ENTRIES,

@@ -185,7 +185,7 @@ struct bpf_map_def SEC("maps") nat_map = {
   .max_entries = LLB_NATV4_MAP_ENTRIES
 };
 
-struct bpf_map_def SEC("maps") nat_v4_stats_map = {
+struct bpf_map_def SEC("maps") nat_stats_map = {
   .type = BPF_MAP_TYPE_PERCPU_ARRAY,
   .key_size = sizeof(__u32),  /* Counter Index */
   .value_size = sizeof(struct dp_pb_stats),
@@ -453,7 +453,7 @@ struct {
         __type(key,         __u32);
         __type(value,       struct dp_pb_stats);
         __uint(max_entries, LLB_NATV4_MAP_ENTRIES);
-} nat_v4_stats_map SEC(".maps");
+} nat_stats_map SEC(".maps");
 
 /*
 struct {
@@ -620,7 +620,7 @@ dp_do_map_stats(struct xdp_md *ctx,
     map = &sess_v4_stats_map;
     break;
   case LL_DP_NAT_STATS_MAP:
-    map = &nat_v4_stats_map;
+    map = &nat_stats_map;
     break;
   case LL_DP_FW4_STATS_MAP:
     map = &fw_v4_stats_map;
