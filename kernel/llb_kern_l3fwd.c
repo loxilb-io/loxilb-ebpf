@@ -99,7 +99,7 @@ dp_rtv4_get_ipkey(struct xfi *xf)
 static int __always_inline
 dp_do_rtops(void *ctx, struct xfi *xf, void *fa_, struct dp_rt_tact *act)
 {
-  LL_DBG_PRINTK("[RTFW] action %d pipe %x\n",
+  bpf_printk("[RTFW] action %d pipe %x\n",
                  act->ca.act_type, xf->pm.pipe_act);
 
   if (act->ca.act_type == DP_SET_DROP) {
@@ -156,7 +156,11 @@ dp_do_rtv6(void *ctx, struct xfi *xf, void *fa_)
     }
   }
 
-  LL_DBG_PRINTK("[RT6FW] --Lookup\n");
+  bpf_printk("[RT6FW] --Lookup");
+  bpf_printk("[RT6FW] --addr0 %x", key->addr[0]);
+  bpf_printk("[RT6FW] --addr1 %x", key->addr[1]);
+  bpf_printk("[RT6FW] --addr2 %x", key->addr[2]);
+  bpf_printk("[RT6FW] --addr3 %x", key->addr[3]);
 
   xf->pm.table_id = LL_DP_RTV6_MAP;
 
@@ -164,8 +168,11 @@ dp_do_rtv6(void *ctx, struct xfi *xf, void *fa_)
   if (!act) {
     /* Default action - Nothing to do */
     xf->pm.nf &= ~LLB_NAT_SRC;
+    bpf_printk("RT Not found");
     return 0;
   }
+
+  bpf_printk("RT found");
 
   xf->pm.phit |= LLB_XDP_RT_HIT;
   dp_do_map_stats(ctx, xf, LL_DP_RTV6_STATS_MAP, act->ca.cidx);
@@ -228,7 +235,7 @@ dp_do_aclops(void *ctx, struct xfi *xf, void *fa_,
 #endif
 
   if (!act) {
-    LL_DBG_PRINTK("[ACL4] miss");
+    LL_DBG_PRINTK("[ACL] miss");
     goto ct_trk;
   }
 
@@ -333,18 +340,18 @@ dp_do_ing_acl(void *ctx, struct xfi *xf, void *fa_)
 
   ACLCT_KEY_GEN(&key, xf);
 
-  LL_DBG_PRINTK("[ACL4] -- Lookup\n");
-  LL_DBG_PRINTK("[ACL4] key-sz %d\n", sizeof(key));
-  LL_DBG_PRINTK("[ACL4] daddr %x\n", key.daddr[0]);
-  LL_DBG_PRINTK("[ACL4] saddr %d\n", key.saddr[0]);
-  LL_DBG_PRINTK("[ACL4] sport %d\n", key.sport);
-  LL_DBG_PRINTK("[ACL4] dport %d\n", key.dport);
-  LL_DBG_PRINTK("[ACL4] l4proto %d\n", key.l4proto);
+  LL_DBG_PRINTK("[ACL] -- Lookup\n");
+  LL_DBG_PRINTK("[ACL] key-sz %d\n", sizeof(key));
+  LL_DBG_PRINTK("[ACL] daddr %x\n", key.daddr[0]);
+  LL_DBG_PRINTK("[ACL] saddr %d\n", key.saddr[0]);
+  LL_DBG_PRINTK("[ACL] sport %d\n", key.sport);
+  LL_DBG_PRINTK("[ACL] dport %d\n", key.dport);
+  LL_DBG_PRINTK("[ACL] l4proto %d\n", key.l4proto);
 
   xf->pm.table_id = LL_DP_ACL_MAP;
   act = bpf_map_lookup_elem(&acl_map, &key);
   if (!act) {
-    LL_DBG_PRINTK("[ACL4] miss");
+    LL_DBG_PRINTK("[ACL] miss");
   }
 
   return dp_do_aclops(ctx, xf, fa_, act);

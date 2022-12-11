@@ -757,7 +757,19 @@ dp_parse_packet(void *md,
 
       xf->l34m.source = udp->source;
       xf->l34m.dest = udp->dest;
-    } 
+    } else if (xf->l34m.nw_proto == IPPROTO_ICMPV6) {
+        struct icmp6hdr *icmp6 = DP_ADD_PTR(ip6, sizeof(*ip6));
+
+        if (icmp6 + 1 > dend) {
+          return 0;
+        }
+
+        if ((icmp6->icmp6_type == ICMPV6_ECHO_REPLY ||
+            icmp6->icmp6_type == ICMPV6_ECHO_REQUEST)) {
+           xf->l34m.source = icmp6->icmp6_dataun.u_echo.identifier;
+           xf->l34m.dest = icmp6->icmp6_dataun.u_echo.identifier;
+        }
+    }
   } else if (xf->l2m.dl_type == bpf_htons(ETH_TYPE_LLB)) {
     struct llb_ethheader *llb = DP_TC_PTR(vlh);
 

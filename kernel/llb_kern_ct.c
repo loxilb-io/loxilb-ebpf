@@ -846,6 +846,9 @@ dp_ct_sm(void *ctx, struct xfi *xf,
   case IPPROTO_SCTP:
     sm_ret = dp_ct_sctp_sm(ctx, xf, atdat, axtdat, dir);
     break;
+  case IPPROTO_ICMPV6:
+    sm_ret = CT_SMR_EST;
+    break;
   default:
     sm_ret = CT_SMR_UNT;
     break;
@@ -901,7 +904,8 @@ dp_ctv4_in(void *ctx, struct xfi *xf)
   if (key.l4proto != IPPROTO_TCP &&
       key.l4proto != IPPROTO_UDP &&
       key.l4proto != IPPROTO_ICMP &&
-      key.l4proto != IPPROTO_SCTP) {
+      key.l4proto != IPPROTO_SCTP &&
+      key.l4proto != IPPROTO_ICMPV6) {
     return 0;
   }
 
