@@ -220,14 +220,14 @@ dp_unparse_packet_always(void *ctx,  struct xfi *xf)
 
   if (xf->pm.nf & LLB_NAT_SRC) {
     LL_DBG_PRINTK("[DEPR] LL_SNAT 0x%lx:%x\n",
-                 xf->nm.nxip, xf->nm.nxport);
-    if (dp_do_snat(ctx, xf, xf->nm.nxip, xf->nm.nxport) != 0) {
+                 xf->nm.nxip4, xf->nm.nxport);
+    if (dp_do_snat(ctx, xf, xf->nm.nxip4, xf->nm.nxport) != 0) {
       return DP_DROP;
     }
   } else if (xf->pm.nf & LLB_NAT_DST) {
     LL_DBG_PRINTK("[DEPR] LL_DNAT 0x%x\n",
-                  xf->nm.nxip, xf->nm.nxport);
-    if (dp_do_dnat(ctx, xf, xf->nm.nxip, xf->nm.nxport) != 0) {
+                  xf->nm.nxip4, xf->nm.nxport);
+    if (dp_do_dnat(ctx, xf, xf->nm.nxip4, xf->nm.nxport) != 0) {
       return DP_DROP;
     }
   }
@@ -462,11 +462,7 @@ dp_ing_slow_main(void *ctx,  struct xfi *xf)
 
 #ifdef HAVE_DP_FC
   /* fast-cache is used only when certain conditions are met */
-  if (xf->pm.pipe_act == LLB_PIPE_RDR && 
-      xf->pm.phit & LLB_DP_ACL_HIT &&
-      !(xf->pm.phit & LLB_DP_SESS_HIT) &&
-      xf->qm.polid == 0 &&
-      xf->pm.mirr == 0) {
+  if (LL_PIPE_FC_CAP(xf)) {
     fa->zone = xf->pm.zone;
     dp_insert_fcv4(ctx, xf, fa);
   }
@@ -504,12 +500,12 @@ dp_ing_ct_main(void *ctx,  struct xfi *xf)
       bpf_tail_call(ctx, &pgm_tbl, LLB_DP_FW_PGM_ID);
     }
 
-    dp_do_nat4_rule_lkup(ctx, xf);
+    dp_do_nat(ctx, xf);
   }
 
-  LL_DBG_PRINTK("[CTRK] start\n");
+  bpf_printk("[CTRK] start\n");
 
-  val = dp_ctv4_in(ctx, xf);
+  val = dp_ct_in(ctx, xf);
   if (val < 0) {
     return DP_PASS;
   }
@@ -525,6 +521,8 @@ dp_ing_ct_main(void *ctx,  struct xfi *xf)
    */
   if (xf->l2m.dl_type == bpf_htons(ETH_P_IP)) {
     dp_do_ipv4_fwd(ctx, xf, fa);
+  } else if (xf->l2m.dl_type == bpf_htons(ETH_P_IPV6)) {
+    dp_do_ipv6_fwd(ctx, xf, fa);
   }
   dp_eg_l2(ctx, xf, fa);
   return dp_pipe_check_res(ctx, xf, fa);

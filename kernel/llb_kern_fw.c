@@ -33,8 +33,8 @@ dp_do_fw4_main(void *ctx, struct xfi *xf)
   PDI_VAL_INIT(&key.inport, xf->pm.iport);
   PDI_VAL_INIT(&key.zone, xf->pm.zone);
   PDI_VAL_INIT(&key.bd, xf->pm.bd);
-  PDI_VAL_INIT(&key.dest, bpf_ntohl(xf->l34m.ip.daddr));
-  PDI_VAL_INIT(&key.source, bpf_ntohl(xf->l34m.ip.saddr));
+  PDI_VAL_INIT(&key.dest, bpf_ntohl(xf->l34m.daddr4));
+  PDI_VAL_INIT(&key.source, bpf_ntohl(xf->l34m.saddr4));
   PDI_RVAL_INIT(&key.dport, bpf_htons(xf->l34m.dest));
   PDI_RVAL_INIT(&key.sport, bpf_htons(xf->l34m.source));
   PDI_VAL_INIT(&key.protocol, xf->l34m.nw_proto);

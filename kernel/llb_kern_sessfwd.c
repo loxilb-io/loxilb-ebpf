@@ -29,19 +29,19 @@ dp_do_sess4_lkup(void *ctx, struct xfi *xf)
 
   key.r = 0;
   if (xf->tm.tunnel_id) {
-    key.daddr = xf->il34m.ip.daddr;
-    key.saddr = xf->il34m.ip.saddr;
+    key.daddr = xf->il34m.daddr4;
+    key.saddr = xf->il34m.saddr4;
     key.teid = bpf_ntohl(xf->tm.tunnel_id);
   } else {
     if (xf->pm.nf == LLB_NAT_SRC) {
-      key.saddr = xf->nm.nxip;
-      key.daddr = xf->l34m.ip.daddr;
+      key.saddr = xf->nm.nxip4;
+      key.daddr = xf->l34m.daddr4;
     } else if (xf->pm.nf == LLB_NAT_DST) {
-      key.daddr = xf->nm.nxip;
-      key.saddr = xf->l34m.ip.saddr;
+      key.daddr = xf->nm.nxip4;
+      key.saddr = xf->l34m.saddr4;
     } else {
-      key.daddr = xf->l34m.ip.daddr;
-      key.saddr = xf->l34m.ip.saddr;
+      key.daddr = xf->l34m.daddr4;
+      key.saddr = xf->l34m.saddr4;
     }
     key.teid = 0;
   }

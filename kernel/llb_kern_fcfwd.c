@@ -8,12 +8,12 @@
 static int __always_inline
 dp_do_fcv4_ct_helper(struct xfi *xf) 
 {
-  struct dp_ctv4_key key;
-  struct dp_aclv4_tact *act;
+  struct dp_ct_key key;
+  struct dp_acl_tact *act;
 
-  ACLCT4_KEY_GEN(&key, xf);
+  ACLCT_KEY_GEN(&key, xf);
 
-  act = bpf_map_lookup_elem(&acl_v4_map, &key);
+  act = bpf_map_lookup_elem(&acl_map, &key);
   if (!act) {
     LL_DBG_PRINTK("[FCH4] miss");
     return -1;
@@ -46,16 +46,16 @@ dp_mk_fcv4_key(struct xfi *xf, struct dp_fcv4_key *key)
 
   //key->bd         = xf->pm.bd;
   key->bd         = 0; 
-  key->daddr      = xf->l34m.ip.daddr;
-  key->saddr      = xf->l34m.ip.saddr;
+  key->daddr      = xf->l34m.daddr4;
+  key->saddr      = xf->l34m.saddr4;
   key->sport      = xf->l34m.source;
   key->dport      = xf->l34m.dest;
   key->l4proto    = xf->l34m.nw_proto;
 
   //key->in_port    = xf->pm.iport;
   key->in_port    = 0;
-  key->in_daddr   = xf->il34m.ip.daddr;
-  key->in_saddr   = xf->il34m.ip.saddr;
+  key->in_daddr   = xf->il34m.daddr4;
+  key->in_saddr   = xf->il34m.saddr4;
   key->in_sport   = xf->il34m.source;
   key->in_dport   = xf->il34m.dest;
   key->in_l4proto = xf->il34m.nw_proto;
@@ -128,7 +128,7 @@ dp_do_fcv4_lkup(void *ctx, struct xfi *xf)
     }
 
     dp_pipe_set_nat(ctx, xf, &ta->nat_act, 1);
-    dp_do_map_stats(ctx, xf, LL_DP_NAT4_STATS_MAP, ta->nat_act.rid);
+    dp_do_map_stats(ctx, xf, LL_DP_NAT_STATS_MAP, ta->nat_act.rid);
   } else if (acts->fcta[DP_SET_DNAT].ca.act_type == DP_SET_DNAT) {
     LL_FC_PRINTK("[FCH4] dnat-act\n");
     ta = &acts->fcta[DP_SET_DNAT];
@@ -138,7 +138,7 @@ dp_do_fcv4_lkup(void *ctx, struct xfi *xf)
     }
 
     dp_pipe_set_nat(ctx, xf, &ta->nat_act, 0);
-    dp_do_map_stats(ctx, xf, LL_DP_NAT4_STATS_MAP, ta->nat_act.rid);
+    dp_do_map_stats(ctx, xf, LL_DP_NAT_STATS_MAP, ta->nat_act.rid);
   }
 
   if (acts->fcta[DP_SET_RT_TUN_NH].ca.act_type == DP_SET_RT_TUN_NH) {
@@ -187,7 +187,7 @@ dp_do_fcv4_lkup(void *ctx, struct xfi *xf)
     dp_do_map_stats(ctx, xf, LL_DP_FW4_STATS_MAP, acts->ca.fwrid);
   }
 
-  dp_do_map_stats(ctx, xf, LL_DP_ACLV4_STATS_MAP, acts->ca.cidx);
+  dp_do_map_stats(ctx, xf, LL_DP_ACL_STATS_MAP, acts->ca.cidx);
 
   xf->pm.phit |= LLB_DP_FC_HIT;
   LL_FC_PRINTK("[FCH4] oport %d\n",  xf->pm.oport);

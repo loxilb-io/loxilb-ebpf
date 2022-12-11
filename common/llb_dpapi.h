@@ -17,8 +17,8 @@
 #define LLB_NH_MAP_ENTRIES    (4*1024)
 #define LLB_RTV4_MAP_ENTRIES  (32*1024)
 #define LLB_RTV4_PREF_LEN     (48)
-#define LLB_ACLV4_MAP_ENTRIES (256*1024)
-#define LLB_ACLV6_MAP_ENTRIES (2*1024)
+#define LLB_ACL_MAP_ENTRIES   (256*1024)
+#define LLB_ACLV6_MAP_ENTRIES (4*1024)
 #define LLB_RTV6_MAP_ENTRIES  (2*1024)
 #define LLB_TMAC_MAP_ENTRIES  (2*1024)
 #define LLB_DMAC_MAP_ENTRIES  (8*1024)
@@ -31,7 +31,7 @@
 #define LLB_PORT_PIDX_START   (LLB_PORT_NO - 128)
 #define LLB_INTF_MAP_ENTRIES  (6*1024)
 #define LLB_FCV4_MAP_ENTRIES  (256*1024)
-#define LLB_CTV4_MAP_ENTRIES  (LLB_FCV4_MAP_ENTRIES)
+#define LLB_CT_MAP_ENTRIES    (LLB_FCV4_MAP_ENTRIES)
 #define LLB_PGM_MAP_ENTRIES   (8)
 #define LLB_FCV4_MAP_ACTS     (DP_SET_TOCP)
 #define LLB_POL_MAP_ENTRIES   (8*1024)
@@ -61,7 +61,29 @@
 #define CT_SCTP_FN_CPTO       (20000000000)
 #define CT_UDP_FN_CPTO        (20000000000)
 #define CT_UDP_EST_CPTO       (60000000000)
-#define CT_ICMP_FN_CPTO       (40000000000)
+#define CT_ICMP_EST_CPTO      (20000000000)
+#define CT_ICMP_FN_CPTO       (10000000000)
+
+#define DP_XADDR_ISZR(a) ((a)[0] == 0 && \
+                          (a)[1] == 0 && \
+                          (a)[2] == 0 && \
+                          (a)[3] == 0)
+
+#define DP_XADDR_CP(a, b)         \
+do {                              \
+  (a)[0] = (b)[0];                \
+  (a)[1] = (b)[1];                \
+  (a)[2] = (b)[2];                \
+  (a)[3] = (b)[3];                \
+} while (0)
+
+#define DP_XADDR_SETZR(a)         \
+do {                              \
+  (a)[0] = 0;                     \
+  (a)[1] = 0;                     \
+  (a)[2] = 0;                     \
+  (a)[3] = 0;                     \
+} while(0)
 
 enum llb_dp_tid {
   LL_DP_INTF_MAP = 0,
@@ -69,8 +91,9 @@ enum llb_dp_tid {
   LL_DP_BD_STATS_MAP,
   LL_DP_SMAC_MAP,
   LL_DP_TMAC_MAP,
-  LL_DP_ACLV4_MAP,
+  LL_DP_ACL_MAP,
   LL_DP_RTV4_MAP,
+  LL_DP_RTV6_MAP,
   LL_DP_NH_MAP,
   LL_DP_DMAC_MAP,
   LL_DP_TX_INTF_MAP,
@@ -80,16 +103,15 @@ enum llb_dp_tid {
   LL_DP_PKT_PERF_RING,
   LL_DP_RTV4_STATS_MAP,
   LL_DP_RTV6_STATS_MAP,
-  LL_DP_ACLV4_STATS_MAP,
-  LL_DP_ACLV6_STATS_MAP,
+  LL_DP_ACL_STATS_MAP,
   LL_DP_TMAC_STATS_MAP,
   LL_DP_FCV4_MAP,
   LL_DP_FCV4_STATS_MAP,
   LL_DP_PGM_MAP,
   LL_DP_POL_MAP,
-  LL_DP_CTV4_MAP,
-  LL_DP_NAT4_MAP,
-  LL_DP_NAT4_STATS_MAP,
+  LL_DP_CT_MAP,
+  LL_DP_NAT_MAP,
+  LL_DP_NAT_STATS_MAP,
   LL_DP_SESS4_MAP,
   LL_DP_SESS4_STATS_MAP,
   LL_DP_FW4_MAP,
@@ -175,14 +197,14 @@ struct dp_sess_act {
 };
 
 struct dp_nat_act {
-  __u32 xip;
-  __u32 rip;
+  __u32 xip[4];
+  __u32 rip[4];
   __u16 xport;
   __u8 fr;
   __u8 doct;
   __u32 rid;
   __u32 aid;
-  __u32 res;
+  __u32 nv6;
 };
 
 #define MIN_DP_POLICER_RATE  (8*1000*1000)  /* 1 MBps = 8 Mbps */
@@ -223,6 +245,13 @@ struct dp_nh_tact {
     struct dp_rt_l2vxnh_act rt_l2vxnh;
   };
 };
+
+struct dp_rtv6_key {
+  struct bpf_lpm_trie_key l;
+  union {
+    __u32 addr[4]; 
+  };
+}__attribute__((packed));
 
 struct dp_rtv4_key {
   struct bpf_lpm_trie_key l;
@@ -546,20 +575,23 @@ typedef struct {
   ct_l3inf_t l3i;
 } ct_pinf_t;
 
+#define nat_xip4 nat_xip[0]
+#define nat_rip4 nat_rip[0]
+
 struct mf_xfrm_inf
 {
   /* LLB_NAT_XXX flags */
   uint8_t nat_flags;
   uint8_t inactive;
   uint16_t wprio;
-  uint16_t res;
+  uint16_t nv6;
   uint16_t nat_xport;
-  uint32_t nat_xip;
-  uint32_t nat_rip;
+  uint32_t nat_xip[4];
+  uint32_t nat_rip[4];
 };
 typedef struct mf_xfrm_inf nxfrm_inf_t;
 
-struct dp_ctv4_dat {
+struct dp_ct_dat {
   __u32 rid;
   __u32 aid;
   ct_pinf_t pi;
@@ -569,7 +601,7 @@ struct dp_ctv4_dat {
   dp_pb_stats_t pb;
 };
 
-struct dp_aclv4_tact {
+struct dp_acl_tact {
   struct dp_cmn_act ca; /* Possible actions :
                          *  DP_SET_DROP
                          *  DP_SET_TOCP
@@ -579,7 +611,7 @@ struct dp_aclv4_tact {
                          *  DP_SET_SESS_FWD_ACT
                          */
   struct bpf_spin_lock lock;
-  struct dp_ctv4_dat ctd;
+  struct dp_ct_dat ctd;
   __u64 ito;            /* Inactive timeout */
   __u64 lts;            /* Last used timestamp */
   union {
@@ -590,11 +622,11 @@ struct dp_aclv4_tact {
   };
 };
 
-struct dp_aclv4_tact_set {
+struct dp_acl_tact_set {
   uint16_t wp;
   uint16_t fc;
   uint32_t tc;
-  struct dp_aclv4_tact tact;
+  struct dp_acl_tact tact;
 };
 
 #define ACL_V4_MAX_ACT_SET     16 
@@ -603,22 +635,22 @@ struct dp_aclv4_tact_set {
 #define DP_SET_LB_WPRIO        1
 #define DP_SET_LB_RR           2
 
-struct dp_aclv4_tacts {
+struct dp_acl_tacts {
   uint16_t num_acts;
   uint16_t lb_type;
   uint32_t rdata;
-  struct dp_aclv4_tact_set act_set[ACL_V4_MAX_ACT_SET];
+  struct dp_acl_tact_set act_set[ACL_V4_MAX_ACT_SET];
 };
-typedef struct dp_aclv4_tacts dp_aclv4_tacts_t;
+typedef struct dp_acl_tacts dp_acl_tacts_t;
 
-struct dp_ctv4_key {
-  __u32 daddr;
-  __u32 saddr;
+struct dp_ct_key {
+  __u32 daddr[4];
+  __u32 saddr[4];
   __u16 sport;
   __u16 dport;
   __u16 zone;
   __u8  l4proto;
-  __u8  r;
+  __u8  v6;
 };
 
 struct dp_fwv4_tact {
@@ -639,18 +671,19 @@ struct dp_fwv4_ent {
   struct dp_fwv4_tact fwa;
 };
 
-struct dp_natv4_key {
-  __u32 daddr;
+struct dp_nat_key {
+  __u32 daddr[4];
   __u16 dport;
   __u16 zone;
   __u8  l4proto;
+  __u8  v6;
 };
 
 #define NAT_LB_SEL_RR   0
 #define NAT_LB_SEL_HASH 1
 #define NAT_LB_SEL_PRIO 2
 
-struct dp_natv4_tacts {
+struct dp_nat_tacts {
   struct dp_cmn_act ca;
   uint64_t ito;
   struct bpf_spin_lock lock;

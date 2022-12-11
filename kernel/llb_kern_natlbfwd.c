@@ -5,7 +5,7 @@
  * SPDX-License-Identifier: (GPL-2.0 OR BSD-2-Clause)
  */
 static int __always_inline
-dp_sel_nat_ep(void *ctx, struct dp_natv4_tacts *act)
+dp_sel_nat_ep(void *ctx, struct dp_nat_tacts *act)
 {
   int sel = -1;
   uint8_t n = 0;
@@ -51,28 +51,31 @@ dp_sel_nat_ep(void *ctx, struct dp_natv4_tacts *act)
 }
 
 static int __always_inline
-dp_do_nat4_rule_lkup(void *ctx, struct xfi *xf)
+dp_do_nat(void *ctx, struct xfi *xf)
 {
-  struct dp_natv4_key *key = (void *)xf->km.skey;
+  struct dp_nat_key key;
   struct mf_xfrm_inf *nxfrm_act;
-  struct dp_natv4_tacts *act;
+  struct dp_nat_tacts *act;
   __u32 sel;
 
-  /*memset(key, 0, sizeof(*key));*/
-  key->daddr = xf->l34m.ip.daddr;
+  memset(&key, 0, sizeof(key));
+  DP_XADDR_CP(key.daddr, xf->l34m.daddr);
   if (xf->l34m.nw_proto != IPPROTO_ICMP) {
-    key->dport = xf->l34m.dest;
+    key.dport = xf->l34m.dest;
   } else {
-    key->dport = 0;
+    key.dport = 0;
   }
-  key->zone = xf->pm.zone;
-  key->l4proto = xf->l34m.nw_proto;
+  key.zone = xf->pm.zone;
+  key.l4proto = xf->l34m.nw_proto;
+  if (xf->l2m.dl_type == bpf_htons(ETH_P_IPV6)) {
+    key.v6 = 1;
+  }
 
   LL_DBG_PRINTK("[NAT4] --Lookup\n");
 
-  xf->pm.table_id = LL_DP_NAT4_MAP;
+  xf->pm.table_id = LL_DP_NAT_MAP;
 
-  act = bpf_map_lookup_elem(&nat_v4_map, key);
+  act = bpf_map_lookup_elem(&nat_map, &key);
   if (!act) {
     /* Default action - Nothing to do */
     xf->pm.nf &= ~LLB_NAT_SRC;
@@ -96,16 +99,16 @@ dp_do_nat4_rule_lkup(void *ctx, struct xfi *xf)
 
       if (nxfrm_act < act + 1) {
         xf->pm.nf = act->ca.act_type == DP_SET_SNAT ? LLB_NAT_SRC : LLB_NAT_DST;
-        xf->nm.nxip = nxfrm_act->nat_xip;
-        xf->nm.nrip = nxfrm_act->nat_rip;
+        xf->nm.nxip4 = nxfrm_act->nat_xip4;
+        xf->nm.nrip4 = nxfrm_act->nat_rip4;
         xf->nm.nxport = nxfrm_act->nat_xport;
         xf->nm.sel_aid = sel;
         xf->nm.ito = act->ito;
         xf->pm.rule_id =  act->ca.cidx;
         LL_DBG_PRINTK("[NAT4] ACT %x\n", xf->pm.nf);
         /* Special case related to host-dnat */
-        if (xf->l34m.ip.saddr == xf->nm.nxip && xf->pm.nf == LLB_NAT_DST) {
-          xf->nm.nxip = 0;
+        if (xf->l34m.saddr4 == xf->nm.nxip4 && xf->pm.nf == LLB_NAT_DST) {
+          xf->nm.nxip4 = 0;
         }
       }
     }

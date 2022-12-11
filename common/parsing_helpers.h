@@ -139,6 +139,11 @@ static __always_inline int ip_decrease_ttl(struct iphdr *iph)
   return --iph->ttl;
 }
 
+static inline int ipv6_addr_is_multicast(const struct in6_addr *addr)
+{
+  return (addr->s6_addr32[0] & bpf_htonl(0xFF000000)) == bpf_htonl(0xFF000000);
+}
+
 static __always_inline __u16
 csum_fold_helper(__u32 csum)
 {

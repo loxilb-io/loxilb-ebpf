@@ -28,6 +28,13 @@ do {                                  \
   F->pm.rcode = C;                    \
 } while (0)
 
+#define LL_PIPE_FC_CAP(x)                     \
+  ((x)->pm.pipe_act == LLB_PIPE_RDR &&        \
+  (x)->pm.phit & LLB_DP_ACL_HIT &&            \
+  !((x)->pm.phit & LLB_DP_SESS_HIT) &&        \
+  (x)->l2m.dl_type == bpf_htons(ETH_P_IP) &&  \
+  (x)->qm.polid == 0 &&                       \
+  (x)->pm.mirr == 0)
 
 #define LL_PIPELINE_CONT(F) (!F->pm.pipe_act)
 
@@ -134,6 +141,9 @@ struct dp_l2_mdi {
     __u32            r2;
 };
 
+#define saddr4 saddr[0]
+#define daddr4 daddr[0]
+
 struct dp_l34_mdi {
     __u8             tos;
     __u8             nw_proto;
@@ -147,17 +157,8 @@ struct dp_l34_mdi {
     __u32            seq;
     __u32            ack;
 
-    union {
-        struct out_ip_flow {
-            __u32    saddr;
-            __u32    daddr;
-        }ip;
-        struct out_ipv6_flow {
-            __u8     saddr[16];
-            __u8     daddr[16];
-
-        }ipv6;
-    };
+    __u32            saddr[4];
+    __u32            daddr[4];
 };
 
 struct dp_tun_mdi {
@@ -187,14 +188,18 @@ struct dp_qos_mdi {
     __u32            polid;
 };
 
+#define nxip4 nxip[0]
+#define nrip4 nrip[0]
+
 struct dp_nat_mdi {
-    __u32            nxip;         /* NAT xIP */
-    __u32            nrip;         /* NAT rIP (for one-arm) */
+    __u32            nxip[4];      /* NAT xIP */
+    __u32            nrip[4];      /* NAT rIP (for one-arm) */
     __u16            nxport;       /* NAT xport */
 #define LLB_PIPE_CT_NONE  0
 #define LLB_PIPE_CT_INP   1
 #define LLB_PIPE_CT_EST   2
-    __u8            ct_sts;       /* Conntrack state */
+    __u8            ct_sts:4;      /* Conntrack state */
+    __u8            nv6:4;
     __u8            sel_aid;
     __u32           res;
     __u64           ito;
