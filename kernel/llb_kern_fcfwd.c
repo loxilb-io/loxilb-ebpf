@@ -128,7 +128,7 @@ dp_do_fcv4_lkup(void *ctx, struct xfi *xf)
     }
 
     dp_pipe_set_nat(ctx, xf, &ta->nat_act, 1);
-    dp_do_map_stats(ctx, xf, LL_DP_NAT4_STATS_MAP, ta->nat_act.rid);
+    dp_do_map_stats(ctx, xf, LL_DP_NAT_STATS_MAP, ta->nat_act.rid);
   } else if (acts->fcta[DP_SET_DNAT].ca.act_type == DP_SET_DNAT) {
     LL_FC_PRINTK("[FCH4] dnat-act\n");
     ta = &acts->fcta[DP_SET_DNAT];
@@ -138,7 +138,7 @@ dp_do_fcv4_lkup(void *ctx, struct xfi *xf)
     }
 
     dp_pipe_set_nat(ctx, xf, &ta->nat_act, 0);
-    dp_do_map_stats(ctx, xf, LL_DP_NAT4_STATS_MAP, ta->nat_act.rid);
+    dp_do_map_stats(ctx, xf, LL_DP_NAT_STATS_MAP, ta->nat_act.rid);
   }
 
   if (acts->fcta[DP_SET_RT_TUN_NH].ca.act_type == DP_SET_RT_TUN_NH) {

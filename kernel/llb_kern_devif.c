@@ -504,7 +504,7 @@ dp_ing_ct_main(void *ctx,  struct xfi *xf)
       bpf_tail_call(ctx, &pgm_tbl, LLB_DP_FW_PGM_ID);
     }
 
-    dp_do_nat4_rule_lkup(ctx, xf);
+    dp_do_nat(ctx, xf);
   }
 
   LL_DBG_PRINTK("[CTRK] start\n");

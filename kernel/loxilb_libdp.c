@@ -521,15 +521,15 @@ llb_xh_init(llb_dp_struct_t *xh)
   xh->maps[LL_DP_CT_MAP].has_pb   = 0;
   xh->maps[LL_DP_CT_MAP].max_entries = LLB_CT_MAP_ENTRIES;
 
-  xh->maps[LL_DP_NAT4_MAP].map_name = "nat_v4_map";
-  xh->maps[LL_DP_NAT4_MAP].has_pb   = 1;
-  xh->maps[LL_DP_NAT4_MAP].pb_xtid  = LL_DP_NAT4_STATS_MAP;
-  xh->maps[LL_DP_NAT4_MAP].max_entries = LLB_NATV4_MAP_ENTRIES;
+  xh->maps[LL_DP_NAT_MAP].map_name = "nat_map";
+  xh->maps[LL_DP_NAT_MAP].has_pb   = 1;
+  xh->maps[LL_DP_NAT_MAP].pb_xtid  = LL_DP_NAT_STATS_MAP;
+  xh->maps[LL_DP_NAT_MAP].max_entries = LLB_NATV4_MAP_ENTRIES;
 
-  xh->maps[LL_DP_NAT4_STATS_MAP].map_name = "nat_v4_stats_map";
-  xh->maps[LL_DP_NAT4_STATS_MAP].has_pb   = 1;
-  xh->maps[LL_DP_NAT4_STATS_MAP].max_entries = LLB_NATV4_STAT_MAP_ENTRIES;
-  xh->maps[LL_DP_NAT4_STATS_MAP].pbs = calloc(LLB_NATV4_STAT_MAP_ENTRIES,
+  xh->maps[LL_DP_NAT_STATS_MAP].map_name = "nat_v4_stats_map";
+  xh->maps[LL_DP_NAT_STATS_MAP].has_pb   = 1;
+  xh->maps[LL_DP_NAT_STATS_MAP].max_entries = LLB_NATV4_STAT_MAP_ENTRIES;
+  xh->maps[LL_DP_NAT_STATS_MAP].pbs = calloc(LLB_NATV4_STAT_MAP_ENTRIES,
                                             sizeof(struct dp_pbc_stats));
 
   xh->maps[LL_DP_PKT_PERF_RING].map_name = "pkt_ring";
@@ -846,7 +846,7 @@ static void ll_map_aclct4_rm_related(uint32_t rid, uint32_t *aids, int naid);
 static int
 llb_add_map_elem_nat4_post_proc(void *k, void *v)
 {
-  struct dp_natv4_tacts *na = v;
+  struct dp_nat_tacts *na = v;
   struct mf_xfrm_inf *ep_arm;
   uint32_t inact_aids[LLB_MAX_NXFRMS];
   int i = 0;
@@ -1000,7 +1000,7 @@ llb_add_map_elem(int tbl, void *k, void *v)
   XH_LOCK();
 
   /* Any table which has stats pb needs to get stats cleared before use */
-  if (tbl == LL_DP_NAT4_MAP ||
+  if (tbl == LL_DP_NAT_MAP ||
       tbl == LL_DP_TMAC_MAP ||
       tbl == LL_DP_TMAC_MAP ||
       tbl == LL_DP_FW4_MAP  ||
@@ -1027,7 +1027,7 @@ llb_add_map_elem(int tbl, void *k, void *v)
     ret = -EFAULT;
   } else {
     /* Need some post-processing for certain maps */
-    if (tbl == LL_DP_NAT4_MAP) {
+    if (tbl == LL_DP_NAT_MAP) {
       llb_add_map_elem_nat4_post_proc(k, v);
     }
   }
@@ -1141,8 +1141,8 @@ llb_del_map_elem(int tbl, void *k)
   XH_LOCK();
 
   /* Need some pre-processing for certain maps */
-  if (tbl == LL_DP_NAT4_MAP) {
-    struct dp_natv4_tacts t = { 0 };
+  if (tbl == LL_DP_NAT_MAP) {
+    struct dp_nat_tacts t = { 0 };
     ret = bpf_map_lookup_elem(llb_map2fd(tbl), k, &t);
     if (ret != 0) {
       XH_UNLOCK();
@@ -1161,7 +1161,7 @@ llb_del_map_elem(int tbl, void *k)
   }
 
   /* Need some post-processing for certain maps */
-  if (tbl == LL_DP_NAT4_MAP) {
+  if (tbl == LL_DP_NAT_MAP) {
     if (cidx > 0) {
       /*llb_del_map_elem_with_cidx(LL_DP_CT_MAP, cidx);*/
       llb_del_map_elem_with_cidx(LL_DP_ACL_MAP, cidx);

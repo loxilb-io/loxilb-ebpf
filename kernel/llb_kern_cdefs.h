@@ -178,10 +178,10 @@ struct bpf_map_def SEC("maps") acl_stats_map = {
   .max_entries = LLB_ACL_MAP_ENTRIES
 };
 
-struct bpf_map_def SEC("maps") nat_v4_map = {
+struct bpf_map_def SEC("maps") nat_map = {
   .type = BPF_MAP_TYPE_HASH,
-  .key_size = sizeof(struct dp_natv4_key),
-  .value_size = sizeof(struct dp_natv4_tacts),
+  .key_size = sizeof(struct dp_nat_key),
+  .value_size = sizeof(struct dp_nat_tacts),
   .max_entries = LLB_NATV4_MAP_ENTRIES
 };
 
@@ -443,10 +443,10 @@ struct {
 
 struct {
         __uint(type,        BPF_MAP_TYPE_HASH);
-        __type(key,         struct dp_natv4_key);
-        __type(value,       struct dp_natv4_tacts);
+        __type(key,         struct dp_nat_key);
+        __type(value,       struct dp_nat_tacts);
         __uint(max_entries, LLB_NATV4_MAP_ENTRIES);
-} nat_v4_map SEC(".maps");
+} nat_map SEC(".maps");
 
 struct {
         __uint(type,        BPF_MAP_TYPE_PERCPU_ARRAY);
@@ -619,7 +619,7 @@ dp_do_map_stats(struct xdp_md *ctx,
   case LL_DP_SESS4_STATS_MAP:
     map = &sess_v4_stats_map;
     break;
-  case LL_DP_NAT4_STATS_MAP:
+  case LL_DP_NAT_STATS_MAP:
     map = &nat_v4_stats_map;
     break;
   case LL_DP_FW4_STATS_MAP:

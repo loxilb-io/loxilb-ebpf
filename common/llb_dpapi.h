@@ -109,8 +109,8 @@ enum llb_dp_tid {
   LL_DP_PGM_MAP,
   LL_DP_POL_MAP,
   LL_DP_CT_MAP,
-  LL_DP_NAT4_MAP,
-  LL_DP_NAT4_STATS_MAP,
+  LL_DP_NAT_MAP,
+  LL_DP_NAT_STATS_MAP,
   LL_DP_SESS4_MAP,
   LL_DP_SESS4_STATS_MAP,
   LL_DP_FW4_MAP,
@@ -670,18 +670,19 @@ struct dp_fwv4_ent {
   struct dp_fwv4_tact fwa;
 };
 
-struct dp_natv4_key {
-  __u32 daddr;
+struct dp_nat_key {
+  __u32 daddr[4];
   __u16 dport;
   __u16 zone;
   __u8  l4proto;
+  __u8  v6;
 };
 
 #define NAT_LB_SEL_RR   0
 #define NAT_LB_SEL_HASH 1
 #define NAT_LB_SEL_PRIO 2
 
-struct dp_natv4_tacts {
+struct dp_nat_tacts {
   struct dp_cmn_act ca;
   uint64_t ito;
   struct bpf_spin_lock lock;
