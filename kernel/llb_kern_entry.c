@@ -706,6 +706,12 @@ dp_parse_packet(void *md,
       return -1;
     }
 
+    if (ipv6_addr_is_multicast(&ip6->daddr) ||
+        ipv6_addr_is_multicast(&ip6->saddr)) {
+      LLBS_PPLN_PASS(xf);
+      return 1;
+    }
+
     xf->pm.l3_plen = bpf_ntohs(ip6->payload_len);
     xf->pm.l3_len =  xf->pm.l3_plen + sizeof(*ip6);
 
