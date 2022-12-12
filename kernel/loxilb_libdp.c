@@ -275,6 +275,10 @@ llb_dflt_sec_map2fd_all(struct bpf_object *bpf_obj)
           key = 4;
         } else  if (strcmp(section, "tc_packet_hook5") == 0) {
           key = 5;
+        } else  if (strcmp(section, "tc_packet_hook6") == 0) {
+          key = 6;
+        } else  if (strcmp(section, "tc_packet_hook7") == 0) {
+          key = 7;
         } else key = -1;
         if (key >= 0) {
           bpf_map_update_elem(fd, &key, &bfd, BPF_ANY);

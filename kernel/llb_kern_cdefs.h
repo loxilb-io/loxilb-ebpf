@@ -704,6 +704,17 @@ dp_csum_tcall(void *ctx,  struct xfi *xf)
 }
 
 static int __always_inline
+dp_sunp_tcall(void *ctx,  struct xfi *xf)
+{
+  int z = 0;
+
+  bpf_map_update_elem(&xfis, &z, xf, BPF_ANY);
+  bpf_tail_call(ctx, &pgm_tbl, LLB_DP_SUNP_PGM_ID2);
+
+  return DP_PASS;
+}
+
+static int __always_inline
 dp_pkt_is_l2mcbc(struct xfi *xf, void *md)
 {
   struct __sk_buff *b = md;  
@@ -871,7 +882,7 @@ dp_set_tcp_dst_ip6(void *md, struct xfi *xf, __be32 *xip)
   bpf_l4_csum_replace(md, tcp_csum_off, old_dip[1], xip[1], BPF_F_PSEUDO_HDR |sizeof(*xip));
   bpf_l4_csum_replace(md, tcp_csum_off, old_dip[2], xip[2], BPF_F_PSEUDO_HDR |sizeof(*xip));
   bpf_l4_csum_replace(md, tcp_csum_off, old_dip[3], xip[3], BPF_F_PSEUDO_HDR |sizeof(*xip));
-  bpf_skb_store_bytes(md, ip_dst_off, xip, sizeof(xf->l34m.daddr), 0);
+  bpf_skb_store_bytes(md, ip_dst_off, xip, sizeof(xf->l34m.saddr), 0);
 
   DP_XADDR_CP(xf->l34m.daddr, xip);
 
@@ -1224,6 +1235,83 @@ dp_do_dnat(void *ctx, struct xfi *xf, __be32 xip, __be16 xport)
 }
 
 static int __always_inline
+dp_do_dnat6(void *ctx, struct xfi *xf, __be32 *xip, __be16 xport)
+{
+  void *dend = DP_TC_PTR(DP_PDATA_END(ctx));
+
+  if (xf->l34m.nw_proto == IPPROTO_TCP)  {
+    struct tcphdr *tcp = DP_ADD_PTR(DP_PDATA(ctx), xf->pm.l4_off);
+    if (tcp + 1 > dend) {
+      LLBS_PPLN_DROP(xf);
+      return -1;
+    }
+
+    if (DP_XADDR_ISZR(xip)) {
+      /* Hairpin nat to host */
+      DP_XADDR_CP(xip, xf->l34m.saddr);
+      dp_set_tcp_src_ip6(ctx, xf, xf->l34m.daddr);
+      dp_set_tcp_dst_ip6(ctx, xf, xip);
+    } else {
+      if (!DP_XADDR_ISZR(xf->nm.nrip)) {
+        dp_set_tcp_src_ip6(ctx, xf, xf->nm.nrip);
+      }
+      dp_set_tcp_dst_ip6(ctx, xf, xip);
+    }
+    dp_set_tcp_dport(ctx, xf, xport);
+  } else if (xf->l34m.nw_proto == IPPROTO_UDP)  {
+    struct udphdr *udp = DP_ADD_PTR(DP_PDATA(ctx), xf->pm.l4_off);
+
+    if (udp + 1 > dend) {
+      LLBS_PPLN_DROP(xf);
+      return -1;
+    }
+
+    if (DP_XADDR_ISZR(xip)) {
+      /* Hairpin nat to host */
+      DP_XADDR_CP(xip, xf->l34m.saddr);
+      dp_set_udp_src_ip6(ctx, xf, xf->l34m.daddr);
+      dp_set_udp_dst_ip6(ctx, xf, xip);
+    } else {
+      if (!DP_XADDR_ISZR(xf->nm.nrip)) {
+        dp_set_udp_src_ip6(ctx, xf, xf->nm.nrip);
+      }
+      dp_set_udp_dst_ip6(ctx, xf, xip);
+    }
+    dp_set_udp_dport(ctx, xf, xport);
+  } else if (xf->l34m.nw_proto == IPPROTO_SCTP)  {
+    struct sctphdr *sctp = DP_ADD_PTR(DP_PDATA(ctx), xf->pm.l4_off);
+
+    if (sctp + 1 > dend) {
+      LLBS_PPLN_DROP(xf);
+      return -1;
+    }
+
+    if (DP_XADDR_ISZR(xip)) {
+      /* Hairpin nat to host */
+      DP_XADDR_CP(xip, xf->l34m.saddr);
+      dp_set_sctp_src_ip6(ctx, xf, xf->l34m.daddr);
+      dp_set_sctp_dst_ip6(ctx, xf, xip);
+    } else {
+      if (!DP_XADDR_ISZR(xf->nm.nrip)) {
+        dp_set_sctp_src_ip6(ctx, xf, xf->nm.nrip);
+      }
+      dp_set_sctp_dst_ip6(ctx, xf, xip);
+    }
+    dp_set_sctp_dport(ctx, xf, xport);
+#ifdef HAVE_DP_SCTP_SUM
+    dp_csum_tcall(ctx, xf);
+#endif
+  } else if (xf->l34m.nw_proto == IPPROTO_ICMP)  {
+    if (!DP_XADDR_ISZR(xf->nm.nrip)) {
+      dp_set_icmp_src_ip6(ctx, xf, xf->nm.nrip);
+    }
+    dp_set_icmp_dst_ip6(ctx, xf, xip);
+  }
+
+  return 0;
+}
+
+static int __always_inline
 dp_do_snat(void *ctx, struct xfi *xf, __be32 xip, __be16 xport)
 {
   void *dend = DP_TC_PTR(DP_PDATA_END(ctx));
@@ -1300,6 +1388,83 @@ dp_do_snat(void *ctx, struct xfi *xf, __be32 xip, __be16 xport)
   return 0;
 }
 
+static int __always_inline
+dp_do_snat6(void *ctx, struct xfi *xf, __be32 *xip, __be16 xport)
+{
+  void *dend = DP_TC_PTR(DP_PDATA_END(ctx));
+
+  if (xf->l34m.nw_proto == IPPROTO_TCP)  {
+    struct tcphdr *tcp = DP_ADD_PTR(DP_PDATA(ctx), xf->pm.l4_off);
+    if (tcp + 1 > dend) {
+      LLBS_PPLN_DROP(xf);
+      return -1;
+    }
+
+    if (DP_XADDR_ISZR(xip)) {
+      /* Hairpin nat to host */
+      DP_XADDR_CP(xip, xf->l34m.saddr);
+      dp_set_tcp_src_ip6(ctx, xf, xf->l34m.daddr);
+      dp_set_tcp_dst_ip6(ctx, xf, xip);
+    } else {
+      dp_set_tcp_src_ip6(ctx, xf, xip);
+      if (!DP_XADDR_ISZR(xf->nm.nrip)) {
+        dp_set_tcp_dst_ip6(ctx, xf, xf->nm.nrip);
+      }
+    }
+    dp_set_tcp_sport(ctx, xf, xport);
+  } else if (xf->l34m.nw_proto == IPPROTO_UDP)  {
+    struct udphdr *udp = DP_ADD_PTR(DP_PDATA(ctx), xf->pm.l4_off);
+
+    if (udp + 1 > dend) {
+      LLBS_PPLN_DROP(xf);
+      return -1;
+    }
+
+    if (DP_XADDR_ISZR(xip)) {
+      /* Hairpin nat to host */
+      DP_XADDR_CP(xip, xf->l34m.saddr);
+      dp_set_udp_src_ip6(ctx, xf, xf->l34m.daddr);
+      dp_set_udp_dst_ip6(ctx, xf, xip);
+    } else {
+      dp_set_udp_src_ip6(ctx, xf, xip);
+      if (!DP_XADDR_ISZR(xf->nm.nrip)) {
+        dp_set_udp_dst_ip6(ctx, xf, xf->nm.nrip);
+      }
+    }
+    dp_set_udp_sport(ctx, xf, xport);
+  } else if (xf->l34m.nw_proto == IPPROTO_SCTP)  {
+    struct sctphdr *sctp = DP_ADD_PTR(DP_PDATA(ctx), xf->pm.l4_off);
+
+    if (sctp + 1 > dend) {
+      LLBS_PPLN_DROP(xf);
+      return -1;
+    }
+
+    if (DP_XADDR_ISZR(xip)) {
+      /* Hairpin nat to host */
+      DP_XADDR_CP(xip, xf->l34m.saddr);
+      dp_set_sctp_src_ip6(ctx, xf, xf->l34m.daddr);
+      dp_set_sctp_dst_ip6(ctx, xf, xip);
+    } else {
+      dp_set_sctp_src_ip6(ctx, xf, xip);
+      if (!DP_XADDR_ISZR(xf->nm.nrip)) {
+        dp_set_sctp_dst_ip6(ctx, xf, xf->nm.nrip);
+      }
+    }
+    dp_set_sctp_sport(ctx, xf, xport);
+#ifdef HAVE_DP_SCTP_SUM
+    dp_csum_tcall(ctx, xf);
+#endif
+  } else if (xf->l34m.nw_proto == IPPROTO_ICMP)  {
+    dp_set_icmp_src_ip6(ctx, xf, xip);
+    if (!DP_XADDR_ISZR(xf->nm.nrip)) {
+      dp_set_icmp_dst_ip6(ctx, xf, xf->nm.nrip);
+    }
+  }
+
+  return 0;
+}
+
 static __u32 __always_inline
 dp_get_pkt_hash(void *md)
 {
@@ -1326,6 +1491,7 @@ dp_pktbuf_write(void *md, __u32 off, void *frmbuf, __u32 frmlen, __u64 flags)
 #define DP_DROP     XDP_DROP
 #define DP_PASS     XDP_PASS
 
+#define dp_sunp_tcall(x, y)
 #define TCALL_CRC1()
 #define TCALL_CRC2()
 #define RETURN_TO_MP_OUT()
@@ -1480,7 +1646,21 @@ dp_do_snat(void *ctx, struct xfi *xf, __be32 xip, __be16 xport)
 }
 
 static int __always_inline
+dp_do_snat6(void *ctx, struct xfi *xf, __be32 *xip, __be16 xport)
+{
+  /* FIXME - TBD */
+  return 0;
+}
+
+static int __always_inline
 dp_do_dnat(void *ctx, struct xfi *xf, __be32 xip, __be16 xport)
+{
+  /* FIXME - TBD */
+  return 0;
+}
+
+static int __always_inline
+dp_do_dnat6(void *ctx, struct xfi *xf, __be32 *xip, __be16 xport)
 {
   /* FIXME - TBD */
   return 0;

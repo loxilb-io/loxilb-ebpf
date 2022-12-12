@@ -974,4 +974,18 @@ int tc_csum_func2(struct __sk_buff *md)
   return dp_sctp_csum(md, xf);
 }
 
+SEC("tc_packet_hook6")
+int tc_slow_unp_func(struct __sk_buff *md)
+{
+  int val = 0;
+  struct xfi *xf;
+
+  xf = bpf_map_lookup_elem(&xfis, &val);
+  if (!xf) {
+    return DP_DROP;
+  }
+
+  return dp_unparse_packet_always_slow(md, xf);
+}
+
 #endif

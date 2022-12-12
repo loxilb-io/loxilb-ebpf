@@ -67,11 +67,11 @@ dp_do_nat(void *ctx, struct xfi *xf)
   }
   key.zone = xf->pm.zone;
   key.l4proto = xf->l34m.nw_proto;
-  if (xf->l2m.dl_type == bpf_htons(ETH_P_IPV6)) {
+  if (xf->l2m.dl_type == bpf_ntohs(ETH_P_IPV6)) {
     key.v6 = 1;
   }
 
-  LL_DBG_PRINTK("[NAT4] --Lookup\n");
+  LL_DBG_PRINTK("[NAT] --Lookup\n");
 
   xf->pm.table_id = LL_DP_NAT_MAP;
 
@@ -82,7 +82,7 @@ dp_do_nat(void *ctx, struct xfi *xf)
     return 0;
   }
 
-  LL_DBG_PRINTK("[NAT4] action %d pipe %x\n",
+  LL_DBG_PRINTK("[NAT] action %d pipe %x\n",
                  act->ca.act_type, xf->pm.pipe_act);
 
   if (act->ca.act_type == DP_SET_SNAT || 
@@ -99,13 +99,14 @@ dp_do_nat(void *ctx, struct xfi *xf)
 
       if (nxfrm_act < act + 1) {
         xf->pm.nf = act->ca.act_type == DP_SET_SNAT ? LLB_NAT_SRC : LLB_NAT_DST;
-        xf->nm.nxip4 = nxfrm_act->nat_xip4;
-        xf->nm.nrip4 = nxfrm_act->nat_rip4;
+        DP_XADDR_CP(xf->nm.nxip, nxfrm_act->nat_xip);
+        DP_XADDR_CP(xf->nm.nrip, nxfrm_act->nat_rip);
         xf->nm.nxport = nxfrm_act->nat_xport;
+        xf->nm.nv6 = nxfrm_act->nv6 ? 1: 0;
         xf->nm.sel_aid = sel;
         xf->nm.ito = act->ito;
         xf->pm.rule_id =  act->ca.cidx;
-        LL_DBG_PRINTK("[NAT4] ACT %x\n", xf->pm.nf);
+        LL_DBG_PRINTK("[NAT] ACT %x\n", xf->pm.nf);
         /* Special case related to host-dnat */
         if (xf->l34m.saddr4 == xf->nm.nxip4 && xf->pm.nf == LLB_NAT_DST) {
           xf->nm.nxip4 = 0;

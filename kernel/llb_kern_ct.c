@@ -141,7 +141,7 @@ dp_ct_proto_xfk_init(struct dp_ct_key *key,
 
   /* Apply NAT xfrm if needed */
   if (xi->nat_flags & LLB_NAT_DST) {
-    xkey->v6 = xi->nv6;
+    xkey->v6 = (__u8)(xi->nv6);
     DP_XADDR_CP(xkey->saddr, xi->nat_xip);
     if (!DP_XADDR_ISZR(xi->nat_rip)) {
       DP_XADDR_CP(xkey->daddr, xi->nat_rip);
@@ -155,6 +155,7 @@ dp_ct_proto_xfk_init(struct dp_ct_key *key,
     }
 
     xxi->nat_flags = LLB_NAT_SRC;
+    xxi->nv6 = xi->nv6;
     DP_XADDR_CP(xxi->nat_xip, key->daddr);
     if (key->l4proto != IPPROTO_ICMP)
       xxi->nat_xport = key->dport;
@@ -174,8 +175,8 @@ dp_ct_proto_xfk_init(struct dp_ct_key *key,
     }
 
     xxi->nat_flags = LLB_NAT_DST;
+    xxi->nv6 = xi->nv6;
     DP_XADDR_CP(xxi->nat_xip, key->saddr);
-
     if (key->l4proto != IPPROTO_ICMP)
       xxi->nat_xport = key->sport;
   }
@@ -191,6 +192,7 @@ dp_ct_proto_xfk_init(struct dp_ct_key *key,
     }
 
     xxi->nat_flags = LLB_NAT_HSRC;
+    xxi->nv6 = xi->nv6;
     DP_XADDR_SETZR(xxi->nat_xip);
     DP_XADDR_SETZR(xi->nat_xip);
     if (key->l4proto != IPPROTO_ICMP)
@@ -208,6 +210,7 @@ dp_ct_proto_xfk_init(struct dp_ct_key *key,
     }
 
     xxi->nat_flags = LLB_NAT_HDST;
+    xxi->nv6 = xi->nv6;
     DP_XADDR_SETZR(xxi->nat_xip);
     DP_XADDR_SETZR(xi->nat_xip);
 
@@ -1004,6 +1007,7 @@ dp_ct_in(void *ctx, struct xfi *xf)
   DP_XADDR_CP(xi->nat_xip, xf->nm.nxip);
   DP_XADDR_CP(xi->nat_rip, xf->nm.nrip);
   xi->nat_xport = xf->nm.nxport;
+  xi->nv6 = xf->nm.nv6;
 
   xxi->nat_flags = 0;
   xxi->nat_xport = 0;
