@@ -742,6 +742,10 @@ dp_parse_packet(void *md,
         xf->pm.tcp_flags |= LLB_TCP_ACK;
       if (tcp->urg)
         xf->pm.tcp_flags |= LLB_TCP_URG;
+
+      if (xf->pm.tcp_flags & (LLB_TCP_FIN|LLB_TCP_RST)) {
+          xf->pm.l4fin = 1;
+      }
   
       xf->l34m.source = tcp->source;
       xf->l34m.dest = tcp->dest;
