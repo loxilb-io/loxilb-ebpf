@@ -70,8 +70,7 @@ dp_sctp_csum(void *ctx, struct xfi *xf)
         //csum = bpf_htonl(crc ^ 0xffffffff);
         csum = (crc ^ 0xffffffff);
         dp_pktbuf_write(ctx, sctp_csum_off, &csum , sizeof(csum), 0); 
-        xf->pm.nf &= ~LLB_NAT_SRC;
-        xf->pm.nf &= ~LLB_NAT_DST;
+        xf->pm.nf = 0;
       }
         
       RETURN_TO_MP_OUT();

@@ -243,8 +243,7 @@ dp_unparse_packet_always_slow(void *ctx,  struct xfi *xf)
     }
   }
 
-  xf->pm.nf &= ~LLB_NAT_SRC;
-  xf->pm.nf &= ~LLB_NAT_DST;
+  xf->pm.nf = 0;
 
   RETURN_TO_MP_OUT();
 
