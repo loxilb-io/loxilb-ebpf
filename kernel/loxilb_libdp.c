@@ -1303,12 +1303,12 @@ ctm_proto_xfk_init(struct dp_ct_key *key,
 }
 
 static void
-ll_send_ct4_ep_reset(struct dp_ct_key *ep, struct dp_acl_tact *adat)
+ll_send_ctep_reset(struct dp_ct_key *ep, struct dp_acl_tact *adat)
 {
   struct mkr_args r;
   ct_tcp_pinf_t *ts = &adat->ctd.pi.t;
 
-  if (ep->l4proto != IPPROTO_TCP && ep->v6) {
+  if (ep->l4proto != IPPROTO_TCP) {
     return;
   }
 
@@ -1318,8 +1318,14 @@ ll_send_ct4_ep_reset(struct dp_ct_key *ep, struct dp_acl_tact *adat)
 
   memset(&r, 0, sizeof(r));
 
-  r.sip[0] = ntohl(ep->daddr[0]);
-  r.dip[0] = ntohl(ep->saddr[0]);
+  if (ep->v6 == 0) {
+    r.sip[0] = ntohl(ep->daddr[0]);
+    r.dip[0] = ntohl(ep->saddr[0]);
+  } else {
+    memcpy(r.sip, ep->daddr, 16);
+    memcpy(r.dip, ep->saddr, 16);
+    r.v6 = 1;
+  }
   r.sport = ntohs(ep->dport);
   r.dport = ntohs(ep->sport);
   r.protocol = ep->l4proto;
@@ -1377,7 +1383,7 @@ ll_aclct4_map_ent_has_aged(int tid, void *k, void *ita)
          dstr, ntohs(xkey.sport),
          sstr, ntohs(xkey.dport),  
          xkey.l4proto); 
-    ll_send_ct4_ep_reset(key, adat);
+    ll_send_ctep_reset(key, adat);
     llb_clear_map_stats(LL_DP_ACL_STATS_MAP, adat->ca.cidx);
     return 1;
   }
@@ -1449,7 +1455,7 @@ ll_aclct4_map_ent_has_aged(int tid, void *k, void *ita)
          sstr, ntohs(key->sport),
          dstr, ntohs(key->dport),  
          key->l4proto, dat->rid, est, has_nat, used1 || used2);
-    ll_send_ct4_ep_reset(key, adat);
+    ll_send_ctep_reset(key, adat);
     llb_clear_map_stats(LL_DP_ACL_STATS_MAP, adat->ca.cidx);
     return 1;
   }

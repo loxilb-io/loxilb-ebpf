@@ -1048,6 +1048,7 @@ dp_ct_in(void *ctx, struct xfi *xf)
       adat->nat_act.nv6 = xf->nm.nv6 ? 1:0;
       adat->ito = xf->nm.ito;
     } else {
+      adat->ito = 0;
       adat->ca.act_type = DP_SET_DO_CT;
     }
     adat->ctd.dir = cdir;
@@ -1075,6 +1076,7 @@ dp_ct_in(void *ctx, struct xfi *xf)
       axdat->nat_act.nv6 = xf->nm.nv6 ? 1:0;
       axdat->ito = xf->nm.ito;
     } else {
+      axdat->ito = 0;
       axdat->ca.act_type = DP_SET_DO_CT;
     }
     axdat->lts = adat->lts;

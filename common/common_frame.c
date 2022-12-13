@@ -14,9 +14,64 @@
 #include <netinet/udp.h>
 #include <netinet/tcp.h>
 #include <netinet/ip.h>
+#include <netinet/ip6.h>
 #include <assert.h>
 #include "common_frame.h"
 #include "common_sum.h"
+
+int
+create_raw_tcp6(void *packet, size_t *plen, struct mkr_args *args)
+{
+  size_t orig_len;
+  struct ip6_hdr *pip;
+  struct tcphdr *ptcp;
+
+  if (!packet || !plen) return -1;
+
+  if (!args->v6 || args->protocol != 0x6) return -1;
+  orig_len = *plen;
+
+  memset(packet, 0, orig_len);
+  pip = (void *)packet;
+
+  /* Fill in the IP header */
+  pip->ip6_vfc = 0x6;
+  pip->ip6_plen = htons(sizeof(struct tcphdr));
+  pip->ip6_nxt = 0x6;
+  pip->ip6_hlim = 64;
+  memcpy(&pip->ip6_src, args->sip, sizeof(pip->ip6_src));
+  memcpy(&pip->ip6_dst, args->dip, sizeof(pip->ip6_dst));
+
+  /* Fill in the TCP header */
+  ptcp = (struct tcphdr *)(pip+1);
+  ptcp->source = htons(args->sport);
+  ptcp->dest = htons(args->dport);
+  ptcp->seq = htonl(args->t.seq);
+  ptcp->doff = 5;
+  if (args->t.fin) {
+    ptcp->fin = 1;
+  }
+  if (args->t.syn) {
+    ptcp->syn = 1;
+  }
+  if (args->t.rst) {
+    ptcp->rst = 1;
+  }
+  if (args->t.ack) {
+    ptcp->ack = 1;
+  }
+  if (args->t.psh) {
+    ptcp->psh = 1;
+  }
+  if (args->t.urg) {
+    ptcp->urg = 1;
+  }
+
+  calc_tcp6_checksum(pip, (void *)ptcp);
+
+  return 0;
+}
+
 
 int
 create_raw_tcp(void *packet, size_t *plen, struct mkr_args *args)
@@ -117,9 +172,13 @@ create_xmit_raw_tcp(struct mkr_args *args)
   size_t len;
   int ret;
 
-  len = sizeof(struct iphdr) + sizeof(struct tcphdr);
-
-  ret = create_raw_tcp(frame, &len, args);
+  if (args->v6) {
+    len = sizeof(struct ip6_hdr) + sizeof(struct tcphdr);
+    ret = create_raw_tcp6(frame, &len, args);
+  } else {
+    len = sizeof(struct iphdr) + sizeof(struct tcphdr);
+    ret = create_raw_tcp(frame, &len, args);
+  }
   if (ret < 0) {
     return -1;
   }
