@@ -339,7 +339,6 @@ dp_do_ing_acl(void *ctx, struct xfi *xf, void *fa_)
   ACLCT_KEY_GEN(&key, xf);
 
   LL_DBG_PRINTK("[ACL] -- Lookup\n");
-  LL_DBG_PRINTK("[ACL] key-sz %d\n", sizeof(key));
   LL_DBG_PRINTK("[ACL] daddr %x\n", key.daddr[0]);
   LL_DBG_PRINTK("[ACL] saddr %d\n", key.saddr[0]);
   LL_DBG_PRINTK("[ACL] sport %d\n", key.sport);
