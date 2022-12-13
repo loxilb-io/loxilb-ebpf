@@ -531,7 +531,7 @@ dp_ing_ct_main(void *ctx,  struct xfi *xf)
 #endif
 
   if (xf->pm.phit & LLB_DP_RES_HIT) {
-    return dp_pipe_check_res(ctx, xf, fa);
+    goto res_end;
   }
 
   /* If ACL is hit, and packet arrives here 
@@ -569,6 +569,8 @@ dp_ing_ct_main(void *ctx,  struct xfi *xf)
     dp_do_ipv6_fwd(ctx, xf, fa);
   }
   dp_eg_l2(ctx, xf, fa);
+
+res_end:
   return dp_pipe_check_res(ctx, xf, fa);
 }
  
