@@ -35,7 +35,7 @@ create_raw_tcp6(void *packet, size_t *plen, struct mkr_args *args)
   pip = (void *)packet;
 
   /* Fill in the IP header */
-  pip->ip6_vfc = 0x6;
+  pip->ip6_vfc = 0x6 << 4 & 0xff;
   pip->ip6_plen = htons(sizeof(struct tcphdr));
   pip->ip6_nxt = 0x6;
   pip->ip6_hlim = 64;
@@ -71,7 +71,6 @@ create_raw_tcp6(void *packet, size_t *plen, struct mkr_args *args)
 
   return 0;
 }
-
 
 int
 create_raw_tcp(void *packet, size_t *plen, struct mkr_args *args)
@@ -134,28 +133,50 @@ static int
 xmit_raw(void *packet, size_t plen, struct mkr_args *args)  
 {
   struct sockaddr_in caddr;
+  struct sockaddr_in6 caddr6;
+  void *sockaddr = NULL;
   int raw_socket;
   int hdr_incl = 1;
   int sent_bytes;
 
-  if ((raw_socket = socket(AF_INET, SOCK_RAW, args->protocol)) < 0) {
-    return -1;
-  }
+  if (args->v6 == 0) {
+    if ((raw_socket = socket(AF_INET, SOCK_RAW, args->protocol)) < 0) {
+      return -1;
+    }
 
-  if (setsockopt(raw_socket, IPPROTO_IP, IP_HDRINCL,
+    if (setsockopt(raw_socket, IPPROTO_IP, IP_HDRINCL,
                  &hdr_incl, sizeof(hdr_incl)) < 0) {
-    close(raw_socket);
-    return -1;
-  }
+      close(raw_socket);
+      return -1;
+    }
 
-  memset(&caddr, 0, sizeof(caddr));
-  caddr.sin_family = AF_INET;
-  caddr.sin_port = htons(args->dport);
-  caddr.sin_addr.s_addr = htonl(args->dip[0]);
+    memset(&caddr, 0, sizeof(caddr));
+    caddr.sin_family = AF_INET;
+    caddr.sin_port = htons(args->dport);
+    caddr.sin_addr.s_addr = htonl(args->dip[0]);
+    sockaddr = &caddr;
+  } else {
+    if ((raw_socket = socket(AF_INET6, SOCK_RAW, IPPROTO_UDP)) < 0) {
+      return -1;
+    }
+
+    if (setsockopt(raw_socket, IPPROTO_IPV6, IPV6_HDRINCL,
+                 &hdr_incl, sizeof(hdr_incl)) < 0) {
+      close(raw_socket);
+      return -1;
+    }
+
+    memset(&caddr6, 0, sizeof(caddr6));
+    caddr6.sin6_family = AF_INET6;
+    caddr6.sin6_port = 0;
+    memcpy(&caddr6.sin6_addr, args->dip, 16);
+    sockaddr = &caddr6;
+  }
 
   sent_bytes = sendto(raw_socket, packet, plen, 0,
-                      (struct sockaddr *)&caddr,
-                      sizeof(struct sockaddr_in));
+                      (struct sockaddr *)sockaddr,
+                      args->v6 ? sizeof(struct sockaddr_in6) :
+                                 sizeof(struct sockaddr_in));
   if (sent_bytes < 0) {
     close(raw_socket);
     return -1;
