@@ -47,6 +47,8 @@ dp_sel_nat_ep(void *ctx, struct dp_nat_tacts *act)
     }
   }
 
+  LL_DBG_PRINTK("lb-sel %d", sel);
+
   return sel;
 }
 
@@ -89,7 +91,7 @@ dp_do_nat(void *ctx, struct xfi *xf)
       act->ca.act_type == DP_SET_DNAT) {
     sel = dp_sel_nat_ep(ctx, act);
 
-    bpf_printk("lb-sel %d", sel);
+    xf->pm.nf = act->ca.act_type == DP_SET_SNAT ? LLB_NAT_SRC : LLB_NAT_DST;
 
     /* FIXME - Do not select inactive end-points 
      * Need multi-passes for selection
@@ -98,7 +100,6 @@ dp_do_nat(void *ctx, struct xfi *xf)
       nxfrm_act = &act->nxfrms[sel];
 
       if (nxfrm_act < act + 1) {
-        xf->pm.nf = act->ca.act_type == DP_SET_SNAT ? LLB_NAT_SRC : LLB_NAT_DST;
         DP_XADDR_CP(xf->nm.nxip, nxfrm_act->nat_xip);
         DP_XADDR_CP(xf->nm.nrip, nxfrm_act->nat_rip);
         xf->nm.nxport = nxfrm_act->nat_xport;
@@ -112,6 +113,8 @@ dp_do_nat(void *ctx, struct xfi *xf)
           xf->nm.nxip4 = 0;
         }
       }
+    } else {
+      xf->pm.nf = 0;
     }
   } else { 
     LLBS_PPLN_DROP(xf);

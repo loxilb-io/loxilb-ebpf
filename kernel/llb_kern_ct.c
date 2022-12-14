@@ -326,9 +326,10 @@ dp_ct_tcp_sm(void *ctx, struct xfi *xf,
         nstate = CT_TCP_EST;
         break;
       }
+      nstate = CT_TCP_ERR;
+      goto end;
     }
     
-
     if ((tcp_flags & LLB_TCP_SYN) != LLB_TCP_SYN) {
       nstate = CT_TCP_ERR;
       goto end;
@@ -1057,7 +1058,6 @@ dp_ct_in(void *ctx, struct xfi *xf)
     adat->ctd.rid = xf->pm.rule_id;
     adat->ctd.aid = xf->nm.sel_aid;
     adat->ctd.smr = CT_SMR_INIT;
-    bpf_map_update_elem(&acl_map, &key, adat, BPF_ANY);
 
     axdat->ca.ftrap = 0;
     axdat->ca.oif = 0;
@@ -1084,11 +1084,13 @@ dp_ct_in(void *ctx, struct xfi *xf)
     axdat->ctd.smr = CT_SMR_INIT;
     axdat->ctd.rid = adat->ctd.rid;
     axdat->ctd.aid = adat->ctd.aid;
+
+
+    bpf_map_update_elem(&acl_map, &key, adat, BPF_ANY);
     bpf_map_update_elem(&acl_map, &xkey, axdat, BPF_ANY);
 
     atdat = bpf_map_lookup_elem(&acl_map, &key);
     axtdat = bpf_map_lookup_elem(&acl_map, &xkey);
-
   }
 
   if (atdat != NULL && axtdat != NULL) {
@@ -1105,7 +1107,6 @@ dp_ct_in(void *ctx, struct xfi *xf)
     LL_DBG_PRINTK("[CTRK] smr %d", smr);
 
     if (smr == CT_SMR_EST) {
-      bpf_printk("est");
       if (xi->nat_flags) {
         atdat->nat_act.doct = 0;
         axtdat->nat_act.doct = 0;
@@ -1113,9 +1114,9 @@ dp_ct_in(void *ctx, struct xfi *xf)
         atdat->ca.act_type = DP_SET_NOP;
         axtdat->ca.act_type = DP_SET_NOP;
       }
-    } else if (smr == CT_SMR_ERR) {
-      atdat->ca.act_type = DP_SET_TOCP;
-      axtdat->ca.act_type = DP_SET_TOCP;
+    } else if (smr == CT_SMR_ERR || smr == CT_SMR_CTD) {
+      bpf_map_delete_elem(&acl_map, &xkey);
+      bpf_map_delete_elem(&acl_map, &key);
     }
   }
 

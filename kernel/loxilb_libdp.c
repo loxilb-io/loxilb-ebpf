@@ -1383,7 +1383,6 @@ ll_aclct4_map_ent_has_aged(int tid, void *k, void *ita)
          dstr, ntohs(xkey.sport),
          sstr, ntohs(xkey.dport),  
          xkey.l4proto); 
-    ll_send_ctep_reset(key, adat);
     llb_clear_map_stats(LL_DP_ACL_STATS_MAP, adat->ca.cidx);
     return 1;
   }
@@ -1456,6 +1455,7 @@ ll_aclct4_map_ent_has_aged(int tid, void *k, void *ita)
          dstr, ntohs(key->dport),  
          key->l4proto, dat->rid, est, has_nat, used1 || used2);
     ll_send_ctep_reset(key, adat);
+    ll_send_ctep_reset(&xkey, &axdat);
     llb_clear_map_stats(LL_DP_ACL_STATS_MAP, adat->ca.cidx);
     return 1;
   }

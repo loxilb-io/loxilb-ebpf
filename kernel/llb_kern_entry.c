@@ -90,9 +90,11 @@ int tc_packet_func_fast(struct __sk_buff *md)
 {
   struct xfi xf;
 
+#ifdef HAVE_DP_FC
   memset(&xf, 0, sizeof xf);
-
   dp_parse_packet(md, &xf, 1);
+#endif
+
   return dp_ing_fc_main(md, &xf);
 }
 
