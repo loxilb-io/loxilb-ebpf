@@ -203,7 +203,6 @@ static int __always_inline
 dp_ing_fc_main(void *ctx, struct xfi *xf)
 {
   __u32 idx = LLB_DP_PKT_SLOW_PGM_ID;
-#ifdef HAVE_DP_FC
   LL_FC_PRINTK("[FCHM] Main--\n");
   if (xf->pm.pipe_act == 0 &&
       xf->l2m.dl_type == bpf_ntohs(ETH_P_IP)) {
@@ -214,8 +213,6 @@ dp_ing_fc_main(void *ctx, struct xfi *xf)
       }
     }
   }
-#endif
   bpf_tail_call(ctx, &pgm_tbl, idx);
   return DP_PASS;
 }
-

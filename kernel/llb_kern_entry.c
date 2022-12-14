@@ -85,21 +85,7 @@ int xdp_pass_func(struct xdp_md *ctx)
 
 #else
 
-SEC("tc_packet_hook0")
-int tc_packet_func_fast(struct __sk_buff *md)
-{
-  struct xfi xf;
-
-#ifdef HAVE_DP_FC
-  memset(&xf, 0, sizeof xf);
-  dp_parse_packet(md, &xf, 1);
-#endif
-
-  return dp_ing_fc_main(md, &xf);
-}
-
-SEC("tc_packet_hook1")
-int tc_packet_func(struct __sk_buff *md)
+int tc_packet_func__(struct __sk_buff *md)
 {
   int val = 0;
   struct xfi *xf;
@@ -113,6 +99,28 @@ int tc_packet_func(struct __sk_buff *md)
 
   xf->pm.tc = 1;
   return dp_ing_pkt_main(md, xf);
+}
+
+
+SEC("tc_packet_hook0")
+int tc_packet_func_fast(struct __sk_buff *md)
+{
+#ifdef HAVE_DP_FC
+  struct xfi xf;
+
+  memset(&xf, 0, sizeof xf);
+  dp_parse_packet(md, &xf, 1);
+
+  return dp_ing_fc_main(md, &xf);
+#else
+  return tc_packet_func__(md);
+#endif
+}
+
+SEC("tc_packet_hook1")
+int tc_packet_func(struct __sk_buff *md)
+{
+  return tc_packet_func__(md);
 }
 
 SEC("tc_packet_hook2")
