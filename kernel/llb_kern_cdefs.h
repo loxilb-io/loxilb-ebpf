@@ -1465,6 +1465,100 @@ dp_do_snat6(void *ctx, struct xfi *xf, __be32 *xip, __be16 xport)
   return 0;
 }
 
+static int __always_inline
+dp_do_dnat64(void *md, struct xfi *xf)
+{
+  struct iphdr *iph;
+  struct ethhdr *eth;
+  struct tcphdr *tcp;
+  struct udphdr *udp;
+  struct vlan_hdr *vlh;
+  __be32 sum;
+  void *dend;
+
+  if (xf->l34m.nw_proto != IPPROTO_TCP &&
+      xf->l34m.nw_proto != IPPROTO_UDP) {
+    LLBS_PPLN_DROP(xf);
+    return -1;
+  }
+
+  if (dp_buf_delete_room(md, sizeof(struct ipv6hdr) - sizeof(*iph),
+            BPF_F_ADJ_ROOM_FIXED_GSO)  < 0) {
+    LL_DBG_PRINTK("Failed v6 remove\n");
+    LLBS_PPLN_DROP(xf);
+    return -1;
+  }
+
+  eth = DP_TC_PTR(DP_PDATA(md));
+  dend = DP_TC_PTR(DP_PDATA_END(md));
+
+  if (eth + 1 > dend) {
+    LLBS_PPLN_DROP(xf);
+    return -1;
+  }
+  memcpy(eth->h_dest, xf->l2m.dl_dst, 2*6);
+  if (xf->l2m.vlan[0] != 0) {
+    vlh = DP_ADD_PTR(eth, sizeof(*eth));
+    if (vlh + 1 > dend) {
+      LLBS_PPLN_DROP(xf);
+      return -1;
+    }
+    vlh->h_vlan_encapsulated_proto = xf->l2m.dl_type;
+  } else {
+    eth->h_proto = xf->l2m.dl_type;
+  }
+
+  iph = (void *)(eth + 1);
+  if (iph + 1 > dend) {
+    LLBS_PPLN_DROP(xf);
+    return -1;
+  }
+
+  xf->pm.l3_len = xf->pm.l3_plen + sizeof(*iph);
+  xf->pm.l3_off = DP_DIFF_PTR(iph, eth);
+  xf->pm.l4_off = DP_DIFF_PTR((iph+1), eth);
+
+  /* Outer IP header */
+  iph->version  = 4;
+  iph->ihl      = 5;
+  iph->tot_len  = bpf_htons(xf->pm.l3_len);
+  iph->ttl      = 64; // FIXME - Copy inner
+  iph->protocol = IPPROTO_UDP;
+  iph->saddr    = xf->nm.nrip4;
+  iph->daddr    = xf->nm.nxip4;
+
+  dp_ipv4_new_csum((void *)iph);
+
+  if (xf->l34m.nw_proto == IPPROTO_TCP) {
+    tcp = (void *)(iph + 1);
+    if (tcp + 1 > dend) {
+      LLBS_PPLN_DROP(xf);
+      return -1;
+    }
+
+    sum = bpf_csum_diff(xf->l34m.saddr, sizeof(xf->l34m.saddr),
+                &iph->saddr, sizeof(iph->saddr), tcp->check);
+    sum = bpf_csum_diff(xf->l34m.daddr, sizeof(xf->l34m.daddr),
+                &iph->daddr, sizeof(iph->daddr), sum);
+    bpf_l4_csum_replace(md, xf->pm.l4_off + offsetof(struct tcphdr, check),
+                      0, sum, BPF_F_PSEUDO_HDR);
+
+    dp_set_tcp_dport(md, xf, xf->nm.nxport);
+
+  } else {
+
+    udp = (void *)(iph + 1);
+    if (udp + 1 > dend) {
+      LLBS_PPLN_DROP(xf);
+      return -1;
+    }
+
+    dp_set_udp_dport(md, xf, xf->nm.nxport);
+  }
+
+  return 0;
+}
+
 static __u32 __always_inline
 dp_get_pkt_hash(void *md)
 {
