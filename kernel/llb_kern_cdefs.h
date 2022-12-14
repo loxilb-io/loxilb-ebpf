@@ -1523,7 +1523,7 @@ dp_do_dnat64(void *md, struct xfi *xf)
   iph->ihl      = 5;
   iph->tot_len  = bpf_htons(xf->pm.l3_len);
   iph->ttl      = 64; // FIXME - Copy inner
-  iph->protocol = IPPROTO_UDP;
+  iph->protocol = xf->l34m.nw_proto;
   iph->saddr    = xf->nm.nrip4;
   iph->daddr    = xf->nm.nxip4;
 
@@ -1554,6 +1554,100 @@ dp_do_dnat64(void *md, struct xfi *xf)
     }
 
     dp_set_udp_dport(md, xf, xf->nm.nxport);
+  }
+
+  return 0;
+}
+
+static int __always_inline
+dp_do_snat46(void *md, struct xfi *xf)
+{
+  struct ipv6hdr *ip6h;
+  struct ethhdr *eth;
+  struct tcphdr *tcp;
+  struct udphdr *udp;
+  struct vlan_hdr *vlh;
+  __be32 sum;
+  void *dend;
+
+  if (xf->l34m.nw_proto != IPPROTO_TCP &&
+      xf->l34m.nw_proto != IPPROTO_UDP) {
+    LLBS_PPLN_DROP(xf);
+    return -1;
+  }
+
+  if (dp_buf_add_room(md, sizeof(*ip6h) - sizeof(struct iphdr),
+            BPF_F_ADJ_ROOM_FIXED_GSO)  < 0) {
+    LL_DBG_PRINTK("Failed v6 remove\n");
+    LLBS_PPLN_DROP(xf);
+    return -1;
+  }
+
+  eth = DP_TC_PTR(DP_PDATA(md));
+  dend = DP_TC_PTR(DP_PDATA_END(md));
+
+  if (eth + 1 > dend) {
+    LLBS_PPLN_DROP(xf);
+    return -1;
+  }
+  memcpy(eth->h_dest, xf->l2m.dl_dst, 2*6);
+  if (xf->l2m.vlan[0] != 0) {
+    vlh = DP_ADD_PTR(eth, sizeof(*eth));
+    if (vlh + 1 > dend) {
+      LLBS_PPLN_DROP(xf);
+      return -1;
+    }
+    vlh->h_vlan_encapsulated_proto = xf->l2m.dl_type;
+  } else {
+    eth->h_proto = xf->l2m.dl_type;
+  }
+
+  ip6h = (void *)(eth + 1);
+  if (ip6h + 1 > dend) {
+    LLBS_PPLN_DROP(xf);
+    return -1;
+  }
+
+  xf->pm.l3_len = xf->pm.l3_plen + sizeof(*ip6h);
+  xf->pm.l3_off = DP_DIFF_PTR(ip6h, eth);
+  xf->pm.l4_off = DP_DIFF_PTR((ip6h+1), eth);
+
+  /* Outer IP header */
+  ip6h->version  = 4;
+  ip6h->payload_len = bpf_htons(xf->pm.l3_plen);
+  ip6h->hop_limit = 64; // FIXME - Copy inner
+  ip6h->flow_lbl[0] = 0;
+  ip6h->flow_lbl[1] = 0;
+  ip6h->flow_lbl[2] = 0;
+  ip6h->nexthdr = xf->l34m.nw_proto;
+  memcpy(&ip6h->saddr, xf->nm.nxip, 16);
+  memcpy(&ip6h->daddr, xf->nm.nrip, 16);
+
+  if (xf->l34m.nw_proto == IPPROTO_TCP) {
+    tcp = (void *)(ip6h + 1);
+    if (tcp + 1 > dend) {
+      LLBS_PPLN_DROP(xf);
+      return -1;
+    }
+
+    sum = bpf_csum_diff(&xf->l34m.saddr[0], 4,
+                        (void *)&ip6h->saddr, sizeof(ip6h->saddr), tcp->check);
+    sum = bpf_csum_diff(&xf->l34m.daddr[0], 4,
+                        (void *)&ip6h->daddr, sizeof(ip6h->daddr), sum);
+    bpf_l4_csum_replace(md, xf->pm.l4_off + offsetof(struct tcphdr, check),
+                      0, sum, BPF_F_PSEUDO_HDR);
+
+    dp_set_tcp_sport(md, xf, xf->nm.nxport);
+
+  } else {
+
+    udp = (void *)(ip6h + 1);
+    if (udp + 1 > dend) {
+      LLBS_PPLN_DROP(xf);
+      return -1;
+    }
+
+    dp_set_udp_sport(md, xf, xf->nm.nxport);
   }
 
   return 0;
