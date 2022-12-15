@@ -201,7 +201,7 @@ struct dp_nat_mdi {
     __u8            ct_sts:4;      /* Conntrack state */
     __u8            nv6:4;
     __u8            sel_aid;
-    __u32           res;
+    __u16           res;
     __u64           ito;
 };
 

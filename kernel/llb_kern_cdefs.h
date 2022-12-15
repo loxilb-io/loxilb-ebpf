@@ -1496,6 +1496,8 @@ dp_do_dnat64(void *md, struct xfi *xf)
     LLBS_PPLN_DROP(xf);
     return -1;
   }
+
+  xf->l2m.dl_type = bpf_htons(ETH_P_IP);
   memcpy(eth->h_dest, xf->l2m.dl_dst, 2*6);
   if (xf->l2m.vlan[0] != 0) {
     vlh = DP_ADD_PTR(eth, sizeof(*eth));
@@ -1503,6 +1505,7 @@ dp_do_dnat64(void *md, struct xfi *xf)
       LLBS_PPLN_DROP(xf);
       return -1;
     }
+    eth->h_proto = bpf_htons(0x8100);
     vlh->h_vlan_encapsulated_proto = xf->l2m.dl_type;
   } else {
     eth->h_proto = xf->l2m.dl_type;
@@ -1590,6 +1593,8 @@ dp_do_snat46(void *md, struct xfi *xf)
     LLBS_PPLN_DROP(xf);
     return -1;
   }
+
+  xf->l2m.dl_type = bpf_htons(ETH_P_IPV6);
   memcpy(eth->h_dest, xf->l2m.dl_dst, 2*6);
   if (xf->l2m.vlan[0] != 0) {
     vlh = DP_ADD_PTR(eth, sizeof(*eth));
@@ -1597,6 +1602,7 @@ dp_do_snat46(void *md, struct xfi *xf)
       LLBS_PPLN_DROP(xf);
       return -1;
     }
+    eth->h_proto = bpf_htons(0x8100);
     vlh->h_vlan_encapsulated_proto = xf->l2m.dl_type;
   } else {
     eth->h_proto = xf->l2m.dl_type;
@@ -1613,7 +1619,7 @@ dp_do_snat46(void *md, struct xfi *xf)
   xf->pm.l4_off = DP_DIFF_PTR((ip6h+1), eth);
 
   /* Outer IP header */
-  ip6h->version  = 4;
+  ip6h->version  = 6;
   ip6h->payload_len = bpf_htons(xf->pm.l3_plen);
   ip6h->hop_limit = 64; // FIXME - Copy inner
   ip6h->flow_lbl[0] = 0;
@@ -1849,6 +1855,20 @@ dp_do_dnat(void *ctx, struct xfi *xf, __be32 xip, __be16 xport)
 
 static int __always_inline
 dp_do_dnat6(void *ctx, struct xfi *xf, __be32 *xip, __be16 xport)
+{
+  /* FIXME - TBD */
+  return 0;
+}
+
+static int __always_inline
+dp_do_dnat64(void *ctx, struct xfi *xf)
+{
+  /* FIXME - TBD */
+  return 0;
+}
+
+static int __always_inline
+dp_do_snat46(void *ctx, struct xfi *xf)
 {
   /* FIXME - TBD */
   return 0;
