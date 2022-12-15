@@ -171,14 +171,13 @@ dp_do_fcv4_lkup(void *ctx, struct xfi *xf)
     ta = &acts->fcta[DP_SET_RM_L2VLAN];
     dp_set_egr_vlan(ctx, xf, 0, ta->l2ov.oport);
   } else {
-    bpf_map_delete_elem(&fc_v4_map, &key);
-    return 0;
+    goto del_out;
   }
 
   /* Catch any conditions which need us to go to cp/ct */
   if (xf->pm.l4fin) {
     acts->ca.ftrap = 1;
-    return 0;
+    goto del_out;
   }
 
   DP_RUN_CT_HELPER(xf);
@@ -197,6 +196,10 @@ dp_do_fcv4_lkup(void *ctx, struct xfi *xf)
   xf->pm.oport = acts->ca.oif;
 
   return ret;
+
+del_out:
+  bpf_map_delete_elem(&fc_v4_map, &key);
+  return 0;
 }
 
 static int __always_inline
