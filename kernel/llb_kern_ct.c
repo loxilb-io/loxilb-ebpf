@@ -1073,7 +1073,7 @@ dp_ct_in(void *ctx, struct xfi *xf)
       axdat->nat_act.doct = 1;
       axdat->nat_act.rid = xf->pm.rule_id;
       axdat->nat_act.aid = xf->nm.sel_aid;
-      axdat->nat_act.nv6 = xf->nm.nv6 ? 1:0;
+      axdat->nat_act.nv6 = key.v6 ? 1:0;
       axdat->ito = xf->nm.ito;
     } else {
       axdat->ito = 0;

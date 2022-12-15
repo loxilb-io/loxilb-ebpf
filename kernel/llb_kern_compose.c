@@ -821,27 +821,51 @@ static int __always_inline
 dp_unparse_packet_always_slow(void *ctx,  struct xfi *xf)
 {
   if (xf->pm.nf & LLB_NAT_SRC) {
-    LL_DBG_PRINTK("[DEPR] LL_SNAT 0x%lx:%x\n",
-                 xf->nm.nxip4, xf->nm.nxport);
+    LL_DBG_PRINTK("[DEPR] LL_SNAT 0x%lx:%x\n", xf->nm.nxip4, xf->nm.nxport);
+    /* If packet is v6 */
     if (xf->l2m.dl_type == bpf_ntohs(ETH_P_IPV6)) {
-      if (dp_do_snat6(ctx, xf, xf->nm.nxip, xf->nm.nxport) != 0) {
-        return DP_DROP;
-      }
-    } else {
-      if (dp_do_snat(ctx, xf, xf->nm.nxip4, xf->nm.nxport) != 0) {
-        return DP_DROP;
+        if (xf->nm.nv6) {
+          if (dp_do_snat6(ctx, xf, xf->nm.nxip, xf->nm.nxport) != 0) {
+             return DP_DROP;
+          }
+        } else {
+          /* TODO */
+          return DP_DROP;
+        }
+    } else { /* If packet is v4 */
+
+      if (xf->nm.nv6 == 0) {
+        if (dp_do_snat(ctx, xf, xf->nm.nxip4, xf->nm.nxport) != 0) {
+          return DP_DROP;
+        }
+      } else {
+        if (dp_do_snat46(ctx, xf) != 0) {
+          return DP_DROP;
+        }
       }
     }
   } else if (xf->pm.nf & LLB_NAT_DST) {
-    LL_DBG_PRINTK("[DEPR] LL_DNAT 0x%x\n",
-                  xf->nm.nxip4, xf->nm.nxport);
+    LL_DBG_PRINTK("[DEPR] LL_DNAT 0x%x\n", xf->nm.nxip4, xf->nm.nxport);
+
+    /* If packet is v6 */
     if (xf->l2m.dl_type == bpf_ntohs(ETH_P_IPV6)) {
-      if (dp_do_dnat6(ctx, xf, xf->nm.nxip, xf->nm.nxport) != 0) {
-        return DP_DROP;
+      if (xf->nm.nv6 == 1) {
+        if (dp_do_dnat6(ctx, xf, xf->nm.nxip, xf->nm.nxport) != 0) {
+          return DP_DROP;
+        }
+      } else {
+        if (dp_do_dnat64(ctx, xf)) {
+          return DP_DROP;
+        }
       }
-    } else {
-      if (dp_do_dnat(ctx, xf, xf->nm.nxip4, xf->nm.nxport) != 0) {
-        return DP_DROP;
+    } else { /* If packet is v4 */
+      if (xf->nm.nv6 == 0) {
+        if (dp_do_dnat(ctx, xf, xf->nm.nxip4, xf->nm.nxport) != 0) {
+          return DP_DROP;
+        }
+      } else {
+          /* TODO */
+          return DP_DROP;
       }
     }
   }
@@ -860,7 +884,7 @@ dp_unparse_packet_always(void *ctx,  struct xfi *xf)
   if (xf->pm.nf & LLB_NAT_SRC) {
     LL_DBG_PRINTK("[DEPR] LL_SNAT 0x%lx:%x\n",
                  xf->nm.nxip4, xf->nm.nxport);
-    if (xf->l2m.dl_type == bpf_ntohs(ETH_P_IPV6)) {
+    if (xf->l2m.dl_type == bpf_ntohs(ETH_P_IPV6) || xf->nm.nv6) {
       dp_sunp_tcall(ctx, xf);
     } else {
       if (dp_do_snat(ctx, xf, xf->nm.nxip4, xf->nm.nxport) != 0) {

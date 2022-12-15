@@ -452,9 +452,17 @@ dp_ing_ct_main(void *ctx,  struct xfi *xf)
    * complexity for now 
    */
   if (xf->l2m.dl_type == bpf_htons(ETH_P_IP)) {
-    dp_do_ipv4_fwd(ctx, xf, fa);
+    if (xf->pm.nf && xf->nm.nv6 != 0) {
+      dp_do_ipv6_fwd(ctx, xf, fa);
+    } else {
+      dp_do_ipv4_fwd(ctx, xf, fa);
+    }
   } else if (xf->l2m.dl_type == bpf_htons(ETH_P_IPV6)) {
-    dp_do_ipv6_fwd(ctx, xf, fa);
+    if (xf->pm.nf && xf->nm.nv6 == 0) {
+      dp_do_ipv4_fwd(ctx, xf, fa);
+    } else {
+      dp_do_ipv6_fwd(ctx, xf, fa);
+    }
   }
   dp_eg_l2(ctx, xf, fa);
 
