@@ -357,6 +357,7 @@ dp_do_ing_acl(void *ctx, struct xfi *xf, void *fa_)
 static void __always_inline
 dp_do_ipv4_fwd(void *ctx,  struct xfi *xf, void *fa_)
 {
+  /* Check tunnel initiation */
   if (xf->tm.tunnel_id == 0 ||  xf->tm.tun_type != LLB_TUN_GTP) {
     dp_do_sess4_lkup(ctx, xf);
   }
@@ -372,29 +373,9 @@ dp_do_ipv4_fwd(void *ctx,  struct xfi *xf, void *fa_)
   }
 }
 
-static int __always_inline
-dp_ing_ipv4(void *ctx,  struct xfi *xf, void *fa_)
-{
-  if (xf->tm.tunnel_id && xf->tm.tun_type == LLB_TUN_GTP) {
-    dp_do_sess4_lkup(ctx, xf);
-  }
-
-  dp_do_ing_acl(ctx, xf, fa_);
-  if (xf->pm.nf && xf->nm.nv6 != 0) {
-    dp_do_ipv4_fwd(ctx, xf, fa_);
-  }
-
-  return 0;
-}
-
 static void __always_inline
 dp_do_ipv6_fwd(void *ctx,  struct xfi *xf, void *fa_)
 {
-  /* Currently GTP with outer IPv6 is not supported */
-  //if (xf->tm.tunnel_id == 0 ||  xf->tm.tun_type != LLB_TUN_GTP) {
-  //  dp_do_sess4_lkup(ctx, xf);
-  //}
-
   if (xf->pm.phit & LLB_DP_TMAC_HIT) {
 
     /* If some pipeline block already set a redirect before this,
@@ -407,14 +388,38 @@ dp_do_ipv6_fwd(void *ctx,  struct xfi *xf, void *fa_)
 }
 
 static int __always_inline
-dp_ing_ipv6(void *ctx,  struct xfi *xf, void *fa_)
+dp_l3_fwd(void *ctx,  struct xfi *xf, void *fa)
 {
-  dp_do_ing_acl(ctx, xf, fa_);
-  if (xf->pm.nf && xf->nm.nv6 == 0) {
-    dp_do_ipv4_fwd(ctx, xf, fa_);
-  } else {
-    dp_do_ipv6_fwd(ctx, xf, fa_);
+  if (xf->l2m.dl_type == bpf_htons(ETH_P_IP)) {
+    if (xf->pm.nf && xf->nm.nv6 != 0) {
+      xf->nm.xlate_proto = 1;
+      dp_do_ipv6_fwd(ctx, xf, fa);
+    } else {
+      dp_do_ipv4_fwd(ctx, xf, fa);
+    }
+  } else if (xf->l2m.dl_type == bpf_htons(ETH_P_IPV6)) {
+    if (xf->pm.nf && xf->nm.nv6 == 0) {
+      xf->nm.xlate_proto = 1;
+      dp_do_ipv4_fwd(ctx, xf, fa);
+    } else {
+      dp_do_ipv6_fwd(ctx, xf, fa);
+    }
   }
+  return 0;
+}
+
+static int __always_inline
+dp_ing_l3(void *ctx,  struct xfi *xf, void *fa)
+{
+  if (xf->l2m.dl_type == bpf_htons(ETH_P_IP)) {
+    /* Check termination */
+    if (xf->tm.tunnel_id && xf->tm.tun_type == LLB_TUN_GTP) {
+      dp_do_sess4_lkup(ctx, xf);
+    }
+  }
+
+  dp_do_ing_acl(ctx, xf, fa);
+  dp_l3_fwd(ctx, xf, fa);
 
   return 0;
 }

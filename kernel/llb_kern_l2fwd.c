@@ -350,11 +350,7 @@ dp_eg_l2(void *ctx,  struct xfi *xf, void *fa)
 static int __always_inline
 dp_ing_fwd(void *ctx,  struct xfi *xf, void *fa)
 {
-  if (xf->l2m.dl_type == bpf_htons(ETH_P_IP)) {
-    dp_ing_ipv4(ctx, xf, fa);
-  } else if (xf->l2m.dl_type == bpf_htons(ETH_P_IPV6)) {
-    dp_ing_ipv6(ctx, xf, fa);
-  }
+  dp_ing_l3(ctx, xf, fa);
   return dp_eg_l2(ctx, xf, fa);
 }
 

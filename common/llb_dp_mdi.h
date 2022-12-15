@@ -34,6 +34,7 @@ do {                                  \
   !((x)->pm.phit & LLB_DP_SESS_HIT) &&        \
   (x)->l2m.dl_type == bpf_htons(ETH_P_IP) &&  \
   (x)->qm.polid == 0 &&                       \
+  (x)->nm.xlate_proto == 0 &&                 \
   (x)->pm.mirr == 0)
 
 #define LL_PIPELINE_CONT(F) (!F->pm.pipe_act)
@@ -198,9 +199,10 @@ struct dp_nat_mdi {
 #define LLB_PIPE_CT_NONE  0
 #define LLB_PIPE_CT_INP   1
 #define LLB_PIPE_CT_EST   2
-    __u8            ct_sts:4;      /* Conntrack state */
-    __u8            nv6:4;
+    __u8            ct_sts;        /* Conntrack state */
     __u8            sel_aid;
+    __u8            nv6;
+    __u8            xlate_proto;
     __u16           res;
     __u64           ito;
 };
