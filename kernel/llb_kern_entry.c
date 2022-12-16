@@ -101,7 +101,6 @@ int tc_packet_func__(struct __sk_buff *md)
   return dp_ing_pkt_main(md, xf);
 }
 
-
 SEC("tc_packet_hook0")
 int tc_packet_func_fast(struct __sk_buff *md)
 {

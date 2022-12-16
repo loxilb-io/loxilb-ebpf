@@ -14,6 +14,18 @@ dp_do_if_lkup(void *ctx, struct xfi *xf)
   key.ing_vid = xf->l2m.vlan[0];
   key.pad =  0;
 
+#ifdef HAVE_DP_EGR_PATH
+  if (DP_IIFI(ctx) == 0) {
+    __u32 ikey = LLB_PORT_NO;
+    __u32 *oif = NULL;
+    oif = bpf_map_lookup_elem(&tx_intf_map, &ikey);
+    if (!oif) {
+      return DP_PASS;
+    }
+    key.ifindex = *(__u32 *)oif;
+  }
+#endif
+
   LL_DBG_PRINTK("[INTF] -- Lookup\n");
   LL_DBG_PRINTK("[INTF] ifidx %d vid %d\n",
                 key.ifindex, bpf_ntohs(key.ing_vid));

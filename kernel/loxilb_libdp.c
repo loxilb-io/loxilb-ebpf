@@ -1810,10 +1810,19 @@ llb_ebpf_link_attach(struct config *cfg)
     sprintf(cmd, "ntc qdisc add dev %s clsact 2>&1 >/dev/null", cfg->ifname);
     llb_sys_exec(cmd);
     printf("%s\n", cmd);    
+
     sprintf(cmd, "ntc filter add dev %s ingress bpf da obj %s sec %s 2>&1",
             cfg->ifname, cfg->filename, cfg->progsec);
     llb_sys_exec(cmd);
     printf("%s\n", cmd);
+
+#ifdef HAVE_DP_EGR_PATH
+    sprintf(cmd, "ntc filter add dev %s egress bpf da obj %s sec %s 2>&1",
+            cfg->ifname, cfg->filename, cfg->progsec);
+    llb_sys_exec(cmd);
+    printf("%s\n", cmd);
+#endif
+
     return 0;
   } else {
     return load_bpf_and_xdp_attach(cfg);
@@ -1827,6 +1836,12 @@ llb_ebpf_link_detach(struct config *cfg)
 
   if (cfg->tc_bpf) {
     /* ntc is netlox's modified tc tool */
+#ifdef HAVE_DP_EGR_PATH
+    sprintf(cmd, "ntc filter del dev %s egress 2>&1", cfg->ifname);
+    printf("%s\n", cmd);
+    llb_sys_exec(cmd);
+#endif
+
     sprintf(cmd, "ntc filter del dev %s ingress 2>&1", cfg->ifname);
     printf("%s\n", cmd);    
     llb_sys_exec(cmd);

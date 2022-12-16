@@ -39,11 +39,12 @@ EXTRA_DEPS +=
 # BPF-prog kern and userspace shares struct via header file:
 KERN_USER_H ?= $(wildcard common_kern_user.h)
 
+CFLAGS_ALL ?= -DHAVE_DP_EGR_PATH=1 -DHAVE_DP_FC=1 -DHAVE_DP_EXTCT=1 -DHAVE_DP_SCTP_SUM=1
 CFLAGS ?= -I$(LIBBPF_DIR)/build/usr/include/ -g
-CFLAGS += -I../headers/ -I$(LIBBPF_DIR)/
+CFLAGS += -I../headers/ -I$(LIBBPF_DIR)/ $(CFLAGS_ALL)
 LDFLAGS ?= -L$(LIBBPF_DIR)
 
-BPF_CFLAGS ?= -I$(LIBBPF_DIR)/build/usr/include/ -I../headers/ -I/usr/include/$(shell uname -m)-linux-gnu
+BPF_CFLAGS ?= -I$(LIBBPF_DIR)/build/usr/include/ -I../headers/ -I/usr/include/$(shell uname -m)-linux-gnu $(CFLAGS_ALL)
 
 LIBS = $(OBJECT_LIBBPF) -lelf $(USER_LIBS) -lz -lpthread
 
