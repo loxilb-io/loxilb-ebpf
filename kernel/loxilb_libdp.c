@@ -1816,7 +1816,7 @@ llb_ebpf_link_attach(struct config *cfg)
     llb_sys_exec(cmd);
     printf("%s\n", cmd);
 
-#ifdef HAVE_DP_EGR_PATH
+#ifdef HAVE_DP_EGR_HOOK
     sprintf(cmd, "ntc filter add dev %s egress bpf da obj %s sec %s 2>&1",
             cfg->ifname, cfg->filename, cfg->progsec);
     llb_sys_exec(cmd);
@@ -1836,7 +1836,7 @@ llb_ebpf_link_detach(struct config *cfg)
 
   if (cfg->tc_bpf) {
     /* ntc is netlox's modified tc tool */
-#ifdef HAVE_DP_EGR_PATH
+#ifdef HAVE_DP_EGR_HOOK
     sprintf(cmd, "ntc filter del dev %s egress 2>&1", cfg->ifname);
     printf("%s\n", cmd);
     llb_sys_exec(cmd);

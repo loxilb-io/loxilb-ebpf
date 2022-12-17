@@ -107,6 +107,12 @@ int tc_packet_func_fast(struct __sk_buff *md)
 #ifdef HAVE_DP_FC
   struct xfi xf;
 
+#ifdef HAVE_DP_EGR_HOOK
+  if (DP_LLB_INGP(md)) {
+    return DP_PASS;
+  }
+#endif
+
   memset(&xf, 0, sizeof xf);
   dp_parse_packet(md, &xf, 1);
 
@@ -119,7 +125,9 @@ int tc_packet_func_fast(struct __sk_buff *md)
 SEC("tc_packet_hook1")
 int tc_packet_func(struct __sk_buff *md)
 {
+  int ret;
   return tc_packet_func__(md);
+  return ret;
 }
 
 SEC("tc_packet_hook2")
@@ -135,7 +143,6 @@ int tc_packet_func_slow(struct __sk_buff *md)
 
   return dp_ing_ct_main(md, xf);
 }
-
 
 SEC("tc_packet_hook3")
 int tc_packet_func_fw(struct __sk_buff *md)

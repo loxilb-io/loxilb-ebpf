@@ -14,7 +14,7 @@ dp_do_if_lkup(void *ctx, struct xfi *xf)
   key.ing_vid = xf->l2m.vlan[0];
   key.pad =  0;
 
-#ifdef HAVE_DP_EGR_PATH
+#ifdef HAVE_DP_EGR_HOOK
   if (DP_IIFI(ctx) == 0) {
     __u32 ikey = LLB_PORT_NO;
     __u32 *oif = NULL;
@@ -264,6 +264,10 @@ static int __always_inline
 dp_pipe_check_res(void *ctx, struct xfi *xf, void *fa)
 {
   LL_DBG_PRINTK("[PIPE] act 0x%x\n", xf->pm.pipe_act);
+
+#ifdef HAVE_DP_EGR_HOOK
+  DP_LLB_MRK_INGP(ctx);
+#endif
 
   if (xf->pm.pipe_act) {
 

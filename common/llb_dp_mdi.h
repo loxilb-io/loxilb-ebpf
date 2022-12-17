@@ -14,6 +14,8 @@
 #define MAX_STACKED_VLANS     3
 #endif
 
+#define LLB_INGP_MARK         0xf01dab1e
+
 #define LLBS_PPLN_DROP(F)     (F->pm.pipe_act |= LLB_PIPE_DROP);
 #define LLBS_PPLN_TRAP(F)     (F->pm.pipe_act |= LLB_PIPE_TRAP);
 #define LLBS_PPLN_RDR(F)      (F->pm.pipe_act |= LLB_PIPE_RDR);
