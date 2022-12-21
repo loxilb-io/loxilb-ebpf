@@ -193,7 +193,7 @@ dp_do_fcv4_lkup(void *ctx, struct xfi *xf)
   dp_unparse_packet_always(ctx, xf);
   dp_unparse_packet(ctx, xf);
 
-  xf->pm.oport = acts->ca.oif;
+  xf->pm.oport = acts->ca.oaux; /* Field overloaded as oif */
 
   return ret;
 

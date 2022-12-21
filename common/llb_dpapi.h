@@ -145,13 +145,14 @@ enum {
   DP_SET_FCACT           = 20,
   DP_SET_DO_CT           = 21,
   DP_SET_RM_GTP          = 22,
-  DP_SET_ADD_GTP         = 23
+  DP_SET_ADD_GTP         = 23,
+  DP_SET_FW_MARK         = 24
 };
 
 struct dp_cmn_act {
   __u8 act_type;
   __u8 ftrap;
-  __u16 oif;
+  __u16 oaux;
   __u32 cidx;
   __u32 fwrid;
   __u32 mark;
@@ -660,6 +661,7 @@ struct dp_fwv4_tact {
                          *  DP_SET_TOCP
                          *  DP_SET_NOP
                          *  DP_SET_RDR_PORT
+                         *  DP_SET_FW_MARK
                          */
   union {
     struct dp_rdr_act port_act;
@@ -676,6 +678,7 @@ struct dp_nat_key {
   __u32 daddr[4];
   __u16 dport;
   __u16 zone;
+  __u16 mark;
   __u8  l4proto;
   __u8  v6;
 };

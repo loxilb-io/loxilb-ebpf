@@ -35,7 +35,7 @@ do {                                  \
   (x)->pm.phit & LLB_DP_ACL_HIT &&            \
   !((x)->pm.phit & LLB_DP_SESS_HIT) &&        \
   (x)->l2m.dl_type == bpf_htons(ETH_P_IP) &&  \
-  (x)->qm.polid == 0 &&                       \
+  (x)->qm.ipolid == 0 &&                      \
   (x)->nm.xlate_proto == 0 &&                 \
   (x)->pm.mirr == 0)
 
@@ -119,7 +119,7 @@ struct dp_pi_mdi {
     __u16            l3_plen;
     __u16            il3_len;
     __u16            il3_plen;
-    __u32            pad;
+    __u32            dp_mark;
     __u16            tun_off;
     __u16            fw_mid;
     __u16            fw_lid;
@@ -188,7 +188,8 @@ struct dp_qos_mdi {
     __u8             icol;
     __u8             ocol;
     __u8             qfi;
-    __u32            polid;
+    __u16            ipolid;
+    __u16            opolid;
 };
 
 #define nxip4 nxip[0]

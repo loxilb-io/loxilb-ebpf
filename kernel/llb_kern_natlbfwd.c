@@ -69,6 +69,7 @@ dp_do_nat(void *ctx, struct xfi *xf)
   }
   key.zone = xf->pm.zone;
   key.l4proto = xf->l34m.nw_proto;
+  key.mark = (__u16)(xf->pm.dp_mark & 0xffff);
   if (xf->l2m.dl_type == bpf_ntohs(ETH_P_IPV6)) {
     key.v6 = 1;
   }

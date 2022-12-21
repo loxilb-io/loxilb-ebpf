@@ -52,7 +52,7 @@ dp_do_if_lkup(void *ctx, struct xfi *xf)
     xf->pm.bd    = l2a->set_ifi.bd;
     xf->pm.mirr  = l2a->set_ifi.mirr;
     xf->pm.pprop = l2a->set_ifi.pprop;
-    xf->qm.polid = l2a->set_ifi.polid;
+    xf->qm.ipolid = l2a->set_ifi.polid;
   } else {
     LLBS_PPLN_DROP(xf);
   }
@@ -321,8 +321,8 @@ dp_ing(void *ctx,  struct xfi *xf)
     dp_do_mark_mirr(ctx, xf);
   }
 
-  if (xf->qm.polid != 0) {
-    do_dp_policer(ctx, xf);
+  if (xf->qm.ipolid != 0) {
+    do_dp_policer(ctx, xf, 0);
   }
 
   return 0;
@@ -338,7 +338,7 @@ dp_insert_fcv4(void *ctx, struct xfi *xf, struct dp_fc_tacts *acts)
   
   oif = bpf_map_lookup_elem(&tx_intf_map, &pkey);
   if (oif) {
-    acts->ca.oif = *oif;
+    acts->ca.oaux = *oif;
   } 
 
   LL_DBG_PRINTK("[FCH4] INS--\n");

@@ -1033,7 +1033,7 @@ dp_ct_in(void *ctx, struct xfi *xf)
 
     LL_DBG_PRINTK("[CTRK] new-ct4");
     adat->ca.ftrap = 0;
-    adat->ca.oif = 0;
+    adat->ca.oaux = 0;
     adat->ca.cidx = dp_ct_get_newctr();
     adat->ca.fwrid = xf->pm.fw_rid;
     memset(&adat->ctd.pi, 0, sizeof(ct_pinf_t));
@@ -1060,7 +1060,7 @@ dp_ct_in(void *ctx, struct xfi *xf)
     adat->ctd.smr = CT_SMR_INIT;
 
     axdat->ca.ftrap = 0;
-    axdat->ca.oif = 0;
+    axdat->ca.oaux = 0;
     axdat->ca.cidx = adat->ca.cidx + 1;
     axdat->ca.fwrid = xf->pm.fw_rid;
     memset(&axdat->ctd.pi, 0, sizeof(ct_pinf_t));

@@ -11,20 +11,27 @@
  * to keep code size in check
  */
 static int
-do_dp_policer(void *ctx, struct xfi *xf)
+do_dp_policer(void *ctx, struct xfi *xf, int egr)
 {
   struct dp_pol_tact *pla;
   int ret = 0;
   __u64 ts_now;
   __u64 ts_last;
   __u32 ntoks;
+  __u32 polid;
   __u32 inbytes;
   __u64 acc_toks;
   __u64 usecs_elapsed;
 
   ts_now = bpf_ktime_get_ns();
 
-  pla = bpf_map_lookup_elem(&polx_map, &xf->qm.polid);
+  if (egr) {
+    polid = xf->qm.opolid;
+  } else {
+    polid = xf->qm.ipolid;
+  }
+
+  pla = bpf_map_lookup_elem(&polx_map, &polid);
   if (!pla) { /*|| pla->ca.act_type != DP_SET_DO_POLICER) { */
     return 0;
   }
