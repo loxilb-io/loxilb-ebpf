@@ -67,8 +67,8 @@ struct pdi_opts {
   uint32_t qfi; 
   uint16_t polid;
   uint16_t qid;
+  uint32_t mark;
   uint16_t mirrid;
-  uint16_t res;
   uint16_t port;
   uint32_t teid;
 };

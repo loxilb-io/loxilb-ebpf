@@ -905,6 +905,7 @@ llb_dp_pdiop2_ufw4(struct pdi_rule *new, struct dp_fwv4_ent *e)
 {
   memset(&e->fwa, 0, sizeof(e->fwa));
   e->fwa.ca.cidx = new->data.rid;
+  e->fwa.ca.mark = new->data.opts.mark;
 
   switch (new->data.op) {
   case PDI_SET_DROP:
@@ -930,6 +931,7 @@ llb_dp_ufw42_pdiop(struct pdi_rule *new, struct dp_fwv4_ent *e)
 {
   new->data.rid = e->fwa.ca.cidx;
   new->data.pref = e->fwa.ca.oaux; // Overloaded field
+  new->data.opts.mark = e->fwa.ca.mark;
 
   switch (e->fwa.ca.act_type) {
   case DP_SET_DROP:
