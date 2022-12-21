@@ -101,6 +101,8 @@ dp_do_fw4_main(void *ctx, struct xfi *xf)
 
   act = &fwe->fwa;
 
+  xf->pm.dp_mark = act->ca.mark;
+
   if (act->ca.act_type == DP_SET_NOP) {
     goto done;
   } else if (act->ca.act_type == DP_SET_RDR_PORT) {
@@ -109,9 +111,6 @@ dp_do_fw4_main(void *ctx, struct xfi *xf)
     xf->pm.oport = ar->oport;
   } else if (act->ca.act_type == DP_SET_TOCP) {
     LLBS_PPLN_TRAPC(xf, LLB_PIPE_RC_FW_RDR);
-  } else if (act->ca.act_type == DP_SET_FW_MARK) {
-    xf->pm.dp_mark = act->ca.mark;
-    goto done;
   } else {
     /* Same for DP_SET_DROP */
     LLBS_PPLN_DROP(xf);
