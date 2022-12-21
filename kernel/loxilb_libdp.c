@@ -929,7 +929,7 @@ static void
 llb_dp_ufw42_pdiop(struct pdi_rule *new, struct dp_fwv4_ent *e) 
 {
   new->data.rid = e->fwa.ca.cidx;
-  new->data.pref = e->fwa.ca.oif; // Overloaded field
+  new->data.pref = e->fwa.ca.oaux; // Overloaded field
 
   switch (e->fwa.ca.act_type) {
   case DP_SET_DROP:
