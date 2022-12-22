@@ -140,6 +140,12 @@ dp_ct_proto_xfk_init(struct dp_ct_key *key,
   xkey->v6 = key->v6;
 
   if (xi->dsr) {
+    if (xi->nat_flags & LLB_NAT_DST) {
+      xxi->nat_flags = LLB_NAT_SRC;
+      DP_XADDR_CP(xxi->nat_xip, key->daddr);
+      xxi->nat_xport = key->dport;
+      xxi->nv6 = xi->nv6;
+    }
     xxi->dsr = xi->dsr;
     return 0;
   }
