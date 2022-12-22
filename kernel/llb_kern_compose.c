@@ -881,7 +881,7 @@ static int __always_inline
 dp_unparse_packet_always(void *ctx,  struct xfi *xf)
 {
 
-  if (xf->pm.nf & LLB_NAT_SRC) {
+  if (xf->pm.nf & LLB_NAT_SRC && xf->nm.dsr == 0) {
     LL_DBG_PRINTK("[DEPR] LL_SNAT 0x%lx:%x\n",
                  xf->nm.nxip4, xf->nm.nxport);
     if (xf->l2m.dl_type == bpf_ntohs(ETH_P_IPV6) || xf->nm.nv6) {
@@ -891,7 +891,7 @@ dp_unparse_packet_always(void *ctx,  struct xfi *xf)
         return DP_DROP;
       }
     }
-  } else if (xf->pm.nf & LLB_NAT_DST) {
+  } else if (xf->pm.nf & LLB_NAT_DST && xf->nm.dsr == 0) {
     LL_DBG_PRINTK("[DEPR] LL_DNAT 0x%x\n",
                   xf->nm.nxip4, xf->nm.nxport);
     if (xf->l2m.dl_type == bpf_ntohs(ETH_P_IPV6)) {

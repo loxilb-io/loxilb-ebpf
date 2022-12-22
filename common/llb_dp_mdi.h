@@ -206,7 +206,8 @@ struct dp_nat_mdi {
     __u8            sel_aid;
     __u8            nv6;
     __u8            xlate_proto;
-    __u16           res;
+    __u8            dsr;
+    __u8            res;
     __u64           ito;
 };
 

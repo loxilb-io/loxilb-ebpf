@@ -139,6 +139,11 @@ dp_ct_proto_xfk_init(struct dp_ct_key *key,
   xkey->zone = key->zone;
   xkey->v6 = key->v6;
 
+  if (xi->dsr) {
+    xxi->dsr = xi->dsr;
+    return 0;
+  }
+
   /* Apply NAT xfrm if needed */
   if (xi->nat_flags & LLB_NAT_DST) {
     xkey->v6 = (__u8)(xi->nv6);
@@ -308,6 +313,11 @@ dp_ct_tcp_sm(void *ctx, struct xfi *xf,
 
   switch (ts->state) {
   case CT_TCP_CLOSED:
+
+    if (xf->nm.dsr) {
+      nstate = CT_TCP_EST;
+      goto end;
+    }
 
     /* If DP starts after TCP was established
      * we need to somehow handle this particular case
@@ -515,11 +525,17 @@ dp_ct_udp_sm(void *ctx, struct xfi *xf,
   switch (us->state) {
   case CT_UDP_CNI:
 
+    if (xf->nm.dsr) {
+      nstate = CT_UDP_EST;
+      break;
+    }
+
     if (us->pkts_seen && us->rpkts_seen) {
       nstate = CT_UDP_EST;
-    }
-    else if (us->pkts_seen > CT_UDP_CONN_THRESHOLD)
+    } else if (us->pkts_seen > CT_UDP_CONN_THRESHOLD) {
       nstate = CT_UDP_UEST;
+    }
+
     break;
   case CT_UDP_UEST:
     if (us->rpkts_seen)
@@ -602,6 +618,10 @@ dp_ct_icmp6_sm(void *ctx, struct xfi *xf,
 
   switch (is->state) {
   case CT_ICMP_CLOSED:
+    if (xf->nm.dsr) {
+      nstate = CT_ICMP_REPS;
+      goto end;
+    }
     if (i->icmp6_type != ICMPV6_ECHO_REQUEST) {
       is->errs = 1;
       goto end;
@@ -698,6 +718,11 @@ dp_ct_icmp_sm(void *ctx, struct xfi *xf,
 
   switch (is->state) { 
   case CT_ICMP_CLOSED: 
+    if (xf->nm.dsr) {
+      nstate = CT_ICMP_REPS;
+      goto end;
+    }
+
     if (i->type != ICMP_ECHO) { 
       is->errs = 1;
       goto end;
@@ -781,6 +806,11 @@ dp_ct_sctp_sm(void *ctx, struct xfi *xf,
 
   switch (ss->state) {
   case CT_SCTP_CLOSED:
+    if (xf->nm.dsr) {
+      nstate = CT_SCTP_EST;
+      goto end;
+    }
+
     if (c->type != SCTP_INIT_CHUNK && dir != CT_DIR_IN) {
       nstate = CT_SCTP_ERR;
       goto end;
@@ -1009,6 +1039,7 @@ dp_ct_in(void *ctx, struct xfi *xf)
   DP_XADDR_CP(xi->nat_rip, xf->nm.nrip);
   xi->nat_xport = xf->nm.nxport;
   xi->nv6 = xf->nm.nv6;
+  xi->dsr = xf->nm.dsr;
 
   xxi->nat_flags = 0;
   xxi->nat_xport = 0;
@@ -1047,6 +1078,7 @@ dp_ct_in(void *ctx, struct xfi *xf)
       adat->nat_act.rid = xf->pm.rule_id;
       adat->nat_act.aid = xf->nm.sel_aid;
       adat->nat_act.nv6 = xf->nm.nv6 ? 1:0;
+      adat->nat_act.dsr = xf->nm.dsr;
       adat->ito = xf->nm.ito;
     } else {
       adat->ito = 0;
@@ -1074,6 +1106,7 @@ dp_ct_in(void *ctx, struct xfi *xf)
       axdat->nat_act.rid = xf->pm.rule_id;
       axdat->nat_act.aid = xf->nm.sel_aid;
       axdat->nat_act.nv6 = key.v6 ? 1:0;
+      axdat->nat_act.dsr = xf->nm.dsr;
       axdat->ito = xf->nm.ito;
     } else {
       axdat->ito = 0;

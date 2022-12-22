@@ -1259,6 +1259,10 @@ ctm_proto_xfk_init(struct dp_ct_key *key,
   xkey->zone = key->zone;
   xkey->v6 = key->v6;
 
+  if (xi->dsr) {
+    return 0;
+  }
+
   /* Apply NAT xfrm if needed */
   if (xi->nat_flags & LLB_NAT_DST) {
     xkey->v6 = xi->nv6;

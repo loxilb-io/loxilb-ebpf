@@ -205,7 +205,9 @@ struct dp_nat_act {
   __u8 doct;
   __u32 rid;
   __u32 aid;
-  __u32 nv6;
+  __u8 nv6;
+  __u8 dsr;
+  __u16 res;
 };
 
 #define MIN_DP_POLICER_RATE  (8*1000*1000)  /* 1 MBps = 8 Mbps */
@@ -585,7 +587,8 @@ struct mf_xfrm_inf
   uint8_t nat_flags;
   uint8_t inactive;
   uint16_t wprio;
-  uint16_t nv6;
+  uint8_t nv6;
+  uint8_t dsr;
   uint16_t nat_xport;
   uint32_t nat_xip[4];
   uint32_t nat_rip[4];
