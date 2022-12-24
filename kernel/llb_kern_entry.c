@@ -70,7 +70,6 @@ int  xdp_packet_func(struct xdp_md *ctx)
     return DP_DROP;
   }
   memset(xf, 0, sizeof *xf);
-  xf->pm.tc = 0;
 
   dp_parse_packet(ctx, xf, 0);
 
@@ -96,8 +95,8 @@ int tc_packet_func__(struct __sk_buff *md)
   }
 
   memset(xf, 0, sizeof(*xf));
-
   xf->pm.tc = 1;
+
   return dp_ing_pkt_main(md, xf);
 }
 
@@ -105,7 +104,15 @@ SEC("tc_packet_hook0")
 int tc_packet_func_fast(struct __sk_buff *md)
 {
 #ifdef HAVE_DP_FC
-  struct xfi xf;
+  int val = 0;
+  struct xfi *xf;
+
+  xf = bpf_map_lookup_elem(&xfis, &val);
+  if (!xf) {
+    return DP_DROP;
+  }
+
+  memset(xf, 0, sizeof(*xf));
 
 #ifdef HAVE_DP_EGR_HOOK
   if (DP_LLB_INGP(md)) {
@@ -113,10 +120,9 @@ int tc_packet_func_fast(struct __sk_buff *md)
   }
 #endif
 
-  memset(&xf, 0, sizeof xf);
-  dp_parse_packet(md, &xf, 1);
+  dp_parse_packet(md, xf, 1);
 
-  return dp_ing_fc_main(md, &xf);
+  return dp_ing_fc_main(md, xf);
 #else
   return tc_packet_func__(md);
 #endif
@@ -125,9 +131,7 @@ int tc_packet_func_fast(struct __sk_buff *md)
 SEC("tc_packet_hook1")
 int tc_packet_func(struct __sk_buff *md)
 {
-  int ret;
   return tc_packet_func__(md);
-  return ret;
 }
 
 SEC("tc_packet_hook2")

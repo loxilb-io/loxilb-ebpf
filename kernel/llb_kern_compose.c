@@ -441,7 +441,7 @@ dp_parse_outer_udp(void *md,
 static int __always_inline
 dp_parse_packet(void *md,
                 struct xfi *xf,
-                int skip_md)
+                int skip_v6)
 {
 #ifndef LL_TC_EBPF
   int i = 0;
@@ -483,11 +483,11 @@ dp_parse_packet(void *md,
 
   h_proto = eth->h_proto;
 
-  if (skip_md == 0) {
-    if (xdp2tc_has_xmd(md, xf)) {
-      return 1;
-    }
+#ifdef HAVE_DP_IPC
+  if (xdp2tc_has_xmd(md, xf)) {
+    return 1;
   }
+#endif
 
   vlh = DP_ADD_PTR(eth, sizeof(*eth));
 
@@ -681,6 +681,10 @@ dp_parse_packet(void *md,
     if (ip6 + 1 > dend) {
       LLBS_PPLN_DROP(xf);
       return -1;
+    }
+
+    if (skip_v6 == 1) {
+      return 0;
     }
 
     if (ipv6_addr_is_multicast(&ip6->daddr) ||
