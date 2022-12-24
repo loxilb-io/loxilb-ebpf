@@ -679,6 +679,25 @@ dp_ipv4_new_csum(struct iphdr *iph)
 #define DP_PDATA_END(md) (((struct __sk_buff *)md)->data_end)
 #define DP_MDATA(md) (((struct __sk_buff *)md)->data_meta)
 
+#ifdef HAVE_CLANG13
+#define DP_NEW_FCXF(xf)                  \
+  int val = 0;                           \
+  xf = bpf_map_lookup_elem(&xfis, &val); \
+  if (!xf) {                             \
+    return DP_DROP;                      \
+  }                                      \
+  memset(xf, 0, sizeof(*xf));            \
+
+#else
+
+#define DP_NEW_FCXF(xf)                  \
+  struct xfi xfr;                        \
+  memset(&xfr, 0, sizeof(xfr));          \
+  xf = &xfr;                             \
+
+#endif
+
+
 #define RETURN_TO_MP_OUT()                       \
 do {                                             \
   xf->pm.phit |= LLB_DP_RES_HIT;                 \

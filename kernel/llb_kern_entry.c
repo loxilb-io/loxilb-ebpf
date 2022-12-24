@@ -104,15 +104,9 @@ SEC("tc_packet_hook0")
 int tc_packet_func_fast(struct __sk_buff *md)
 {
 #ifdef HAVE_DP_FC
-  int val = 0;
   struct xfi *xf;
 
-  xf = bpf_map_lookup_elem(&xfis, &val);
-  if (!xf) {
-    return DP_DROP;
-  }
-
-  memset(xf, 0, sizeof(*xf));
+  DP_NEW_FCXF(xf);
 
 #ifdef HAVE_DP_EGR_HOOK
   if (DP_LLB_INGP(md)) {
