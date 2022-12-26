@@ -30,6 +30,8 @@
 #include <netinet/in.h>
 
 #include "loxilb_libdp.h"
+#include "llb_kern_mon.h"
+#include "loxilb_libdp.skel.h"
 #include "../common/pdi.h"
 #include "../common/common_frame.h"
 
@@ -79,6 +81,7 @@ typedef struct llb_dp_struct
   const char *ll_dp_dfl_sec;
   const char *ll_dp_pdir;
   pthread_t pkt_thr;
+  pthread_t mon_thr;
   int mgmt_ch_fd;
   llb_dp_map_t maps[LL_DP_MAX_MAP];
   llb_dp_link_t links[LLB_INTERFACES];
@@ -183,7 +186,7 @@ llb_setup_pkt_ring(struct bpf_object *bpf_obj __attribute__((unused)))
 
   if (pkt_fd < 0) return -1;
 
-   /* Set up ring buffer polling */
+  /* Set up ring buffer polling */
   pb_opts.sample_cb = llb_handle_pkt_event;
 
   pb = perf_buffer__new(pkt_fd, 8 /* 32KB per CPU */, &pb_opts);
@@ -199,6 +202,104 @@ llb_setup_pkt_ring(struct bpf_object *bpf_obj __attribute__((unused)))
 cleanup:
   perf_buffer__free(pb);
   return -1;
+}
+
+static void
+llb_mon_output(void *ctx, int cpu, void *data, __u32 size) {
+  struct map_update_data *map_data = (struct map_update_data*)data;
+  char out_val;
+  if (map_data->updater == UPDATER_KERNEL) {
+    printf("Map Updated From Kernel:\n");
+  } else if (map_data->updater == UPDATER_USERMODE) {
+    printf("Map Updated From User:\n");
+  } else if (map_data->updater == UPDATER_SYSCALL_GET) {
+    printf("Syscall used to get a map handle:\n");
+  } else if (map_data->updater == UPDATER_SYSCALL_UPDATE) {
+    printf("Syscall used to get a update map using handle:\n");
+  }
+  printf("  PID:   %d\n",  map_data->pid);
+  if (map_data->updater == UPDATER_SYSCALL_UPDATE) {
+    printf("  FD:    %d\n",  map_data->map_id);
+  } else {
+    printf("  ID:    %d\n",  map_data->map_id);
+  }
+  if (map_data->name[0] != '\x00')
+    printf("  Name:  %s\n",  map_data->name);
+  if (map_data->key_size > 0) {
+    printf("  Key:   ");
+    for (int i = 0; i < map_data->key_size; i++) {
+      out_val = map_data->key[i];
+      printf("%02x ", out_val);
+    }
+    printf("\n");
+  }
+  if (map_data->value_size > 0) {
+    printf("  Value: ");
+    for (int i = 0; i < map_data->value_size; i++) {
+      out_val = map_data->value[i];
+      printf("%02x ", out_val);
+    }
+    printf("\n");
+  }
+}
+
+static void *
+llb_mon_proc_main(void *arg)
+{
+  struct perf_buffer *pb = arg;
+
+  while (1) {
+    perf_buffer__poll(pb, 100 /* timeout, ms */);
+  }
+
+  /* NOT REACHED */
+  return NULL;
+}
+
+static int
+llb_setup_kern_mon(void)
+{
+  struct llb_kern_mon *prog;
+  int err;
+
+  // Open and load eBPF Program
+  prog = llb_kern_mon__open();
+  if (!prog) {
+      printf("Failed to open and load BPF skeleton\n");
+      return 1;
+  }
+  err = llb_kern_mon__load(prog);
+  if (err) {
+      printf("Failed to load and verify BPF skeleton\n");
+      goto cleanup;
+  }
+
+  // Attach the various kProbes
+  err = llb_kern_mon__attach(prog);
+  if (err) {
+      printf("Failed to attach BPF skeleton\n");
+      goto cleanup;
+  }
+
+  // Setup Pef buffer to process events from kernel
+  struct perf_buffer_opts pb_opts = { 0 } ;
+  struct perf_buffer *pb;
+  pb_opts.sample_cb = llb_mon_output;
+  pb = perf_buffer__new(bpf_map__fd(prog->maps.map_events), 8, &pb_opts);
+  err = libbpf_get_error(pb);
+  if (err) {
+    printf("failed to setup perf_buffer: %d\n", err);
+    goto cleanup;
+  }
+
+  pthread_create(&xh->pkt_thr, NULL, llb_mon_proc_main, pb);
+
+  return 0;
+
+cleanup:
+  llb_kern_mon__destroy(prog);
+  return err < 0 ? -err : 0;
+
 }
 
 static int 
@@ -577,6 +678,10 @@ llb_xh_init(llb_dp_struct_t *xh)
   assert(xh->ufw6);
 
   if (llb_mgmt_ch_init(xh) != 0) {
+    assert(0);
+  }
+
+  if (llb_setup_kern_mon() != 0) {
     assert(0);
   }
 
