@@ -26,12 +26,23 @@ log_map_update(struct pt_regs *ctx, struct bpf_map* updated_map,
   uint32_t map_id = MEM_READ(updated_map->id);
   uint32_t key_size = MEM_READ(updated_map->key_size);
   uint32_t value_size = MEM_READ(updated_map->value_size);
+  char filter[] = { 'a', 'c', 'l', '_', 'm', 'a', 'p', '\0'};
+  int i;
  
-
   // Read the key and value into byte arrays
   // memset the whole struct to ensure verifier is happy
   struct map_update_data out_data;
   __builtin_memset(&out_data, 0, sizeof(out_data));
+
+  // Parse the map name
+  bpf_probe_read_str(out_data.name, BPF_NAME_LEN, updated_map->name);
+
+#pragma unroll
+  for (i = 0 ; i < sizeof(filter); i++) {
+    if (out_data.name[i] != filter[i]) {
+      return;
+    }
+  }
 
   // Set basic data
   out_data.key_size = key_size;
@@ -40,9 +51,6 @@ log_map_update(struct pt_regs *ctx, struct bpf_map* updated_map,
   out_data.pid = (unsigned int)bpf_get_current_pid_tgid();
   out_data.updater = update_type;
 
-  // Parse the map name
-  bpf_probe_read_str(out_data.name, BPF_NAME_LEN, updated_map->name);
-  
   // Parse the Key
   if (key_size <= MAX_KEY_SIZE) {
     bpf_probe_read(out_data.key, key_size, pKey);

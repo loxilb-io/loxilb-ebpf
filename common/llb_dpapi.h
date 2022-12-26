@@ -728,12 +728,24 @@ struct ll_dp_pmdi {
   uint8_t data[];
 }; 
 
+struct ll_dp_map_notif {
+  int addop;
+  char map_name[16];
+  int key_len;
+  void *key;
+  int val_len;
+  void *val;
+};
+typedef struct ll_dp_map_notif ll_dp_map_notif_t;
+
 struct dp_map_ita {
   void *next_key;
   void *val;
   void *uarg;
 };
 typedef struct dp_map_ita dp_map_ita_t;
+
+void go_map_noti_handler(struct ll_dp_map_notif *mn);
 
 /* Policer map stats update callback */
 typedef void (*dp_pts_cb_t)(uint32_t idx, struct dp_pol_stats *ps);
