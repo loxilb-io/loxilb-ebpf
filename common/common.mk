@@ -13,14 +13,43 @@
 LLC = llc
 CLANG := $(shell if [ -f /usr/bin/clang-13 ];then echo clang-13; else echo clang-10; fi;)
 CC ?= gcc
+BPFTOOL ?= bpftool
 
 XDP_C = ${XDP_TARGETS:=.c}
 TC_C = ${TC_TARGETS:=.c}
+MON_C = ${MON_TARGETS:=.c}
 XDP_OBJ = ${XDP_C:.c=.o}
 TC_OBJ = ${TC_C:.c=.o}
+MON_OBJ = ${MON_C:.c=.o}
 USER_C := ${USER_TARGETS:=.c}
 USER_OBJ := ${USER_C:.c=.o}
 USER_TARGETS_LIB := libloxilbdp.a
+
+ARCH := $(shell uname -m | sed 's/x86_64/x86/')
+
+# Get Clang's default includes on this system. We'll explicitly add these dirs
+# to the includes list when compiling with `-target bpf` because otherwise some
+# architecture-specific dirs will be "missing" on some architectures/distros -
+# headers such as asm/types.h, asm/byteorder.h, asm/socket.h, asm/sockios.h,
+# sys/cdefs.h etc. might be missing.
+#
+# Use '-idirafter': Don't interfere with include mechanics except where the
+# build would have failed anyways.
+CLANG_BPF_SYS_INCLUDES = $(shell $(CLANG) -v -E - </dev/null 2>&1 \
+  | sed -n '/<...> search starts here:/,/End of search list./{ s| \(/.*\)|-idirafter \1|p }')
+
+ifeq ($(V),1)
+  Q =
+  msg =
+else
+  Q = @
+  msg = @printf '  %-8s %s%s\n'         \
+          "$(1)"            \
+          "$(patsubst $(abspath $(OUTPUT))/%,%,$(2))" \
+          "$(if $(3), $(3))";
+  MAKEFLAGS += --no-print-directory
+endif
+
 
 # Expect this is defined by including Makefile, but define if not
 COMMON_DIR ?= ../common/
@@ -51,10 +80,10 @@ BPF_CFLAGS ?= -I$(LIBBPF_DIR)/build/usr/include/ -I../headers/ -I/usr/include/$(
 
 LIBS = $(OBJECT_LIBBPF) -lelf $(USER_LIBS) -lz -lpthread
 
-all: llvm-check $(USER_TARGETS) $(XDP_OBJ) $(TC_OBJ) $(USER_TARGETS_LIB)
+all: llvm-check $(USER_TARGETS) $(XDP_OBJ) $(TC_OBJ) $(MON_OBJ) $(USER_TARGETS_LIB)
 #all: llvm-check $(XDP_OBJ) $(USER_TARGETS_LIB)
 
-.PHONY: clean $(CLANG) $(LLC)
+.PHONY: clean $(CLANG) $(LLC) vmlinux
 
 clean:
 	rm -rf $(LIBBPF_DIR)/build
@@ -95,7 +124,7 @@ $(COMMON_H): %.h: %.c
 $(COMMON_OBJS): %.o: %.h
 	make -C $(COMMON_DIR)
 
-$(USER_TARGETS): %: %.c  $(OBJECT_LIBBPF) Makefile $(COMMON_MK) $(COMMON_OBJS) $(KERN_USER_H) $(EXTRA_DEPS)
+$(USER_TARGETS): %: %.c  $(OBJECT_LIBBPF) Makefile $(COMMON_MK) $(COMMON_OBJS) $(KERN_USER_H) $(EXTRA_DEPS) %.skel.h
 	$(CC) -Wall $(CFLAGS) $(LDFLAGS) -o $@ loxilb_libdp_main.c $(COMMON_OBJS) \
 	 $< $(LIBS)
 
@@ -135,6 +164,26 @@ $(TC_OBJ): %.o: %.c  Makefile $(COMMON_MK) $(KERN_USER_H) $(EXTRA_DEPS) $(XDP_DE
 	#$(LLC) -march=bpf -mattr=dwarfris -filetype=obj -o $@ ${@:.o=.o}
 	sudo mv $@ /opt/loxilb/ 
 	@#sudo pahole -J /opt/loxilb/$@
+
+vmlinux:
+	$(BPFTOOL) btf dump file /sys/kernel/btf/vmlinux format c > vmlinux.h
+
+$(MON_OBJ): %.o: %.c  Makefile $(COMMON_MK) $(KERN_USER_H) $(EXTRA_DEPS) $(XDP_DEPS) vmlinux
+	$(CLANG) \
+    -target bpf \
+    -D __BPF_TRACING__ \
+    -D__TARGET_ARCH_$(ARCH) \
+    -DLL_TC_EBPF=1 \
+    $(CLANG_BPF_SYS_INCLUDES) \
+    -O2 -g -c -o ${@:.o=.o} $<
+	#$(LLC) -march=bpf -mattr=dwarfris -filetype=obj -o $@ ${@:.o=.o}
+	sudo cp $@ /opt/loxilb/
+	@#sudo pahole -J /opt/loxilb/$@
+
+# Generate BPF skeletons
+%.skel.h: $(MON_OBJ)
+	$(call msg,GEN-SKEL,$@)
+	$(BPFTOOL) gen skeleton $< > $@
 
 install:
 	@sudo cp -f /opt/loxilb/llb_*.o ${dpinstalldir}/
