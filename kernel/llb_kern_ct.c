@@ -99,7 +99,7 @@ do {                                       \
 #define DP_RUN_CT_HELPER(x)
 #endif
 
-static __u32
+static __u32 __always_inline
 dp_ct_get_newctr(void)
 {
   __u32 k = 0;
@@ -125,7 +125,7 @@ dp_ct_get_newctr(void)
   return v;
 }
 
-static int 
+static int __always_inline
 dp_ct_proto_xfk_init(struct dp_ct_key *key,
                      nxfrm_inf_t *xi,
                      struct dp_ct_key *xkey,
@@ -949,7 +949,7 @@ end:
   return CT_SMR_INPROG;
 }
 
-static int
+static int __always_inline
 dp_ct_sm(void *ctx, struct xfi *xf,
          struct dp_acl_tact *atdat,
          struct dp_acl_tact *axtdat,

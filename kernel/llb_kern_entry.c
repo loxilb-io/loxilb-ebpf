@@ -84,7 +84,8 @@ int xdp_pass_func(struct xdp_md *ctx)
 
 #else
 
-int tc_packet_func__(struct __sk_buff *md)
+static int __always_inline
+tc_packet_func__(struct __sk_buff *md)
 {
   int val = 0;
   struct xfi *xf;
