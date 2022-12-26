@@ -5,7 +5,7 @@
 #define __LLB_KERN_MON_H__
 
 #define MAX_KEY_SIZE 64
-#define MAX_VALUE_SIZE 176
+#define MAX_VALUE_SIZE 224
 #define BPF_NAME_LEN 16U
 
 enum map_updater{
