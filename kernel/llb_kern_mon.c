@@ -18,81 +18,102 @@ struct {
 
 #define MEM_READ(P) ({typeof(P) val = 0; bpf_probe_read(&val, sizeof(val), &P); val;})
 
-static __always_inline void log_map_update(struct pt_regs *ctx, struct bpf_map* updated_map, char *pKey, char *pValue, enum map_updater update_type) {
-    // Get basic info about the map
-    uint32_t map_id = MEM_READ(updated_map->id);
-    uint32_t key_size = MEM_READ(updated_map->key_size);
-    uint32_t value_size = MEM_READ(updated_map->value_size);
+static void __always_inline
+log_map_update(struct pt_regs *ctx, struct bpf_map* updated_map,
+               char *pKey, char *pValue, enum map_updater update_type)
+{ 
+  // Get basic info about the map
+  uint32_t map_id = MEM_READ(updated_map->id);
+  uint32_t key_size = MEM_READ(updated_map->key_size);
+  uint32_t value_size = MEM_READ(updated_map->value_size);
+ 
 
-    // Read the key and value into byte arrays
-    // memset the whole struct to ensure verifier is happy
-    struct map_update_data out_data;
-    __builtin_memset(&out_data, 0, sizeof(out_data));
+  // Read the key and value into byte arrays
+  // memset the whole struct to ensure verifier is happy
+  struct map_update_data out_data;
+  __builtin_memset(&out_data, 0, sizeof(out_data));
 
-    // Set basic data
-    out_data.key_size = key_size;
-    out_data.value_size = value_size;
-    out_data.map_id = map_id;
-    out_data.pid = (unsigned int)bpf_get_current_pid_tgid();
-    out_data.updater = update_type;
+  // Set basic data
+  out_data.key_size = key_size;
+  out_data.value_size = value_size;
+  out_data.map_id = map_id;
+  out_data.pid = (unsigned int)bpf_get_current_pid_tgid();
+  out_data.updater = update_type;
 
-    // Parse the map name
-    bpf_probe_read_str(out_data.name, BPF_NAME_LEN, updated_map->name);
+  // Parse the map name
+  bpf_probe_read_str(out_data.name, BPF_NAME_LEN, updated_map->name);
   
-    // Parse the Key
-    if (key_size <= MAX_KEY_SIZE) {
-        bpf_probe_read(out_data.key, key_size, pKey);
-    }
-    else {
-        bpf_probe_read(out_data.key, MAX_KEY_SIZE, pKey);
-    }
-    // Parse the Value
+  // Parse the Key
+  if (key_size <= MAX_KEY_SIZE) {
+    bpf_probe_read(out_data.key, key_size, pKey);
+  } else {
+    bpf_probe_read(out_data.key, MAX_KEY_SIZE, pKey);
+  }
+  // Parse the Value
+  if (pValue) {
     if (value_size <= MAX_VALUE_SIZE) {
-        bpf_probe_read(out_data.value, value_size, pValue);
+      bpf_probe_read(out_data.value, value_size, pValue);
+    } else {
+      bpf_probe_read(out_data.key, MAX_VALUE_SIZE, pKey);
     }
-    else {
-        bpf_probe_read(out_data.key, MAX_VALUE_SIZE, pKey);
-    }
+  }
 
-    // Write data to be processed in userspace
-    bpf_perf_event_output(ctx, &map_events, BPF_F_CURRENT_CPU, &out_data, sizeof(out_data));
+  // Write data to be processed in userspace
+  bpf_perf_event_output(ctx, &map_events, BPF_F_CURRENT_CPU,
+                        &out_data, sizeof(out_data));
 }
 
 SEC("kprobe/bpf_map_update_value.isra.0")
-int bpf_prog_user_mapupdate(struct pt_regs *ctx) {
-    struct bpf_map* updated_map = (struct bpf_map* ) PT_REGS_PARM1(ctx);
-    // 'struct fd f' is PARAM2
-    char *pKey = (char*)PT_REGS_PARM3(ctx);
-    char *pValue = (char*)PT_REGS_PARM4(ctx);
+int bpf_prog_user_mapupdate(struct pt_regs *ctx)
+{
+  struct bpf_map* updated_map = (struct bpf_map* ) PT_REGS_PARM1(ctx);
+  // 'struct fd f' is PARAM2
+  char *pKey = (char*)PT_REGS_PARM3(ctx);
+  char *pValue = (char*)PT_REGS_PARM4(ctx);
 
-    log_map_update(ctx, updated_map, pKey, pValue, UPDATER_USERMODE);
+  log_map_update(ctx, updated_map, pKey, pValue, UPDATER_USERMODE);
 
-    return 0;
-}
-
-SEC("kprobe/array_map_update_elem")
-int bpf_prog_kern_mapupdate(struct pt_regs *ctx) {
-    // Parse functions params
-    struct bpf_map* updated_map = (struct bpf_map* ) PT_REGS_PARM1(ctx);
-    char *pKey = (char*)PT_REGS_PARM2(ctx);
-    char *pValue = (char*)PT_REGS_PARM3(ctx);
-
-    log_map_update(ctx, updated_map, pKey, pValue, UPDATER_KERNEL);
-    return 0;
+  return 0;
 }
 
 SEC("kprobe/htab_map_update_elem")
-int bpf_prog_kern_hmapupdate(struct pt_regs *ctx) {
-    // Parse functions params
-    struct bpf_map* updated_map = (struct bpf_map* ) PT_REGS_PARM1(ctx);
-    char *pKey = (char*)PT_REGS_PARM2(ctx);
-    char *pValue = (char*)PT_REGS_PARM3(ctx);
+int bpf_prog_kern_hmapupdate(struct pt_regs *ctx)
+{
+  // Parse functions params
+  struct bpf_map* updated_map = (struct bpf_map* ) PT_REGS_PARM1(ctx);
+  char *pKey = (char*)PT_REGS_PARM2(ctx);
+  char *pValue = (char*)PT_REGS_PARM3(ctx);
 
-    log_map_update(ctx, updated_map, pKey, pValue, UPDATER_KERNEL);
-    return 0;
+  log_map_update(ctx, updated_map, pKey, pValue, UPDATER_KERNEL);
+  return 0;
 }
 
-#if 0
+SEC("kprobe/htab_map_delete_elem")
+int bpf_prog_kern_hmapdelete(struct pt_regs *ctx)
+{
+  // Parse functions params
+  struct bpf_map* updated_map = (struct bpf_map* ) PT_REGS_PARM1(ctx);
+  char *pKey = (char*)PT_REGS_PARM2(ctx);
+  char *pValue = NULL;
+
+  log_map_update(ctx, updated_map, pKey, pValue, DELETE_KERNEL);
+  return 0;
+}
+
+#ifdef HAVE_DP_EXT_MON 
+
+SEC("kprobe/array_map_update_elem")
+int bpf_prog_kern_mapupdate(struct pt_regs *ctx)
+{
+  // Parse functions params
+  struct bpf_map* updated_map = (struct bpf_map* ) PT_REGS_PARM1(ctx);
+  char *pKey = (char*)PT_REGS_PARM2(ctx);
+  char *pValue = (char*)PT_REGS_PARM3(ctx);
+
+  log_map_update(ctx, updated_map, pKey, pValue, UPDATER_KERNEL);
+  return 0;
+}
+
 // The bpf syscall has 3 arguments:
 //  1. cmd:   The command/action to take (get a map handle, load a program, etc.)
 //  2. uattr: A union of structs that hold the arguments for the action

@@ -216,6 +216,8 @@ llb_mon_output(void *ctx, int cpu, void *data, __u32 size) {
     printf("Syscall used to get a map handle:\n");
   } else if (map_data->updater == UPDATER_SYSCALL_UPDATE) {
     printf("Syscall used to get a update map using handle:\n");
+  } else if (map_data->updater == DELETE_KERNEL) {
+    printf("Map Deleted From Kernel:\n");
   }
   printf("  PID:   %d\n",  map_data->pid);
   if (map_data->updater == UPDATER_SYSCALL_UPDATE) {
@@ -233,7 +235,7 @@ llb_mon_output(void *ctx, int cpu, void *data, __u32 size) {
     }
     printf("\n");
   }
-  if (map_data->value_size > 0) {
+  if (map_data->value_size > 0 && map_data->updater != DELETE_KERNEL) {
     printf("  Value: ");
     for (int i = 0; i < map_data->value_size; i++) {
       out_val = map_data->value[i];
