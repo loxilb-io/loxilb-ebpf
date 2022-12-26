@@ -745,7 +745,7 @@ struct dp_map_ita {
 };
 typedef struct dp_map_ita dp_map_ita_t;
 
-void go_map_noti_handler(struct ll_dp_map_notif *mn);
+void goMapNotiHandler(struct ll_dp_map_notif *mn);
 
 /* Policer map stats update callback */
 typedef void (*dp_pts_cb_t)(uint32_t idx, struct dp_pol_stats *ps);

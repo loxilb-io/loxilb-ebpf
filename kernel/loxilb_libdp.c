@@ -204,8 +204,14 @@ cleanup:
   return -1;
 }
 
+void __attribute__((weak))
+goMapNotiHandler(struct ll_dp_map_notif *mn)
+{
+}
+
 static void
-llb_mon_output(void *ctx, int cpu, void *data, __u32 size) {
+llb_mon_output(void *ctx, int cpu, void *data, __u32 size)
+{
   struct map_update_data *map_data = (struct map_update_data*)data;
   struct ll_dp_map_notif noti;
   char out_val;
@@ -256,6 +262,8 @@ llb_mon_output(void *ctx, int cpu, void *data, __u32 size) {
 
   noti.val = map_data->value;
   noti.val_len = map_data->value_size;
+
+  goMapNotiHandler(&noti);
 }
 
 static void *
