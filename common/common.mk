@@ -177,7 +177,7 @@ $(MON_OBJ): %.o: %.c  Makefile $(COMMON_MK) $(KERN_USER_H) $(EXTRA_DEPS) $(XDP_D
     $(CLANG_BPF_SYS_INCLUDES) \
     -O2 -g -c -o ${@:.o=.o} $<
 	#$(LLC) -march=bpf -mattr=dwarfris -filetype=obj -o $@ ${@:.o=.o}
-	sudo cp $@ /opt/loxilb/
+	@sudo cp $@ /opt/loxilb/
 	@#sudo pahole -J /opt/loxilb/$@
 
 # Generate BPF skeletons
