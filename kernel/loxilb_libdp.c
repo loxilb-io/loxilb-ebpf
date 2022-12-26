@@ -207,6 +207,7 @@ cleanup:
 static void
 llb_mon_output(void *ctx, int cpu, void *data, __u32 size) {
   struct map_update_data *map_data = (struct map_update_data*)data;
+  struct ll_dp_map_notif noti;
   char out_val;
   if (map_data->updater == UPDATER_KERNEL) {
     printf("Map Updated From Kernel:\n");
@@ -243,6 +244,18 @@ llb_mon_output(void *ctx, int cpu, void *data, __u32 size) {
     }
     printf("\n");
   }
+
+  memset(&noti, 0, sizeof(noti));
+  if (map_data->updater == UPDATER_KERNEL) {
+    noti.addop = 1;
+  } else if (map_data->updater == DELETE_KERNEL) {
+    noti.addop = 0;
+  } else return;
+  noti.key = map_data->key;
+  noti.key_len = map_data->key_size;
+
+  noti.val = map_data->value;
+  noti.val_len = map_data->value_size;
 }
 
 static void *
