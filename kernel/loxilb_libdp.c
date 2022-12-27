@@ -210,7 +210,7 @@ goMapNotiHandler(struct ll_dp_map_notif *mn)
 }
 
 static void
-llb_mon_output(void *ctx, int cpu, void *data, __u32 size)
+llb_maptrace_output(void *ctx, int cpu, void *data, __u32 size)
 {
   struct map_update_data *map_data = (struct map_update_data*)data;
   struct ll_dp_map_notif noti;
@@ -226,6 +226,7 @@ llb_mon_output(void *ctx, int cpu, void *data, __u32 size)
   } else if (map_data->updater == DELETE_KERNEL) {
     printf("Map Deleted From Kernel:\n");
   }
+#if 0
   printf("  PID:   %d\n",  map_data->pid);
   if (map_data->updater == UPDATER_SYSCALL_UPDATE) {
     printf("  FD:    %d\n",  map_data->map_id);
@@ -250,6 +251,7 @@ llb_mon_output(void *ctx, int cpu, void *data, __u32 size)
     }
     printf("\n");
   }
+#endif
 
   memset(&noti, 0, sizeof(noti));
   if (map_data->updater == UPDATER_KERNEL) {
@@ -266,8 +268,34 @@ llb_mon_output(void *ctx, int cpu, void *data, __u32 size)
   goMapNotiHandler(&noti);
 }
 
+static void
+llb_maptrace_uhook(int tid, int addop,
+                   void *key, int key_sz,
+                   void *val, int val_sz)
+{
+  map_update_data ud;
+
+  if (tid != LL_DP_ACL_MAP) {
+    return;
+  }
+
+  memset(&ud, 0, sizeof(ud));
+  strcpy(ud.name, "acl_map");
+  ud.updater = DELETE_KERNEL;
+  if (key_sz) {
+    memcpy(ud.key, key, key_sz > MAX_KEY_SIZE ? MAX_KEY_SIZE:key_sz); 
+  }
+  ud.key_size = key_sz;
+
+  if (val_sz) {
+    memcpy(ud.value, val, val_sz > MAX_VALUE_SIZE ? MAX_VALUE_SIZE:val_sz); 
+  }
+  ud.value_size = val_sz;
+  llb_maptrace_output(NULL, 0, &ud, sizeof(ud));
+}
+
 static void *
-llb_mon_proc_main(void *arg)
+llb_maptrace_main(void *arg)
 {
   struct perf_buffer *pb = arg;
 
@@ -307,7 +335,7 @@ llb_setup_kern_mon(void)
   // Setup Pef buffer to process events from kernel
   struct perf_buffer_opts pb_opts = { 0 } ;
   struct perf_buffer *pb;
-  pb_opts.sample_cb = llb_mon_output;
+  pb_opts.sample_cb = llb_maptrace_output;
   pb = perf_buffer__new(bpf_map__fd(prog->maps.map_events), 8, &pb_opts);
   err = libbpf_get_error(pb);
   if (err) {
@@ -315,7 +343,7 @@ llb_setup_kern_mon(void)
     goto cleanup;
   }
 
-  pthread_create(&xh->pkt_thr, NULL, llb_mon_proc_main, pb);
+  pthread_create(&xh->mon_thr, NULL, llb_maptrace_main, pb);
 
   return 0;
 
@@ -332,13 +360,13 @@ llb_objmap2fd(struct bpf_object *bpf_obj,
   struct bpf_map *map;
   int map_fd = -1;
 
-  printf("%s: \n", mapname);
   map = bpf_object__find_map_by_name(bpf_obj, mapname);
   if (!map) {
     goto out;
   }
 
   map_fd = bpf_map__fd(map);
+  printf("%s: %d\n", mapname, map_fd);
 out:
   return map_fd;
 }
@@ -922,6 +950,7 @@ llb_map_loop_and_delete(int tid, dp_map_walker_t cb, dp_map_ita_t *it)
     }
 
     if (cb(tid, it->next_key, it)) {
+      llb_maptrace_uhook(tid, 0, it->next_key, it->key_sz, NULL, 0);
       bpf_map_delete_elem(t->map_fd, it->next_key);
     }
 
@@ -1619,6 +1648,7 @@ ll_age_aclct4map(void)
 
   memset(&it, 0, sizeof(it));
   it.next_key = &next_key;
+  it.key_sz = sizeof(next_key);
   it.val = adat;
   it.uarg = as;
 

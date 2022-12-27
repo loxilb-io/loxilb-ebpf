@@ -740,6 +740,7 @@ typedef struct ll_dp_map_notif ll_dp_map_notif_t;
 
 struct dp_map_ita {
   void *next_key;
+  size_t key_sz;
   void *val;
   void *uarg;
 };

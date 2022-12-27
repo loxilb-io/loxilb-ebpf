@@ -71,19 +71,6 @@ log_map_update(struct pt_regs *ctx, struct bpf_map* updated_map,
                         &out_data, sizeof(out_data));
 }
 
-SEC("kprobe/bpf_map_update_value.isra.0")
-int bpf_prog_user_mapupdate(struct pt_regs *ctx)
-{
-  struct bpf_map* updated_map = (struct bpf_map* ) PT_REGS_PARM1(ctx);
-  // 'struct fd f' is PARAM2
-  char *pKey = (char*)PT_REGS_PARM3(ctx);
-  char *pValue = (char*)PT_REGS_PARM4(ctx);
-
-  log_map_update(ctx, updated_map, pKey, pValue, UPDATER_USERMODE);
-
-  return 0;
-}
-
 SEC("kprobe/htab_map_update_elem")
 int bpf_prog_kern_hmapupdate(struct pt_regs *ctx)
 {
@@ -108,7 +95,32 @@ int bpf_prog_kern_hmapdelete(struct pt_regs *ctx)
   return 0;
 }
 
+SEC("kprobe/htab_map_lookup_and_delete_elem")
+int bpf_prog_kern_hmaplkdelete(struct pt_regs *ctx)
+{
+  // Parse functions params
+  struct bpf_map* updated_map = (struct bpf_map* ) PT_REGS_PARM1(ctx);
+  char *pKey = (char*)PT_REGS_PARM2(ctx);
+  char *pValue = (char*)PT_REGS_PARM3(ctx);
+
+  log_map_update(ctx, updated_map, pKey, pValue, DELETE_KERNEL);
+  return 0;
+}
+
 #ifdef HAVE_DP_EXT_MON 
+
+SEC("kprobe/bpf_map_update_value.isra.0")
+int bpf_prog_user_mapupdate(struct pt_regs *ctx)
+{
+  struct bpf_map* updated_map = (struct bpf_map* ) PT_REGS_PARM1(ctx);
+  // 'struct fd f' is PARAM2
+  char *pKey = (char*)PT_REGS_PARM3(ctx);
+  char *pValue = (char*)PT_REGS_PARM4(ctx);
+
+  log_map_update(ctx, updated_map, pKey, pValue, UPDATER_USERMODE);
+
+  return 0;
+}
 
 SEC("kprobe/array_map_update_elem")
 int bpf_prog_kern_mapupdate(struct pt_regs *ctx)
