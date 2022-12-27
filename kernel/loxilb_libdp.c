@@ -204,6 +204,9 @@ cleanup:
   return -1;
 }
 
+
+#ifdef HAVE_DP_CT_SYNC
+
 void __attribute__((weak))
 goMapNotiHandler(struct ll_dp_map_notif *mn)
 {
@@ -353,6 +356,23 @@ cleanup:
   return err < 0 ? -err : 0;
 
 }
+
+#else
+
+static void
+llb_maptrace_uhook(int tid, int addop,
+                   void *key, int key_sz,
+                   void *val, int val_sz)
+{
+  return;
+}
+
+static int
+llb_setup_kern_mon(void)
+{
+  return 0;
+}
+#endif
 
 static int 
 llb_objmap2fd(struct bpf_object *bpf_obj,

@@ -68,7 +68,7 @@ EXTRA_DEPS +=
 # BPF-prog kern and userspace shares struct via header file:
 KERN_USER_H ?= $(wildcard common_kern_user.h)
 
-CFLAGS_ALL ?= -DHAVE_DP_FC=1 -DHAVE_DP_EXTCT=1 -DHAVE_DP_SCTP_SUM=1
+CFLAGS_ALL ?= -DHAVE_DP_FC=1 -DHAVE_DP_EXTCT=1 -DHAVE_DP_SCTP_SUM=1 -DHAVE_DP_CT_SYNC=1
 ifeq ($(CLANG), clang-13)
 CFLAGS_ALL += -DHAVE_CLANG13
 endif
