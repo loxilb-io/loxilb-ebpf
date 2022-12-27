@@ -62,8 +62,10 @@ log_map_update(struct pt_regs *ctx, struct bpf_map* updated_map,
     if (value_size <= MAX_VALUE_SIZE) {
       bpf_probe_read(out_data.value, value_size, pValue);
     } else {
-      bpf_probe_read(out_data.key, MAX_VALUE_SIZE, pKey);
+      bpf_probe_read(out_data.value, MAX_VALUE_SIZE, pValue);
     }
+  } else {
+    out_data.value_size = 0;
   }
 
   // Write data to be processed in userspace

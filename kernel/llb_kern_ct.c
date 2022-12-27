@@ -1124,9 +1124,8 @@ dp_ct_in(void *ctx, struct xfi *xf)
     axdat->ctd.rid = adat->ctd.rid;
     axdat->ctd.aid = adat->ctd.aid;
 
-
-    bpf_map_update_elem(&acl_map, &key, adat, BPF_ANY);
     bpf_map_update_elem(&acl_map, &xkey, axdat, BPF_ANY);
+    bpf_map_update_elem(&acl_map, &key, adat, BPF_ANY);
 
     atdat = bpf_map_lookup_elem(&acl_map, &key);
     axtdat = bpf_map_lookup_elem(&acl_map, &xkey);

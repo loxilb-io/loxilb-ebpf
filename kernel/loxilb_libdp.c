@@ -214,6 +214,8 @@ llb_maptrace_output(void *ctx, int cpu, void *data, __u32 size)
 {
   struct map_update_data *map_data = (struct map_update_data*)data;
   struct ll_dp_map_notif noti;
+
+#if 0
   char out_val;
   if (map_data->updater == UPDATER_KERNEL) {
     printf("Map Updated From Kernel:\n");
@@ -226,7 +228,6 @@ llb_maptrace_output(void *ctx, int cpu, void *data, __u32 size)
   } else if (map_data->updater == DELETE_KERNEL) {
     printf("Map Deleted From Kernel:\n");
   }
-#if 0
   printf("  PID:   %d\n",  map_data->pid);
   if (map_data->updater == UPDATER_SYSCALL_UPDATE) {
     printf("  FD:    %d\n",  map_data->map_id);
