@@ -1366,8 +1366,8 @@ get_os_usecs(void)
   return ((unsigned long long)ts.tv_sec * 1000000UL) + ts.tv_nsec/1000;
 }
 
-static uint64_t
-__get_os_nsecs_now(void)
+unsigned long long
+get_os_nsecs(void)
 {
   struct timespec ts;
 
@@ -1401,7 +1401,7 @@ ll_age_fcmap(void)
   dp_map_ita_t it;
   struct dp_fcv4_key next_key;
   struct dp_fc_tacts *fc_val;
-  uint64_t ns = __get_os_nsecs_now();
+  uint64_t ns = get_os_nsecs();
 
   fc_val = calloc(1, sizeof(*fc_val));
   if (!fc_val) return;
@@ -1654,7 +1654,7 @@ ll_age_aclct4map(void)
   struct dp_ct_key next_key;
   struct dp_acl_tact *adat;
   ct_arg_struct_t *as;
-  uint64_t ns = __get_os_nsecs_now();
+  uint64_t ns = get_os_nsecs();
 
   adat = calloc(1, sizeof(*adat));
   if (!adat) return;
@@ -1746,7 +1746,7 @@ ll_map_aclct4_rm_related(uint32_t rid, uint32_t *aids, int naid)
   struct dp_ct_key next_key;
   struct dp_acl_tact *adat;
   ct_arg_struct_t *as;
-  uint64_t ns = __get_os_nsecs_now();
+  uint64_t ns = get_os_nsecs();
 
   adat = calloc(1, sizeof(*adat));
   if (!adat) return;
