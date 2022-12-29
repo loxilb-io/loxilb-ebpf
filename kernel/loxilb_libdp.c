@@ -83,6 +83,7 @@ typedef struct llb_dp_struct
   pthread_t pkt_thr;
   pthread_t mon_thr;
   int mgmt_ch_fd;
+  int have_mtrace;
   llb_dp_map_t maps[LL_DP_MAX_MAP];
   llb_dp_link_t links[LLB_INTERFACES];
   llb_dp_sect_t psecs[LLB_PSECS];
@@ -753,8 +754,10 @@ llb_xh_init(llb_dp_struct_t *xh)
     assert(0);
   }
 
-  if (llb_setup_kern_mon() != 0) {
-    assert(0);
+  if (xh->have_mtrace) {
+    if (llb_setup_kern_mon() != 0) {
+      assert(0);
+    }
   }
 
   return;
@@ -2107,13 +2110,18 @@ llb_dp_link_attach(const char *ifname,
 }
 
 int
-loxilb_main(void)
+loxilb_main(struct ebpfcfg *cfg)
 {
   libbpf_set_print(libbpf_print_fn);
   llb_set_rlims();
 
   xh = calloc(1, sizeof(*xh));
   assert(xh);
+
+  /* Save any special config parameters */
+  if (cfg) {
+    xh->have_mtrace = cfg->have_mtrace;
+  }
 
   llb_xh_init(xh);
   return 0;

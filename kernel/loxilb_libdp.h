@@ -50,7 +50,11 @@ enum llb_bpf_mnt_type {
 unsigned long long get_os_usecs(void);
 unsigned long long get_os_nsecs(void);
 
-int loxilb_main(void);
+struct ebpfcfg {
+  int have_mtrace;
+};
+
+int loxilb_main(struct ebpfcfg *cfg);
 
 
 #endif
