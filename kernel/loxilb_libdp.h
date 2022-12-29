@@ -48,6 +48,7 @@ enum llb_bpf_mnt_type {
 #include "../common/llb_dp_mdi.h"
 
 unsigned long long get_os_usecs(void);
+unsigned long long get_os_nsecs(void);
 
 int loxilb_main(void);
 

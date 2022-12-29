@@ -30,6 +30,8 @@
 #include <netinet/in.h>
 
 #include "loxilb_libdp.h"
+#include "llb_kern_mon.h"
+#include "loxilb_libdp.skel.h"
 #include "../common/pdi.h"
 #include "../common/common_frame.h"
 
@@ -79,6 +81,7 @@ typedef struct llb_dp_struct
   const char *ll_dp_dfl_sec;
   const char *ll_dp_pdir;
   pthread_t pkt_thr;
+  pthread_t mon_thr;
   int mgmt_ch_fd;
   llb_dp_map_t maps[LL_DP_MAX_MAP];
   llb_dp_link_t links[LLB_INTERFACES];
@@ -183,7 +186,7 @@ llb_setup_pkt_ring(struct bpf_object *bpf_obj __attribute__((unused)))
 
   if (pkt_fd < 0) return -1;
 
-   /* Set up ring buffer polling */
+  /* Set up ring buffer polling */
   pb_opts.sample_cb = llb_handle_pkt_event;
 
   pb = perf_buffer__new(pkt_fd, 8 /* 32KB per CPU */, &pb_opts);
@@ -201,6 +204,176 @@ cleanup:
   return -1;
 }
 
+
+#ifdef HAVE_DP_CT_SYNC
+
+void __attribute__((weak))
+goMapNotiHandler(struct ll_dp_map_notif *mn)
+{
+}
+
+static void
+llb_maptrace_output(void *ctx, int cpu, void *data, __u32 size)
+{
+  struct map_update_data *map_data = (struct map_update_data*)data;
+  struct ll_dp_map_notif noti;
+
+#if 0
+  char out_val;
+  if (map_data->updater == UPDATER_KERNEL) {
+    printf("Map Updated From Kernel:\n");
+  } else if (map_data->updater == UPDATER_USERMODE) {
+    printf("Map Updated From User:\n");
+  } else if (map_data->updater == UPDATER_SYSCALL_GET) {
+    printf("Syscall used to get a map handle:\n");
+  } else if (map_data->updater == UPDATER_SYSCALL_UPDATE) {
+    printf("Syscall used to get a update map using handle:\n");
+  } else if (map_data->updater == DELETE_KERNEL) {
+    printf("Map Deleted From Kernel:\n");
+  }
+  printf("  PID:   %d\n",  map_data->pid);
+  if (map_data->updater == UPDATER_SYSCALL_UPDATE) {
+    printf("  FD:    %d\n",  map_data->map_id);
+  } else {
+    printf("  ID:    %d\n",  map_data->map_id);
+  }
+  if (map_data->name[0] != '\x00')
+    printf("  Name:  %s\n",  map_data->name);
+  if (map_data->key_size > 0) {
+    printf("  Key:   ");
+    for (int i = 0; i < map_data->key_size; i++) {
+      out_val = map_data->key[i];
+      printf("%02x ", out_val);
+    }
+    printf("\n");
+  }
+  if (map_data->value_size > 0 && map_data->updater != DELETE_KERNEL) {
+    printf("  Value: ");
+    for (int i = 0; i < map_data->value_size; i++) {
+      out_val = map_data->value[i];
+      printf("%02x ", out_val);
+    }
+    printf("\n");
+  }
+#endif
+
+  memset(&noti, 0, sizeof(noti));
+  if (map_data->updater == UPDATER_KERNEL) {
+    noti.addop = 1;
+  } else if (map_data->updater == DELETE_KERNEL) {
+    noti.addop = 0;
+  } else return;
+  noti.key = map_data->key;
+  noti.key_len = map_data->key_size;
+
+  noti.val = map_data->value;
+  noti.val_len = map_data->value_size;
+
+  goMapNotiHandler(&noti);
+}
+
+static void
+llb_maptrace_uhook(int tid, int addop,
+                   void *key, int key_sz,
+                   void *val, int val_sz)
+{
+  map_update_data ud;
+
+  if (tid != LL_DP_ACL_MAP) {
+    return;
+  }
+
+  memset(&ud, 0, sizeof(ud));
+  strcpy(ud.name, "acl_map");
+  ud.updater = DELETE_KERNEL;
+  if (key_sz) {
+    memcpy(ud.key, key, key_sz > MAX_KEY_SIZE ? MAX_KEY_SIZE:key_sz); 
+  }
+  ud.key_size = key_sz;
+
+  if (val_sz) {
+    memcpy(ud.value, val, val_sz > MAX_VALUE_SIZE ? MAX_VALUE_SIZE:val_sz); 
+  }
+  ud.value_size = val_sz;
+  llb_maptrace_output(NULL, 0, &ud, sizeof(ud));
+}
+
+static void *
+llb_maptrace_main(void *arg)
+{
+  struct perf_buffer *pb = arg;
+
+  while (1) {
+    perf_buffer__poll(pb, 100 /* timeout, ms */);
+  }
+
+  /* NOT REACHED */
+  return NULL;
+}
+
+static int
+llb_setup_kern_mon(void)
+{
+  struct llb_kern_mon *prog;
+  int err;
+
+  // Open and load eBPF Program
+  prog = llb_kern_mon__open();
+  if (!prog) {
+      printf("Failed to open and load BPF skeleton\n");
+      return 1;
+  }
+  err = llb_kern_mon__load(prog);
+  if (err) {
+      printf("Failed to load and verify BPF skeleton\n");
+      goto cleanup;
+  }
+
+  // Attach the various kProbes
+  err = llb_kern_mon__attach(prog);
+  if (err) {
+      printf("Failed to attach BPF skeleton\n");
+      goto cleanup;
+  }
+
+  // Setup Pef buffer to process events from kernel
+  struct perf_buffer_opts pb_opts = { 0 } ;
+  struct perf_buffer *pb;
+  pb_opts.sample_cb = llb_maptrace_output;
+  pb = perf_buffer__new(bpf_map__fd(prog->maps.map_events), 8, &pb_opts);
+  err = libbpf_get_error(pb);
+  if (err) {
+    printf("failed to setup perf_buffer: %d\n", err);
+    goto cleanup;
+  }
+
+  pthread_create(&xh->mon_thr, NULL, llb_maptrace_main, pb);
+
+  return 0;
+
+cleanup:
+  llb_kern_mon__destroy(prog);
+  return err < 0 ? -err : 0;
+
+}
+
+#else
+
+static void
+llb_maptrace_uhook(int tid, int addop,
+                   void *key, int key_sz,
+                   void *val, int val_sz)
+{
+  return;
+}
+
+static int
+llb_setup_kern_mon(void)
+{
+  return 0;
+}
+#endif
+
 static int 
 llb_objmap2fd(struct bpf_object *bpf_obj,
               const char *mapname)
@@ -208,13 +381,13 @@ llb_objmap2fd(struct bpf_object *bpf_obj,
   struct bpf_map *map;
   int map_fd = -1;
 
-  printf("%s: \n", mapname);
   map = bpf_object__find_map_by_name(bpf_obj, mapname);
   if (!map) {
     goto out;
   }
 
   map_fd = bpf_map__fd(map);
+  printf("%s: %d\n", mapname, map_fd);
 out:
   return map_fd;
 }
@@ -580,6 +753,10 @@ llb_xh_init(llb_dp_struct_t *xh)
     assert(0);
   }
 
+  if (llb_setup_kern_mon() != 0) {
+    assert(0);
+  }
+
   return;
 }
 
@@ -794,6 +971,7 @@ llb_map_loop_and_delete(int tid, dp_map_walker_t cb, dp_map_ita_t *it)
     }
 
     if (cb(tid, it->next_key, it)) {
+      llb_maptrace_uhook(tid, 0, it->next_key, it->key_sz, NULL, 0);
       bpf_map_delete_elem(t->map_fd, it->next_key);
     }
 
@@ -1188,8 +1366,8 @@ get_os_usecs(void)
   return ((unsigned long long)ts.tv_sec * 1000000UL) + ts.tv_nsec/1000;
 }
 
-static uint64_t
-__get_os_nsecs_now(void)
+unsigned long long
+get_os_nsecs(void)
 {
   struct timespec ts;
 
@@ -1223,7 +1401,7 @@ ll_age_fcmap(void)
   dp_map_ita_t it;
   struct dp_fcv4_key next_key;
   struct dp_fc_tacts *fc_val;
-  uint64_t ns = __get_os_nsecs_now();
+  uint64_t ns = get_os_nsecs();
 
   fc_val = calloc(1, sizeof(*fc_val));
   if (!fc_val) return;
@@ -1476,7 +1654,7 @@ ll_age_aclct4map(void)
   struct dp_ct_key next_key;
   struct dp_acl_tact *adat;
   ct_arg_struct_t *as;
-  uint64_t ns = __get_os_nsecs_now();
+  uint64_t ns = get_os_nsecs();
 
   adat = calloc(1, sizeof(*adat));
   if (!adat) return;
@@ -1491,6 +1669,7 @@ ll_age_aclct4map(void)
 
   memset(&it, 0, sizeof(it));
   it.next_key = &next_key;
+  it.key_sz = sizeof(next_key);
   it.val = adat;
   it.uarg = as;
 
@@ -1567,7 +1746,7 @@ ll_map_aclct4_rm_related(uint32_t rid, uint32_t *aids, int naid)
   struct dp_ct_key next_key;
   struct dp_acl_tact *adat;
   ct_arg_struct_t *as;
-  uint64_t ns = __get_os_nsecs_now();
+  uint64_t ns = get_os_nsecs();
 
   adat = calloc(1, sizeof(*adat));
   if (!adat) return;
