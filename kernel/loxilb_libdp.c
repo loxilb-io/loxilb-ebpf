@@ -280,6 +280,10 @@ llb_maptrace_uhook(int tid, int addop,
 {
   map_update_data ud;
 
+  if (!xh->have_mtrace) {
+    return;
+  }
+
   if (tid != LL_DP_ACL_MAP) {
     return;
   }
