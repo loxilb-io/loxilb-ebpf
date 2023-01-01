@@ -95,6 +95,7 @@ create_raw_tcp(void *packet, size_t *plen, struct mkr_args *args)
   pip->id = 0xbeef;
   pip->frag_off = 0x0000;
   pip->protocol = 0x6;
+  pip->ttl = 64;
   pip->saddr = htonl(args->sip[0]);
   pip->daddr = htonl(args->dip[0]);
   calc_ip_csum(pip);
