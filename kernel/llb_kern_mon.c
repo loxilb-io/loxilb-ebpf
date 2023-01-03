@@ -26,7 +26,7 @@ log_map_update(struct pt_regs *ctx, struct bpf_map* updated_map,
   uint32_t map_id = MEM_READ(updated_map->id);
   uint32_t key_size = MEM_READ(updated_map->key_size);
   uint32_t value_size = MEM_READ(updated_map->value_size);
-  char filter[] = { 'a', 'c', 'l', '_', 'm', 'a', 'p', '\0'};
+  char filter[] = { 'c', 't', '_', 'm', 'a', 'p', '\0'};
   int i;
  
   // Read the key and value into byte arrays

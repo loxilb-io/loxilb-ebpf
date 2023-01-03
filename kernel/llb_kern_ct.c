@@ -36,7 +36,7 @@ struct {
 
 #endif
 
-#define ACLCT_KEY_GEN(k, xf)                 \
+#define CT_KEY_GEN(k, xf)                    \
 do {                                         \
   (k)->daddr[0] = xf->l34m.daddr[0];         \
   (k)->daddr[1] = xf->l34m.daddr[1];         \
@@ -71,11 +71,11 @@ static int __always_inline
 dp_run_ct_helper(struct xfi *xf)
 {
   struct dp_ct_key key;
-  struct dp_acl_tact *act;
+  struct dp_ct_tact *act;
 
-  ACLCT_KEY_GEN(&key, xf);
+  CT_KEY_GEN(&key, xf);
 
-  act = bpf_map_lookup_elem(&acl_map, &key);
+  act = bpf_map_lookup_elem(&ct_map, &key);
   if (!act) {
     LL_DBG_PRINTK("[FCH4] miss");
     return -1;
@@ -271,8 +271,8 @@ dp_ct3_sm(struct dp_ct_dat *tdat,
 
 static int __always_inline
 dp_ct_tcp_sm(void *ctx, struct xfi *xf, 
-             struct dp_acl_tact *atdat,
-             struct dp_acl_tact *axtdat,
+             struct dp_ct_tact *atdat,
+             struct dp_ct_tact *axtdat,
              ct_dir_t dir)
 {
   struct dp_ct_dat *tdat = &atdat->ctd;
@@ -506,8 +506,8 @@ end:
 
 static int __always_inline
 dp_ct_udp_sm(void *ctx, struct xfi *xf,
-             struct dp_acl_tact *atdat,
-             struct dp_acl_tact *axtdat,
+             struct dp_ct_tact *atdat,
+             struct dp_ct_tact *axtdat,
              ct_dir_t dir)
 {
   struct dp_ct_dat *tdat = &atdat->ctd;
@@ -570,8 +570,8 @@ dp_ct_udp_sm(void *ctx, struct xfi *xf,
 
 static int __always_inline
 dp_ct_icmp6_sm(void *ctx, struct xfi *xf,
-               struct dp_acl_tact *atdat,
-               struct dp_acl_tact *axtdat,
+               struct dp_ct_tact *atdat,
+               struct dp_ct_tact *axtdat,
                ct_dir_t dir)
 {
   struct dp_ct_dat *tdat = &atdat->ctd;
@@ -667,8 +667,8 @@ end:
 
 static int __always_inline
 dp_ct_icmp_sm(void *ctx, struct xfi *xf, 
-              struct dp_acl_tact *atdat,
-              struct dp_acl_tact *axtdat,
+              struct dp_ct_tact *atdat,
+              struct dp_ct_tact *axtdat,
               ct_dir_t dir)
 {
   struct dp_ct_dat *tdat = &atdat->ctd;
@@ -768,8 +768,8 @@ end:
 
 static int __always_inline
 dp_ct_sctp_sm(void *ctx, struct xfi *xf, 
-              struct dp_acl_tact *atdat,
-              struct dp_acl_tact *axtdat,
+              struct dp_ct_tact *atdat,
+              struct dp_ct_tact *axtdat,
               ct_dir_t dir)
 {
   struct dp_ct_dat *tdat = &atdat->ctd;
@@ -951,8 +951,8 @@ end:
 
 static int __always_inline
 dp_ct_sm(void *ctx, struct xfi *xf,
-         struct dp_acl_tact *atdat,
-         struct dp_acl_tact *axtdat,
+         struct dp_ct_tact *atdat,
+         struct dp_ct_tact *axtdat,
          ct_dir_t dir)
 {
   int sm_ret = 0;
@@ -991,7 +991,7 @@ dp_ct_sm(void *ctx, struct xfi *xf,
 struct {
         __uint(type,        BPF_MAP_TYPE_PERCPU_ARRAY);
         __type(key,         int);
-        __type(value,       struct dp_acl_tact);
+        __type(value,       struct dp_ct_tact);
         __uint(max_entries, 2);
 } xctk SEC(".maps");
 
@@ -1000,10 +1000,10 @@ dp_ct_in(void *ctx, struct xfi *xf)
 {
   struct dp_ct_key key;
   struct dp_ct_key xkey;
-  struct dp_acl_tact *adat;
-  struct dp_acl_tact *axdat;
-  struct dp_acl_tact *atdat;
-  struct dp_acl_tact *axtdat;
+  struct dp_ct_tact *adat;
+  struct dp_ct_tact *axdat;
+  struct dp_ct_tact *atdat;
+  struct dp_ct_tact *axtdat;
   nxfrm_inf_t *xi;
   nxfrm_inf_t *xxi;
   ct_dir_t cdir = CT_DIR_IN;
@@ -1064,8 +1064,8 @@ dp_ct_in(void *ctx, struct xfi *xf)
 
   dp_ct_proto_xfk_init(&key, xi, &xkey, xxi);
 
-  atdat = bpf_map_lookup_elem(&acl_map, &key);
-  axtdat = bpf_map_lookup_elem(&acl_map, &xkey);
+  atdat = bpf_map_lookup_elem(&ct_map, &key);
+  axtdat = bpf_map_lookup_elem(&ct_map, &xkey);
   if (atdat == NULL || axtdat == NULL) {
 
     LL_DBG_PRINTK("[CTRK] new-ct4");
@@ -1124,11 +1124,11 @@ dp_ct_in(void *ctx, struct xfi *xf)
     axdat->ctd.rid = adat->ctd.rid;
     axdat->ctd.aid = adat->ctd.aid;
 
-    bpf_map_update_elem(&acl_map, &xkey, axdat, BPF_ANY);
-    bpf_map_update_elem(&acl_map, &key, adat, BPF_ANY);
+    bpf_map_update_elem(&ct_map, &xkey, axdat, BPF_ANY);
+    bpf_map_update_elem(&ct_map, &key, adat, BPF_ANY);
 
-    atdat = bpf_map_lookup_elem(&acl_map, &key);
-    axtdat = bpf_map_lookup_elem(&acl_map, &xkey);
+    atdat = bpf_map_lookup_elem(&ct_map, &key);
+    axtdat = bpf_map_lookup_elem(&ct_map, &xkey);
   }
 
   if (atdat != NULL && axtdat != NULL) {
@@ -1153,8 +1153,8 @@ dp_ct_in(void *ctx, struct xfi *xf)
         axtdat->ca.act_type = DP_SET_NOP;
       }
     } else if (smr == CT_SMR_ERR || smr == CT_SMR_CTD) {
-      bpf_map_delete_elem(&acl_map, &xkey);
-      bpf_map_delete_elem(&acl_map, &key);
+      bpf_map_delete_elem(&ct_map, &xkey);
+      bpf_map_delete_elem(&ct_map, &key);
     }
   }
 

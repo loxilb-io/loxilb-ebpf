@@ -284,12 +284,12 @@ llb_maptrace_uhook(int tid, int addop,
     return;
   }
 
-  if (tid != LL_DP_ACL_MAP) {
+  if (tid != LL_DP_CT_MAP) {
     return;
   }
 
   memset(&ud, 0, sizeof(ud));
-  strcpy(ud.name, "acl_map");
+  strcpy(ud.name, "ct_map");
   ud.updater = DELETE_KERNEL;
   if (key_sz) {
     memcpy(ud.key, key, key_sz > MAX_KEY_SIZE ? MAX_KEY_SIZE:key_sz); 
@@ -615,16 +615,16 @@ llb_xh_init(llb_dp_struct_t *xh)
   xh->maps[LL_DP_TMAC_STATS_MAP].pbs = calloc(LLB_TMAC_MAP_ENTRIES,
                                             sizeof(struct dp_pbc_stats));
 
-  xh->maps[LL_DP_ACL_MAP].map_name = "acl_map";
-  xh->maps[LL_DP_ACL_MAP].has_pb   = 0;
-  xh->maps[LL_DP_ACL_MAP].max_entries = LLB_ACL_MAP_ENTRIES;
+  xh->maps[LL_DP_CT_MAP].map_name = "ct_map";
+  xh->maps[LL_DP_CT_MAP].has_pb   = 0;
+  xh->maps[LL_DP_CT_MAP].max_entries = LLB_CT_MAP_ENTRIES;
 
-  xh->maps[LL_DP_ACL_STATS_MAP].map_name = "acl_stats_map";
-  xh->maps[LL_DP_ACL_STATS_MAP].has_pb   = 1;
-  xh->maps[LL_DP_ACL_STATS_MAP].max_entries = LLB_ACL_MAP_ENTRIES;
-  xh->maps[LL_DP_ACL_STATS_MAP].pbs = calloc(LLB_ACL_MAP_ENTRIES,
+  xh->maps[LL_DP_CT_STATS_MAP].map_name = "ct_stats_map";
+  xh->maps[LL_DP_CT_STATS_MAP].has_pb   = 1;
+  xh->maps[LL_DP_CT_STATS_MAP].max_entries = LLB_CT_MAP_ENTRIES;
+  xh->maps[LL_DP_CT_STATS_MAP].pbs = calloc(LLB_CT_MAP_ENTRIES,
                                             sizeof(struct dp_pbc_stats));
-  assert(xh->maps[LL_DP_ACL_STATS_MAP].pbs);
+  assert(xh->maps[LL_DP_CT_STATS_MAP].pbs);
 
   xh->maps[LL_DP_RTV4_MAP].map_name = "rt_v4_map";
   xh->maps[LL_DP_RTV4_MAP].has_pb   = 1;
@@ -698,10 +698,6 @@ llb_xh_init(llb_dp_struct_t *xh)
   xh->maps[LL_DP_FCV4_MAP].map_name = "fc_v4_map";
   xh->maps[LL_DP_FCV4_MAP].has_pb   = 0;
   xh->maps[LL_DP_FCV4_MAP].max_entries = LLB_FCV4_MAP_ENTRIES;
-
-  xh->maps[LL_DP_CT_MAP].map_name = "ct_map";
-  xh->maps[LL_DP_CT_MAP].has_pb   = 0;
-  xh->maps[LL_DP_CT_MAP].max_entries = LLB_CT_MAP_ENTRIES;
 
   xh->maps[LL_DP_NAT_MAP].map_name = "nat_map";
   xh->maps[LL_DP_NAT_MAP].has_pb   = 1;
@@ -1030,10 +1026,10 @@ llb_map2fd(int t)
   return xh->maps[t].map_fd;
 }
 
-static void ll_map_aclct4_rm_related(uint32_t rid, uint32_t *aids, int naid);
+static void ll_map_ct_rm_related(uint32_t rid, uint32_t *aids, int naid);
 
 static int
-llb_add_map_elem_nat4_post_proc(void *k, void *v)
+llb_add_map_elem_nat_post_proc(void *k, void *v)
 {
   struct dp_nat_tacts *na = v;
   struct mf_xfrm_inf *ep_arm;
@@ -1052,7 +1048,7 @@ llb_add_map_elem_nat4_post_proc(void *k, void *v)
   }
 
   if (j > 0) {
-    ll_map_aclct4_rm_related(na->ca.cidx, inact_aids, j);
+    ll_map_ct_rm_related(na->ca.cidx, inact_aids, j);
   }
 
   return 0;
@@ -1219,7 +1215,7 @@ llb_add_map_elem(int tbl, void *k, void *v)
   } else {
     /* Need some post-processing for certain maps */
     if (tbl == LL_DP_NAT_MAP) {
-      llb_add_map_elem_nat4_post_proc(k, v);
+      llb_add_map_elem_nat_post_proc(k, v);
     }
   }
   XH_UNLOCK();
@@ -1237,16 +1233,13 @@ ll_map_elem_cmp_cidx(int tid, void *k, void *ita)
 
   cidx = *(uint32_t *)it->uarg;
 
-  if (tid == LL_DP_CT_MAP) {
-    struct dp_ct_dat *dat = it->val;
-    if (dat->rid == cidx) return 1;
-
-  } else if (tid == LL_DP_ACL_MAP || 
-             tid == LL_DP_TMAC_MAP ||
-             tid == LL_DP_RTV4_MAP) {
+  if (tid == LL_DP_CT_MAP || 
+      tid == LL_DP_TMAC_MAP ||
+      tid == LL_DP_RTV4_MAP) {
     struct dp_cmn_act *ca = it->val;
     if (ca->cidx == cidx) return 1;
   }
+
   return 0;
 }
 
@@ -1354,9 +1347,8 @@ llb_del_map_elem(int tbl, void *k)
   /* Need some post-processing for certain maps */
   if (tbl == LL_DP_NAT_MAP) {
     if (cidx > 0) {
-      /*llb_del_map_elem_with_cidx(LL_DP_CT_MAP, cidx);*/
-      llb_del_map_elem_with_cidx(LL_DP_ACL_MAP, cidx);
-      llb_clear_map_stats(LL_DP_ACL_STATS_MAP, cidx);
+      llb_del_map_elem_with_cidx(LL_DP_CT_MAP, cidx);
+      llb_clear_map_stats(LL_DP_CT_STATS_MAP, cidx);
     }
   }
 
@@ -1494,7 +1486,7 @@ ctm_proto_xfk_init(struct dp_ct_key *key,
 }
 
 static void
-ll_send_ctep_reset(struct dp_ct_key *ep, struct dp_acl_tact *adat)
+ll_send_ctep_reset(struct dp_ct_key *ep, struct dp_ct_tact *adat)
 {
   struct mkr_args r;
   ct_tcp_pinf_t *ts = &adat->ctd.pi.t;
@@ -1527,14 +1519,14 @@ ll_send_ctep_reset(struct dp_ct_key *ep, struct dp_acl_tact *adat)
 }
 
 static int
-ll_aclct4_map_ent_has_aged(int tid, void *k, void *ita)
+ll_ct_map_ent_has_aged(int tid, void *k, void *ita)
 {
   dp_map_ita_t *it = ita;
   struct dp_ct_key *key = k;
   struct dp_ct_key xkey;
   struct dp_ct_dat *dat;
-  struct dp_acl_tact *adat;
-  struct dp_acl_tact axdat;
+  struct dp_ct_tact *adat;
+  struct dp_ct_tact axdat;
   ct_arg_struct_t *as;
   uint64_t curr_ns;
   uint64_t latest_ns;
@@ -1568,13 +1560,13 @@ ll_aclct4_map_ent_has_aged(int tid, void *k, void *ita)
 
   ctm_proto_xfk_init(key, &adat->ctd.xi, &xkey);
 
-  t = &xh->maps[LL_DP_ACL_MAP];
+  t = &xh->maps[LL_DP_CT_MAP];
   if (bpf_map_lookup_elem(t->map_fd, &xkey, &axdat) != 0) {
     printf("rdir ct4 not found %s:%d -> %s:%d (%d)\n",
          dstr, ntohs(xkey.sport),
          sstr, ntohs(xkey.dport),  
          xkey.l4proto); 
-    llb_clear_map_stats(LL_DP_ACL_STATS_MAP, adat->ca.cidx);
+    llb_clear_map_stats(LL_DP_CT_STATS_MAP, adat->ca.cidx);
     return 1;
   }
 
@@ -1637,8 +1629,8 @@ ll_aclct4_map_ent_has_aged(int tid, void *k, void *ita)
   }
 
   /* CT is allocated both for current and reverse direction */
-  llb_fetch_map_stats_used(LL_DP_ACL_STATS_MAP, adat->ca.cidx, 1, &used1);
-  llb_fetch_map_stats_used(LL_DP_ACL_STATS_MAP, adat->ca.cidx+1, 1, &used2);
+  llb_fetch_map_stats_used(LL_DP_CT_STATS_MAP, adat->ca.cidx, 1, &used1);
+  llb_fetch_map_stats_used(LL_DP_CT_STATS_MAP, adat->ca.cidx+1, 1, &used2);
 
   if (curr_ns - latest_ns > to && !used1 && !used2) {
     printf("##%s:%d -> %s:%d (%d):%u (Aged:%d:%d:%d)\n",
@@ -1647,7 +1639,7 @@ ll_aclct4_map_ent_has_aged(int tid, void *k, void *ita)
          key->l4proto, dat->rid, est, has_nat, used1 || used2);
     ll_send_ctep_reset(key, adat);
     ll_send_ctep_reset(&xkey, &axdat);
-    llb_clear_map_stats(LL_DP_ACL_STATS_MAP, adat->ca.cidx);
+    llb_clear_map_stats(LL_DP_CT_STATS_MAP, adat->ca.cidx);
     return 1;
   }
 
@@ -1655,11 +1647,11 @@ ll_aclct4_map_ent_has_aged(int tid, void *k, void *ita)
 }
 
 static void
-ll_age_aclct4map(void)
+ll_age_ctmap(void)
 {
   dp_map_ita_t it;
   struct dp_ct_key next_key;
-  struct dp_acl_tact *adat;
+  struct dp_ct_tact *adat;
   ct_arg_struct_t *as;
   uint64_t ns = get_os_nsecs();
 
@@ -1680,7 +1672,7 @@ ll_age_aclct4map(void)
   it.val = adat;
   it.uarg = as;
 
-  llb_map_loop_and_delete(LL_DP_ACL_MAP, ll_aclct4_map_ent_has_aged, &it);
+  llb_map_loop_and_delete(LL_DP_CT_MAP, ll_ct_map_ent_has_aged, &it);
   if (adat) free(adat);
   if (as) free(as);
 }
@@ -1693,7 +1685,7 @@ llb_age_map_entries(int tbl)
     ll_age_fcmap();
     break;
   case LL_DP_CT_MAP:
-    ll_age_aclct4map();
+    ll_age_ctmap();
     break;
   default:
     break;
@@ -1703,12 +1695,12 @@ llb_age_map_entries(int tbl)
 }
 
 static int
-ll_aclct_map_ent_rm_related(int tid, void *k, void *ita)
+ll_ct_map_ent_rm_related(int tid, void *k, void *ita)
 {
   int i = 0;
   struct dp_ct_key *key = k;
   dp_map_ita_t *it = ita;
-  struct dp_acl_tact *adat;
+  struct dp_ct_tact *adat;
   ct_arg_struct_t *as;
   char dstr[INET6_ADDRSTRLEN];
   char sstr[INET6_ADDRSTRLEN];
@@ -1736,7 +1728,7 @@ ll_aclct_map_ent_rm_related(int tid, void *k, void *ita)
          dstr, ntohs(key->dport),
          key->l4proto);
 
-      llb_clear_map_stats(LL_DP_ACL_STATS_MAP, adat->ca.cidx);
+      llb_clear_map_stats(LL_DP_CT_STATS_MAP, adat->ca.cidx);
 
       return 1;
     }
@@ -1746,12 +1738,12 @@ ll_aclct_map_ent_rm_related(int tid, void *k, void *ita)
 }
 
 static void
-ll_map_aclct4_rm_related(uint32_t rid, uint32_t *aids, int naid)
+ll_map_ct_rm_related(uint32_t rid, uint32_t *aids, int naid)
 {
   dp_map_ita_t it;
   int i = 0;
   struct dp_ct_key next_key;
-  struct dp_acl_tact *adat;
+  struct dp_ct_tact *adat;
   ct_arg_struct_t *as;
   uint64_t ns = get_os_nsecs();
 
@@ -1777,7 +1769,7 @@ ll_map_aclct4_rm_related(uint32_t rid, uint32_t *aids, int naid)
   }
   as->n_aids = naid;
 
-  llb_map_loop_and_delete(LL_DP_ACL_MAP, ll_aclct_map_ent_rm_related, &it);
+  llb_map_loop_and_delete(LL_DP_CT_MAP, ll_ct_map_ent_rm_related, &it);
   if (adat) free(adat);
   if (as) free(as);
 }

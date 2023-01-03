@@ -17,7 +17,7 @@
 #define LLB_NH_MAP_ENTRIES    (4*1024)
 #define LLB_RTV4_MAP_ENTRIES  (32*1024)
 #define LLB_RTV4_PREF_LEN     (48)
-#define LLB_ACL_MAP_ENTRIES   (256*1024)
+#define LLB_CT_MAP_ENTRIES    (256*1024)
 #define LLB_ACLV6_MAP_ENTRIES (4*1024)
 #define LLB_RTV6_MAP_ENTRIES  (2*1024)
 #define LLB_TMAC_MAP_ENTRIES  (2*1024)
@@ -31,7 +31,6 @@
 #define LLB_PORT_PIDX_START   (LLB_PORT_NO - 128)
 #define LLB_INTF_MAP_ENTRIES  (6*1024)
 #define LLB_FCV4_MAP_ENTRIES  (256*1024)
-#define LLB_CT_MAP_ENTRIES    (LLB_FCV4_MAP_ENTRIES)
 #define LLB_PGM_MAP_ENTRIES   (8)
 #define LLB_FCV4_MAP_ACTS     (DP_SET_TOCP)
 #define LLB_POL_MAP_ENTRIES   (8*1024)
@@ -92,7 +91,7 @@ enum llb_dp_tid {
   LL_DP_BD_STATS_MAP,
   LL_DP_SMAC_MAP,
   LL_DP_TMAC_MAP,
-  LL_DP_ACL_MAP,
+  LL_DP_CT_MAP,
   LL_DP_RTV4_MAP,
   LL_DP_RTV6_MAP,
   LL_DP_NH_MAP,
@@ -104,13 +103,12 @@ enum llb_dp_tid {
   LL_DP_PKT_PERF_RING,
   LL_DP_RTV4_STATS_MAP,
   LL_DP_RTV6_STATS_MAP,
-  LL_DP_ACL_STATS_MAP,
+  LL_DP_CT_STATS_MAP,
   LL_DP_TMAC_STATS_MAP,
   LL_DP_FCV4_MAP,
   LL_DP_FCV4_STATS_MAP,
   LL_DP_PGM_MAP,
   LL_DP_POL_MAP,
-  LL_DP_CT_MAP,
   LL_DP_NAT_MAP,
   LL_DP_NAT_STATS_MAP,
   LL_DP_SESS4_MAP,
@@ -605,7 +603,7 @@ struct dp_ct_dat {
   dp_pb_stats_t pb;
 };
 
-struct dp_acl_tact {
+struct dp_ct_tact {
   struct dp_cmn_act ca; /* Possible actions :
                          *  DP_SET_DROP
                          *  DP_SET_TOCP
@@ -626,26 +624,26 @@ struct dp_acl_tact {
   };
 };
 
-struct dp_acl_tact_set {
+struct dp_ct_tact_set {
   uint16_t wp;
   uint16_t fc;
   uint32_t tc;
-  struct dp_acl_tact tact;
+  struct dp_ct_tact tact;
 };
 
-#define ACL_V4_MAX_ACT_SET     16 
+#define CT_MAX_ACT_SET         16 
 
 #define DP_SET_LB_NONE         0
 #define DP_SET_LB_WPRIO        1
 #define DP_SET_LB_RR           2
 
-struct dp_acl_tacts {
+struct dp_ct_tacts {
   uint16_t num_acts;
   uint16_t lb_type;
   uint32_t rdata;
-  struct dp_acl_tact_set act_set[ACL_V4_MAX_ACT_SET];
+  struct dp_ct_tact_set act_set[CT_MAX_ACT_SET];
 };
-typedef struct dp_acl_tacts dp_acl_tacts_t;
+typedef struct dp_ct_tacts dp_ct_tacts_t;
 
 struct dp_ct_key {
   __u32 daddr[4];

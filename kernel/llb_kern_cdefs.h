@@ -164,18 +164,18 @@ struct bpf_map_def SEC("maps") nh_map = {
   .max_entries = LLB_NH_MAP_ENTRIES
 };
 
-struct bpf_map_def SEC("maps") acl_map = {
+struct bpf_map_def SEC("maps") ct_map = {
   .type = BPF_MAP_TYPE_HASH,
   .key_size = sizeof(struct dp_ct_key),
-  .value_size = sizeof(struct dp_acl_tact),
-  .max_entries = LLB_ACL_MAP_ENTRIES
+  .value_size = sizeof(struct dp_ct_tact),
+  .max_entries = LLB_CT_MAP_ENTRIES
 };
 
-struct bpf_map_def SEC("maps") acl_stats_map = {
+struct bpf_map_def SEC("maps") ct_stats_map = {
   .type = BPF_MAP_TYPE_PERCPU_ARRAY,
   .key_size = sizeof(__u32),  /* Counter Index */
   .value_size = sizeof(struct dp_pb_stats),
-  .max_entries = LLB_ACL_MAP_ENTRIES
+  .max_entries = LLB_CT_MAP_ENTRIES
 };
 
 struct bpf_map_def SEC("maps") nat_map = {
@@ -227,14 +227,6 @@ struct bpf_map_def SEC("maps") mirr_map = {
   .key_size = sizeof(__u32),
   .value_size = sizeof(struct dp_mirr_tact),
   .max_entries = LLB_MIRR_MAP_ENTRIES
-};
-
-struct bpf_map_def SEC("maps") ct_map = {
-  .type = BPF_MAP_TYPE_HASH,
-  .key_size = sizeof(struct dp_ct_key),
-  .value_size = sizeof(struct dp_ct_dat),
-  .map_flags = BPF_F_NO_PREALLOC,
-  .max_entries = LLB_CT_MAP_ENTRIES
 };
 
 struct bpf_map_def SEC("maps") sess_v4_map = {
@@ -430,16 +422,16 @@ struct {
 struct {
         __uint(type,        BPF_MAP_TYPE_HASH);
         __type(key,         struct dp_ct_key);
-        __type(value,       struct dp_acl_tact);
-        __uint(max_entries, LLB_ACL_MAP_ENTRIES);
-} acl_map SEC(".maps");
+        __type(value,       struct dp_ct_tact);
+        __uint(max_entries, LLB_CT_MAP_ENTRIES);
+} ct_map SEC(".maps");
 
 struct {
         __uint(type,        BPF_MAP_TYPE_PERCPU_ARRAY);
         __type(key,         __u32);
         __type(value,       struct dp_pb_stats);
-        __uint(max_entries, LLB_ACL_MAP_ENTRIES);
-} acl_stats_map SEC(".maps");
+        __uint(max_entries, LLB_CT_MAP_ENTRIES);
+} ct_stats_map SEC(".maps");
 
 struct {
         __uint(type,        BPF_MAP_TYPE_HASH);
@@ -500,13 +492,6 @@ struct {
         __type(value,       struct dp_mirr_tact);
         __uint(max_entries, LLB_MIRR_MAP_ENTRIES);
 } mirr_map SEC(".maps");
-
-struct {
-        __uint(type,        BPF_MAP_TYPE_HASH);
-        __type(key,         struct dp_ct_key);
-        __type(value,       struct dp_ct_dat);
-        __uint(max_entries, LLB_FCV4_MAP_ENTRIES);
-} ct_map SEC(".maps");
 
 struct {
         __uint(type,        BPF_MAP_TYPE_HASH);
@@ -598,8 +583,8 @@ dp_do_map_stats(struct xdp_md *ctx,
   case LL_DP_RTV6_STATS_MAP:
     map = &rt_v6_stats_map;
     break;
-  case LL_DP_ACL_STATS_MAP:
-    map = &acl_stats_map;
+  case LL_DP_CT_STATS_MAP:
+    map = &ct_stats_map;
     break;
   case LL_DP_INTF_STATS_MAP:
     map = &intf_stats_map;

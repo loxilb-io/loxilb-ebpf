@@ -226,8 +226,8 @@ dp_pipe_set_nat(void *ctx, struct xfi *xf,
 }
 
 static int __always_inline
-dp_do_aclops(void *ctx, struct xfi *xf, void *fa_, 
-             struct dp_acl_tact *act)
+dp_do_ctops(void *ctx, struct xfi *xf, void *fa_, 
+             struct dp_ct_tact *act)
 {
 #ifdef HAVE_DP_FC
   struct dp_fc_tacts *fa = fa_;
@@ -315,7 +315,7 @@ dp_do_aclops(void *ctx, struct xfi *xf, void *fa_,
   if (act->ca.fwrid != 0) {
     dp_do_map_stats(ctx, xf, LL_DP_FW4_STATS_MAP, act->ca.fwrid);
   }
-  dp_do_map_stats(ctx, xf, LL_DP_ACL_STATS_MAP, act->ca.cidx);
+  dp_do_map_stats(ctx, xf, LL_DP_CT_STATS_MAP, act->ca.cidx);
 #if 0
   /* Note that this might result in consistency problems 
    * between packet and byte counts at times but this should be 
@@ -332,12 +332,12 @@ ct_trk:
 }
 
 static int __always_inline
-dp_do_ing_acl(void *ctx, struct xfi *xf, void *fa_)
+dp_do_ing_ct(void *ctx, struct xfi *xf, void *fa_)
 {
   struct dp_ct_key key;
-  struct dp_acl_tact *act;
+  struct dp_ct_tact *act;
 
-  ACLCT_KEY_GEN(&key, xf);
+  CT_KEY_GEN(&key, xf);
 
   LL_DBG_PRINTK("[ACL] -- Lookup\n");
   LL_DBG_PRINTK("[ACL] daddr %x\n", key.daddr[0]);
@@ -346,13 +346,13 @@ dp_do_ing_acl(void *ctx, struct xfi *xf, void *fa_)
   LL_DBG_PRINTK("[ACL] dport %d\n", key.dport);
   LL_DBG_PRINTK("[ACL] l4proto %d\n", key.l4proto);
 
-  xf->pm.table_id = LL_DP_ACL_MAP;
-  act = bpf_map_lookup_elem(&acl_map, &key);
+  xf->pm.table_id = LL_DP_CT_MAP;
+  act = bpf_map_lookup_elem(&ct_map, &key);
   if (!act) {
     LL_DBG_PRINTK("[ACL] miss");
   }
 
-  return dp_do_aclops(ctx, xf, fa_, act);
+  return dp_do_ctops(ctx, xf, fa_, act);
 }
 
 static void __always_inline
@@ -419,7 +419,7 @@ dp_ing_l3(void *ctx,  struct xfi *xf, void *fa)
     }
   }
 
-  dp_do_ing_acl(ctx, xf, fa);
+  dp_do_ing_ct(ctx, xf, fa);
   dp_l3_fwd(ctx, xf, fa);
 
   return 0;
