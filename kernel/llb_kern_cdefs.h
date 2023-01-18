@@ -1479,7 +1479,7 @@ dp_do_dnat64(void *md, struct xfi *xf)
   struct ethhdr *eth;
   struct tcphdr *tcp;
   struct udphdr *udp;
-  struct vlan_hdr *vlh;
+  struct vlanhdr *vlh;
   __be32 sum;
   void *dend;
 
@@ -1576,7 +1576,7 @@ dp_do_snat46(void *md, struct xfi *xf)
   struct ethhdr *eth;
   struct tcphdr *tcp;
   struct udphdr *udp;
-  struct vlan_hdr *vlh;
+  struct vlanhdr *vlh;
   __be32 sum;
   void *dend;
 
@@ -1767,16 +1767,16 @@ dp_remove_vlan_tag(void *ctx, struct xfi *xf)
   void *start = DP_TC_PTR(DP_PDATA(ctx));
   void *dend = DP_TC_PTR(DP_PDATA_END(ctx));
   struct ethhdr *eth;
-  struct vlan_hdr *vlh;
+  struct vlanhdr *vlh;
 
   if (start + (sizeof(*eth) + sizeof(*vlh)) > dend) {
     return -1;
   }
-  eth = DP_ADD_PTR(DP_PDATA(ctx), (int)sizeof(struct vlan_hdr));
+  eth = DP_ADD_PTR(DP_PDATA(ctx), (int)sizeof(struct vlanhdr));
   memcpy(eth->h_dest, xf->l2m.dl_dst, 6);
   memcpy(eth->h_source, xf->l2m.dl_src, 6);
   eth->h_proto = xf->l2m.dl_type;
-  if (dp_remove_l2(ctx, (int)sizeof(struct vlan_hdr))) {
+  if (dp_remove_l2(ctx, (int)sizeof(struct vlanhdr))) {
     return -1;
   }
   return 0;
@@ -1786,10 +1786,10 @@ static int __always_inline
 dp_insert_vlan_tag(void *ctx, struct xfi *xf, __be16 vlan)
 {
   struct ethhdr *neth;
-  struct vlan_hdr *vlh;
+  struct vlanhdr *vlh;
   void *dend = DP_TC_PTR(DP_PDATA_END(ctx));
 
-  if (dp_add_l2(ctx, (int)sizeof(struct vlan_hdr))) {
+  if (dp_add_l2(ctx, (int)sizeof(struct vlanhdr))) {
     return -1;
   }
 
@@ -1823,7 +1823,7 @@ static int __always_inline
 dp_swap_vlan_tag(void *ctx, struct xfi *xf, __be16 vlan)
 {
   struct ethhdr *eth;
-  struct vlan_hdr *vlh;
+  struct vlanhdr *vlh;
   void *start = DP_TC_PTR(DP_PDATA(ctx));
   void *dend = DP_TC_PTR(DP_PDATA_END(ctx));
 
@@ -1993,7 +1993,7 @@ static int __always_inline
 dp_do_strip_vxlan(void *md, struct xfi *xf, int olen)
 {
   struct ethhdr *eth;
-  struct vlan_hdr *vlh;
+  struct vlanhdr *vlh;
   void *dend;
 
   if (dp_buf_delete_room(md, olen, BPF_F_ADJ_ROOM_FIXED_GSO)  < 0) {
@@ -2049,7 +2049,7 @@ dp_do_ins_vxlan(void *md,
   struct ethhdr *ieth;
   struct iphdr *iph;
   struct udphdr *udp;
-  struct vxlan_hdr *vx; 
+  struct vxlanhdr *vx;
   int olen, l2_len;
   __u64 flags;
 
@@ -2122,8 +2122,8 @@ dp_do_ins_vxlan(void *md,
   }
 
   /* Outer UDP header */
-  udp->source = xf->l34m.source + VXLAN_UDP_SPORT;
-  udp->dest   = bpf_htons(VXLAN_UDP_DPORT);
+  udp->source = xf->l34m.source + VXLAN_OUDP_SPORT;
+  udp->dest   = bpf_htons(VXLAN_OUDP_DPORT);
   udp->check  = 0;
   udp->len    = bpf_htons(xf->pm.l3_len +  olen - sizeof(*iph));
 

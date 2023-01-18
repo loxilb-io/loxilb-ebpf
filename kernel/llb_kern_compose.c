@@ -11,7 +11,7 @@ dp_parse_inner_packet(void *md,
                       int  skip_l2,
                       struct xfi *xf)
 {
-  struct vlan_hdr *ivlh;
+  struct vlanhdr *ivlh;
   struct ethhdr *ieth;
   void *dend = DP_TC_PTR(DP_PDATA_END(md)); 
 
@@ -55,7 +55,7 @@ dp_parse_inner_packet(void *md,
 
 proc_inl3:
   if (xf->il2m.dl_type == bpf_htons(ETH_P_ARP)) {
-    struct arp_ethheader *arp = DP_TC_PTR(ivlh);
+    struct arp_ethhdr *arp = DP_TC_PTR(ivlh);
 
     if (arp + 1 > dend) {
       LLBS_PPLN_DROP(xf);
@@ -294,7 +294,7 @@ dp_parse_gtp(void *md,
 
     /* PDU session container is always first */
     if (geh->next_hdr == GTP_NH_PDU_SESS) {
-      struct gtp_pdu_sess_cmn_hdr *pch = DP_TC_PTR(nh);
+      struct gtp_pdu_sess_cmnhdr *pch = DP_TC_PTR(nh);
 
       if (pch + 1 > dend) {
         goto drop;
@@ -399,13 +399,13 @@ dp_parse_outer_udp(void *md,
                    void *udp_next,
                    struct xfi *xf)
 {
-  struct vxlan_hdr *vx;
+  struct vxlanhdr *vx;
   struct gtp_v1_hdr *gh; 
   void *dend = DP_TC_PTR(DP_PDATA_END(md)); 
   void *vx_next;
 
   switch (xf->l34m.dest) {
-  case bpf_htons(VXLAN_UDP_DPORT) :
+  case bpf_htons(VXLAN_OUDP_DPORT) :
     vx = DP_TC_PTR(udp_next);
     if (vx + 1 > dend) {
       LLBS_PPLN_DROP(xf);
@@ -450,7 +450,7 @@ dp_parse_packet(void *md,
   __u32 fm_data_end;
   __u16 h_proto;
   struct ethhdr *eth;
-  struct vlan_hdr *vlh;
+  struct vlanhdr *vlh;
   void *dend;
 
   fm_data = DP_PDATA(md);
@@ -513,7 +513,7 @@ dp_parse_packet(void *md,
 
   xf->l2m.dl_type = h_proto;
   if (xf->l2m.dl_type == bpf_htons(ETH_P_ARP)) {
-    struct arp_ethheader *arp = DP_TC_PTR(vlh);
+    struct arp_ethhdr *arp = DP_TC_PTR(vlh);
 
     if (arp + 1 > dend) {
       LLBS_PPLN_DROP(xf);
@@ -528,19 +528,6 @@ dp_parse_packet(void *md,
     xf->l34m.nw_proto = bpf_ntohs(arp->ar_op) & 0xff;
     LLBS_PPLN_TRAPC(xf, LLB_PIPE_RC_PARSER);
     return 1;
-  } else if (xf->l2m.dl_type == bpf_htons(ETH_P_MPLS_UC) ||
-             xf->l2m.dl_type == bpf_htons(ETH_P_MPLS_MC)) {
-    struct mpls_header *mpls = DP_TC_PTR(vlh);
-
-    if (mpls + 1 > dend) {
-      LLBS_PPLN_DROP(xf);
-      return -1;
-    }
-
-    xf->l2m.mpls_label = bpf_htonl(MPLS_HDR_GET_LABEL(mpls->mpls_tag));
-    xf->l2m.mpls_tc = MPLS_HDR_GET_TC(mpls->mpls_tag);
-    xf->l2m.mpls_tc = MPLS_HDR_GET_BOS(mpls->mpls_tag);
-
   } else if (xf->l2m.dl_type == bpf_htons(ETH_P_IP)) {
     struct iphdr *iph = DP_TC_PTR(vlh);
     int iphl = iph->ihl << 2;
@@ -761,7 +748,7 @@ dp_parse_packet(void *md,
       }
     }
   } else if (xf->l2m.dl_type == bpf_htons(ETH_TYPE_LLB)) {
-    struct llb_ethheader *llb = DP_TC_PTR(vlh);
+    struct llb_ethhdr *llb = DP_TC_PTR(vlh);
 
     LL_DBG_PRINTK("[PRSR] LLB \n");
 
@@ -779,10 +766,10 @@ dp_parse_packet(void *md,
     xf->pm.oport = (llb->oport);
     xf->pm.iport = (llb->iport);
 
-    eth = DP_ADD_PTR(fm_data, (int)sizeof(struct llb_ethheader));
+    eth = DP_ADD_PTR(fm_data, (int)sizeof(struct llb_ethhdr));
     memcpy(eth->h_dest, xf->l2m.dl_dst, 6);
     memcpy(eth->h_source, xf->l2m.dl_src, 6);
-    eth->h_proto = llb->next_eth_type;
+    eth->h_proto = llb->ntype;
 
     if (dp_remove_l2(md, (int)sizeof(*llb))) {
       LLBS_PPLN_DROP(xf);

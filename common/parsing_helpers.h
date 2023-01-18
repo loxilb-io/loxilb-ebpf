@@ -13,17 +13,6 @@
 #include <linux/udp.h>
 #include <linux/tcp.h>
 
-#define __force __attribute__((force))
-
-#ifndef memcpy
-#define memcpy(dest, src, n) __builtin_memcpy((dest), (src), (n))
-#define memset(dest, c, n) __builtin_memset((dest), (c), (n))
-#endif
-
-#define DP_ADD_PTR(x, len) ((void *)(((uint8_t *)((long)x)) + (len)))
-#define DP_TC_PTR(x) ((void *)((long)x))
-#define DP_DIFF_PTR(x, y) (((uint8_t *)DP_TC_PTR(x)) - ((uint8_t *)DP_TC_PTR(y)))
-
 /* Header cursor to keep track of current parsing position */
 struct hdr_cursor {
 	void *pos;
@@ -33,85 +22,95 @@ struct hdr_cursor {
 #define VLAN_PCP_MASK  0xe000
 #define VLAN_PCP_SHIFT 13
 
-/*
- *	struct vlan_hdr - vlan header
- *	@h_vlan_TCI: priority and VLAN ID
- *	@h_vlan_encapsulated_proto: packet type ID or len
- */
-struct vlan_hdr {
-	__be16	h_vlan_TCI;
-	__be16	h_vlan_encapsulated_proto;
-};
-
-#define ARP_ETH_HEADER_LEN 28
-
-struct arp_ethheader {
-    uint16_t  ar_hrd;         /* Hw type */
-    uint16_t  ar_pro;         /* Proto type */
-    uint8_t   ar_hln;         /* Hw addr len */
-    uint8_t   ar_pln;         /* Proto addr len */
-    uint16_t  ar_op;          /* Op-code. */
-
-    uint8_t   ar_sha[6];      /* Sender hw addr */
-    uint32_t  ar_spa;         /* Sender proto addr */
-    uint8_t   ar_tha[6];      /* Target hw addr */
-    uint32_t  ar_tpa;         /* Target proto addr */
-} __attribute__((packed));
-
-/* Shim L2 header for internal communication */
-#define ETH_TYPE_LLB 0x9999
-
-struct llb_ethheader {
-    uint16_t iport;
-    uint16_t oport;
-    uint8_t  miss_table;
-    uint8_t  rcode;
-    uint16_t next_eth_type;
-} __attribute__((packed));
-
-#define MPLS_HEADER_LEN (4)
-#define MPLS_LABEL_MASK ((1<<20)-1)
-#define MPLS_TC_MASK    ((1<<4)-1)
-#define MPLS_BOS_MASK   (1)
-#define MPLS_TTL_MASK   (255)
-#define MPLS_HDR_GET_LABEL(m) (bpf_ntohl((m)) & MPLS_LABEL_MASK)
-#define MPLS_HDR_GET_TC(m)    ((bpf_ntohl((m))>>20) & MPLS_TC_MASK)
-#define MPLS_HDR_GET_BOS(m)   ((bpf_ntohl((m))>>23) & MPLS_BOS_MASK)
-#define MPLS_HDR_GET_TTL(m)   ((bpf_ntohl((m))>>24) & MPLS_TTL_MASK)
-
-struct mpls_header {
-    uint32_t mpls_tag;
-};
-
-#define VXLAN_UDP_DPORT (4789)
-#define VXLAN_UDP_SPORT (4788)
-
-/* VXLAN protocol header */
-struct vxlan_hdr {
-#define VXLAN_VI_FLAG_ON (bpf_htonl(0x08 << 24))
-    __u32 vx_flags;
-    __u32 vx_vni;
-}__attribute__((packed));
-
 /* Allow users of header file to redefine VLAN max depth */
 #ifndef MAX_STACKED_VLANS
 #define MAX_STACKED_VLANS 3
 #endif
 
 /*
- * Struct icmphdr_common represents the common part of the icmphdr and icmp6hdr
- * structures.
+ *	struct vlanhdr - vlan header
+ *	@h_vlan_TCI: priority and VLAN ID
+ *	@h_vlan_encapsulated_proto: packet type ID or len
  */
-struct icmphdr_common {
+struct vlanhdr {
+	__be16	h_vlan_TCI;
+	__be16	h_vlan_encapsulated_proto;
+};
+
+#define ARP_ETH_HEADER_LEN 28
+
+/*
+ *	struct arp_ethhdr - arp header
+ *	@ar_hrd: Hardware type
+ *	@ar_pro: Protocol type
+ *	@ar_hln: Protocol address len
+ *	@ar_op:  ARP opcode
+ *	@ar_sha: Sender hardware/mac address
+ *	@ar_spa: Sender protocol address
+ *	@ar_tha: Target hardware/mac address
+ *	@ar_tpa: Target protocol address
+ */
+struct arp_ethhdr {
+  __be16    ar_hrd;
+  __be16    ar_pro;
+  __u8      ar_hln;
+  __u8      ar_pln;
+  __be16    ar_op;
+  __u8      ar_sha[6];
+  __be32    ar_spa;
+  __u8      ar_tha[6];
+  __be32    ar_tpa;
+} __attribute__((packed));
+
+/* LLB L2 header type */
+#define ETH_TYPE_LLB 0x9999
+
+/*
+ *  struct llb_ethhdr - header for internal communication
+ *  @iport: input port
+ *  @oport: output port
+ *  @mmap:  missed map
+ *  @rcode: return code
+ *  @ntype: next header type
+ */
+struct llb_ethhdr {
+  __be16 iport;
+  __be16 oport;
+  __u8   mmap;
+  __u8   rcode;
+  __be16 ntype;
+} __attribute__((packed));
+
+#define VXLAN_OUDP_DPORT (4789)
+#define VXLAN_OUDP_SPORT (4788)
+#define VXLAN_VI_FLAG_ON (bpf_htonl(0x08 << 24))
+
+/*
+ *  struct vxlanhdr - vxlan header
+ *  @vx_flags: flags
+ *  @vx_vni:   vxlan vni info
+ */
+struct vxlanhdr {
+    __be32 vx_flags;
+    __be32 vx_vni;
+}__attribute__((packed));
+
+/*
+ * struct icmp_cmnhdr - represents the common part of the icmphdr and icmp6hdr
+ * @type:  icmp packet type
+ * @code:  icmp code
+ * @cksum: icmp checksum
+ */
+struct icmp_cmnhdr {
 	__u8		type;
 	__u8		code;
 	__sum16	cksum;
 };
 
-/* IP flags. */
-#define IP_CE		0x8000		/* Flag: "Congestion"		*/
-#define IP_DF		0x4000		/* Flag: "Don't Fragment"	*/
-#define IP_MF		0x2000		/* Flag: "More Fragments"	*/
+/* IP flags */
+#define IP_CE		  0x8000		/* Flag: "Congestion"		*/
+#define IP_DF		  0x4000		/* Flag: "Don't Fragment"	*/
+#define IP_MF		  0x2000		/* Flag: "More Fragments"	*/
 #define IP_OFFSET	0x1FFF		/* "Fragment Offset" part	*/
 
 static __always_inline int ip_is_fragment(const struct iphdr *iph)
@@ -124,7 +123,7 @@ static __always_inline int ip_is_first_fragment(const struct iphdr *iph)
 	return (iph->frag_off & bpf_htons(IP_OFFSET)) == 0;
 }
 
-static __always_inline int proto_is_vlan(__u16 h_proto)
+static __always_inline int proto_is_vlan(__be16 h_proto)
 {
 	return !!(h_proto == bpf_htons(ETH_P_8021Q) ||
 		  h_proto == bpf_htons(ETH_P_8021AD));
@@ -133,9 +132,9 @@ static __always_inline int proto_is_vlan(__u16 h_proto)
 /* from include/net/ip.h */
 static __always_inline int ip_decrease_ttl(struct iphdr *iph)
 {
-  __u32 check = iph->check;
+  __be32 check = iph->check;
   check += bpf_htons(0x0100);
-  iph->check = (__u16)(check + (check >= 0xFFFF));
+  iph->check = (__be16)(check + (check >= 0xFFFF));
   return --iph->ttl;
 }
 
@@ -144,8 +143,8 @@ static inline int ipv6_addr_is_multicast(const struct in6_addr *addr)
   return (addr->s6_addr32[0] & bpf_htonl(0xFF000000)) == bpf_htonl(0xFF000000);
 }
 
-static __always_inline __u16
-csum_fold_helper(__u32 csum)
+static __always_inline __be16
+csum_fold_helper(__be32 csum)
 {
   return ~((csum & 0xffff) + (csum >> 16));
 }
@@ -153,23 +152,23 @@ csum_fold_helper(__u32 csum)
 static __always_inline void
 ipv4_csum(void *data_start,
           int data_size,
-          __u32 *csum)
+          __be32 *csum)
 {
   *csum = bpf_csum_diff(0, 0, data_start, data_size, *csum);
   *csum = csum_fold_helper(*csum);
 }
 
 static __always_inline void
-ipv4_l4_csum(void *data_start, __u32 data_size,
+ipv4_l4_csum(void *data_start, __be32 data_size,
              __u64 *csum, struct iphdr *iph) {
-  __u32 tmp = 0;
+  __be32 tmp = 0;
   *csum = bpf_csum_diff(0, 0, &iph->saddr, sizeof(__be32), *csum);
   *csum = bpf_csum_diff(0, 0, &iph->daddr, sizeof(__be32), *csum);
   // __builtin_bswap32 equals to htonl()
-  tmp = __builtin_bswap32((__u32)(iph->protocol));
-  *csum = bpf_csum_diff(0, 0, &tmp, sizeof(__u32), *csum);
-  tmp = __builtin_bswap32((__u32)(data_size));
-  *csum = bpf_csum_diff(0, 0, &tmp, sizeof(__u32), *csum);
+  tmp = __builtin_bswap32((__be32)(iph->protocol));
+  *csum = bpf_csum_diff(0, 0, &tmp, sizeof(__be32), *csum);
+  tmp = __builtin_bswap32((__be32)(data_size));
+  *csum = bpf_csum_diff(0, 0, &tmp, sizeof(__be32), *csum);
   *csum = bpf_csum_diff(0, 0, data_start, data_size, *csum);
   *csum = csum_fold_helper(*csum);
 }
@@ -183,6 +182,9 @@ ipv4_l4_csum(void *data_start, __u32 data_size,
 #define GTP_EXT_FM     (0x4)
 #define GTP_MT_TPDU    (0xff)
   
+/*
+ * struct gtp_v1_hdr - GTPv1 header
+ */
 struct gtp_v1_hdr {
 #if defined(__BIG_ENDIAN_BITFIELD)
   __u8    ver:3;
@@ -198,15 +200,18 @@ struct gtp_v1_hdr {
 #error  "Please fix byteorder"
 #endif
   __u8    mt;
-  __u16   mlen;
-  __u32   teid;
+  __be16  mlen;
+  __be32  teid;
 };
   
 #define GTP_MAX_EXTH    2
 #define GTP_NH_PDU_SESS 0x85
 
+/*
+ * struct gtp_v1_ehdr - GTPv1 extension header
+ */
 struct gtp_v1_ehdr {
-  __u16   seq;
+  __be16  seq;
   __u8    npdu;
   __u8    next_hdr;
 };
@@ -214,7 +219,10 @@ struct gtp_v1_ehdr {
 #define GTP_PDU_SESS_UL 1
 #define GTP_PDU_SESS_DL 0
 
-struct gtp_pdu_sess_cmn_hdr {
+/*
+ * struct gtp_pdu_sess_hdr - GTP common PDU session header
+ */
+struct gtp_pdu_sess_cmnhdr {
   __u8    len;
 #if defined(__BIG_ENDIAN_BITFIELD)
   __u8    pdu_type:4;
@@ -227,8 +235,11 @@ struct gtp_pdu_sess_cmn_hdr {
 #endif
 };
 
+/*
+ * struct gtp_dl_pdu_sess_hdr - GTP DL PDU session header
+ */
 struct gtp_dl_pdu_sess_hdr {
-  struct gtp_pdu_sess_cmn_hdr cmn;
+  struct gtp_pdu_sess_cmnhdr cmn;
 #if defined(__BIG_ENDIAN_BITFIELD)
   __u8    ppp:1;
   __u8    rqi:1;
@@ -243,8 +254,11 @@ struct gtp_dl_pdu_sess_hdr {
   __u8    next_hdr;
 };
 
+/*
+ * struct gtp_ul_pdu_sess_hdr - GTP UL PDU session header
+ */
 struct gtp_ul_pdu_sess_hdr {
-  struct gtp_pdu_sess_cmn_hdr cmn;
+  struct gtp_pdu_sess_cmnhdr cmn;
 #if defined(__BIG_ENDIAN_BITFIELD)
   __u8    res:2;
   __u8    qfi:6;
@@ -257,7 +271,9 @@ struct gtp_ul_pdu_sess_hdr {
   __u8    next_hdr;
 };
 
-/* Header as defined in <linux/sctp.h> */
+/*
+ * struct sctphdr - SCTP header
+ */
 struct sctphdr {
 	__be16 source;
 	__be16 dest;
@@ -275,12 +291,18 @@ struct sctphdr {
 #define SCTP_COOKIE_ACK    11
 #define SCTP_SHUT_COMPLETE 14
  
+/*
+ * struct sctp_dch - SCTP chunk
+ */
 struct sctp_dch {
 	__u8 type;
 	__u8 flags;
 	__be16 len;
 };
 
+/*
+ * struct sctp_init_ch - SCTP init chunk
+ */
 struct sctp_init_ch {
   __be32 tag;
   __be32 adv_rwc;
@@ -305,12 +327,12 @@ struct mkrt_args {
 };
 
 struct mkr_args {
-  uint8_t v6;
+  uint8_t  v6;
   uint32_t dip[4];
   uint32_t sip[4];
   uint16_t sport;
   uint16_t dport;
-  uint8_t protocol;
+  uint8_t  protocol;
 
   union {
     struct mkrt_args t;

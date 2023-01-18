@@ -84,6 +84,7 @@ typedef struct llb_dp_struct
   pthread_t mon_thr;
   int mgmt_ch_fd;
   int have_mtrace;
+  int nodenum;
   llb_dp_map_t maps[LL_DP_MAX_MAP];
   llb_dp_link_t links[LLB_INTERFACES];
   llb_dp_sect_t psecs[LLB_PSECS];
@@ -418,6 +419,17 @@ llb_setup_crc32c_map(int mapfd)
   }
 }
 
+static void
+llb_setup_ctctr_map(int mapfd)
+{
+  uint32_t k = 0;
+  struct dp_ct_ctrtact ctr;
+
+  memset(&ctr, 0, sizeof(ctr));
+  ctr.counter = (LLB_CT_MAP_ENTRIES/LLB_MAX_DP_NODES) * xh->nodenum;
+  bpf_map_update_elem(mapfd, &k, &ctr, BPF_ANY);
+}
+
 static int
 llb_dflt_sec_map2fd_all(struct bpf_object *bpf_obj)
 {
@@ -464,6 +476,8 @@ llb_dflt_sec_map2fd_all(struct bpf_object *bpf_obj)
       }
     } else if (i == LL_DP_CRC32C_MAP) {
       llb_setup_crc32c_map(fd);
+    } else if (i == LL_DP_CTCTR_MAP) {
+      llb_setup_ctctr_map(fd);
     }
   }
 
@@ -739,6 +753,10 @@ llb_xh_init(llb_dp_struct_t *xh)
   xh->maps[LL_DP_CRC32C_MAP].map_name = "crc32c_map";
   xh->maps[LL_DP_CRC32C_MAP].has_pb   = 0;
   xh->maps[LL_DP_CRC32C_MAP].max_entries = LLB_CRC32C_ENTRIES;
+
+  xh->maps[LL_DP_CTCTR_MAP].map_name = "ctctr_map";
+  xh->maps[LL_DP_CTCTR_MAP].has_pb   = 0;
+  xh->maps[LL_DP_CTCTR_MAP].max_entries = 1;
 
   strcpy(xh->psecs[0].name, LLB_SECTION_PASS);
   strcpy(xh->psecs[1].name, XDP_LL_SEC_DEFAULT);

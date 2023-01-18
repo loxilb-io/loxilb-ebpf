@@ -5,23 +5,12 @@
  * SPDX-License-Identifier: (GPL-2.0 OR BSD-2-Clause)
  */
 
-#define CT_CTR_SID      (0)
-#define CT_CTR_MAX_SID (250000)
-
-struct dp_ct_ctrtact {
-  struct dp_cmn_act ca; /* Possible actions :
-                         * None (just place holder) 
-                         */
-  struct bpf_spin_lock lock;
-  __u32 counter; 
-};
-
 #ifdef HAVE_LEGACY_BPF_MAPS
 
 struct bpf_map_def SEC("maps") ct_ctr = {
   .type = BPF_MAP_TYPE_ARRAY,
   .key_size = sizeof(__u32),
-  .value_size = sizeof(dp_ct_ctrtact),
+  .value_size = sizeof(struct dp_ct_ctrtact),
   .max_entries = 1 
 };
 
@@ -116,11 +105,11 @@ dp_ct_get_newctr(void)
    *         with the locking here
    */ 
   bpf_spin_lock(&ctr->lock);
-  v = ++ctr->counter;
+  v = ctr->counter;
+  ctr->counter += 2;
   bpf_spin_unlock(&ctr->lock);
 
   /* Essentially allocation starts from idx-2,4,8... */
-  v <<= 1;
   v = (v + CT_CTR_SID) % CT_CTR_MAX_SID;
   return v;
 }

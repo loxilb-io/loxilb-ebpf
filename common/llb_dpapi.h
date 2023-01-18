@@ -38,6 +38,7 @@
 #define LLB_PSECS             (8)
 #define LLB_MAX_NXFRMS        (16)
 #define LLB_CRC32C_ENTRIES    (256)
+#define LLB_MAX_DP_NODES      (3)
 
 #define LLB_DP_SUNP_PGM_ID2    (6)
 #define LLB_DP_CRC_PGM_ID2     (5)
@@ -116,6 +117,7 @@ enum llb_dp_tid {
   LL_DP_FW4_MAP,
   LL_DP_FW4_STATS_MAP,
   LL_DP_CRC32C_MAP,
+  LL_DP_CTCTR_MAP,
   LL_DP_MAX_MAP
 };
 
@@ -715,6 +717,17 @@ struct dp_sess_tact {
   uint32_t teid;
 };
 
+#define CT_CTR_SID      (0)
+#define CT_CTR_MAX_SID  (250000)
+
+struct dp_ct_ctrtact {
+  struct dp_cmn_act ca; /* Possible actions :
+                         * None (just place holder)
+                         */
+  struct bpf_spin_lock lock;
+  __u32 counter;
+};
+
 struct ll_dp_pmdi {
   __u32 ifindex;
   __u16 xdp_inport;
@@ -745,6 +758,17 @@ struct dp_map_ita {
 typedef struct dp_map_ita dp_map_ita_t;
 
 void goMapNotiHandler(struct ll_dp_map_notif *mn);
+
+#define __force __attribute__((force))
+
+#ifndef memcpy
+#define memcpy(dest, src, n) __builtin_memcpy((dest), (src), (n))
+#define memset(dest, c, n) __builtin_memset((dest), (c), (n))
+#endif
+
+#define DP_ADD_PTR(x, len) ((void *)(((uint8_t *)((long)x)) + (len)))
+#define DP_TC_PTR(x) ((void *)((long)x))
+#define DP_DIFF_PTR(x, y) (((uint8_t *)DP_TC_PTR(x)) - ((uint8_t *)DP_TC_PTR(y)))
 
 /* Policer map stats update callback */
 typedef void (*dp_pts_cb_t)(uint32_t idx, struct dp_pol_stats *ps);

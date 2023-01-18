@@ -163,7 +163,7 @@ dp_trap_packet(void *ctx,  struct xfi *xf, void *fa_)
   struct ethhdr *neth;
   struct ethhdr *oeth;
   uint16_t ntype;
-  struct llb_ethheader *llb;
+  struct llb_ethhdr *llb;
   void *dend = DP_TC_PTR(DP_PDATA_END(ctx));
 
   LL_DBG_PRINTK("[TRAP] START--\n");
@@ -212,8 +212,8 @@ dp_trap_packet(void *ctx,  struct xfi *xf, void *fa_)
   if (xf->tm.tun_decap) {
     llb->rcode |= LLB_PIPE_RC_TUN_DECAP;
   }
-  llb->miss_table = xf->pm.table_id; /* FIXME */
-  llb->next_eth_type = ntype;
+  llb->mmap = xf->pm.table_id; /* FIXME */
+  llb->ntype = ntype;
 
   xf->pm.oport = LLB_PORT_NO;
   if (dp_redirect_port(&tx_intf_map, xf) != DP_REDIRECT) {
