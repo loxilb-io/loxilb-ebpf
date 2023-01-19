@@ -93,6 +93,7 @@ dp_ct_get_newctr(void)
 {
   __u32 k = 0;
   __u32 v = 0;
+  __u32 maxval = 0;
   struct dp_ct_ctrtact *ctr;
 
   ctr = bpf_map_lookup_elem(&ct_ctr, &k);
@@ -106,11 +107,14 @@ dp_ct_get_newctr(void)
    */ 
   bpf_spin_lock(&ctr->lock);
   v = ctr->counter;
+  maxval = ctr->maxval;
   ctr->counter += 2;
   bpf_spin_unlock(&ctr->lock);
 
-  /* Essentially allocation starts from idx-2,4,6... */
-  v = (v + CT_CTR_SID) % CT_CTR_MAX_SID;
+  /* Essentially allocation starts from counter-0,2,4,6... */
+  if (maxval != 0) {
+    v = (v + CT_CTR_SID) % maxval;
+  }
   return v;
 }
 

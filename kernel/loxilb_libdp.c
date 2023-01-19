@@ -427,6 +427,7 @@ llb_setup_ctctr_map(int mapfd)
 
   memset(&ctr, 0, sizeof(ctr));
   ctr.counter = (LLB_CT_MAP_ENTRIES/LLB_MAX_DP_NODES) * xh->nodenum;
+  ctr.maxval = (LLB_CT_MAP_ENTRIES/LLB_MAX_DP_NODES);
   bpf_map_update_elem(mapfd, &k, &ctr, BPF_ANY);
 }
 

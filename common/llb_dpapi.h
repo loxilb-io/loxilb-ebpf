@@ -38,7 +38,7 @@
 #define LLB_PSECS             (8)
 #define LLB_MAX_NXFRMS        (16)
 #define LLB_CRC32C_ENTRIES    (256)
-#define LLB_MAX_DP_NODES      (3)
+#define LLB_MAX_DP_NODES      (2)
 
 #define LLB_DP_SUNP_PGM_ID2    (6)
 #define LLB_DP_CRC_PGM_ID2     (5)
@@ -726,6 +726,7 @@ struct dp_ct_ctrtact {
                          */
   struct bpf_spin_lock lock;
   __u32 counter;
+  __u32 maxval;
 };
 
 struct ll_dp_pmdi {
