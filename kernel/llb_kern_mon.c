@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: BSD-3-Clause
-// This file is based on https://github.com/CrowdStrike/bpfmon-example
-// And modified to work with loxilb by loxilb authors
 #include "vmlinux.h"
 #include "bpf/bpf_helpers.h"
 #include "bpf/bpf_tracing.h"
