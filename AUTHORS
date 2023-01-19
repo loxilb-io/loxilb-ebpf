@@ -10,4 +10,6 @@ BackGuyn Jung     <backguyn@netlox.io>
 Inho Gog          <inhogog2@netlox.io>
 Seokhwan Kong     <seokhwan.kong@netlox.io>
 
-Certain parts of this project are derived from github.com/xdp-project. All original authors of derived files are maintained as is.
+Certain parts of this project are derived from:
+[XDP Project](github.com/xdp-project)   
+[BFPMon](github.com/CrowdStrike/bpfmon-example)
