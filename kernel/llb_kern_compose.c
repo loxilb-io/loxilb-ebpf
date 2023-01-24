@@ -5,18 +5,403 @@
  * SPDX-License-Identifier: (GPL-2.0 OR BSD-2-Clause)
  */
 
-static int __always_inline
-dp_parse_inner_packet(void *md,
-                      void *inp,
-                      int  skip_l2,
-                      struct xfi *xf)
-{
-  struct vlanhdr *ivlh;
-  struct ethhdr *ieth;
-  void *dend = DP_TC_PTR(DP_PDATA_END(md)); 
+struct parser {
+  int  inp;
+  int  skip_l2;
+  int  skip_v6;
+  void *start;
+  void *dbegin;
+  void *dend;
+};
 
-  if (skip_l2) {
-    ivlh = DP_TC_PTR(inp);
+static int __always_inline
+dp_parse_eth(struct parser *p,
+             void *md,
+             struct xfi *xf)
+{
+  struct ethhdr *eth;
+  eth = DP_TC_PTR(p->dbegin);
+
+  if (eth + 1 > p->dend) {
+    return -1;
+  }
+
+  if (p->inp) {
+    xf->il2m.valid = 1;
+    memcpy(xf->il2m.dl_dst, eth->h_dest, 2*6);
+    memcpy(xf->pm.lkup_dmac, eth->h_dest, 6);
+    xf->il2m.dl_type = eth->h_proto;
+  } else {
+    xf->l2m.valid = 1;
+    memcpy(xf->l2m.dl_dst, eth->h_dest, 2*6);
+    memcpy(xf->pm.lkup_dmac, eth->h_dest, 6);
+    xf->l2m.dl_type = eth->h_proto;
+  }
+
+  if (eth->h_proto < bpf_htons(1536)) {
+    return 1;
+  }
+
+  p->dbegin = DP_ADD_PTR(eth, sizeof(*eth));
+
+  return 0;
+}
+
+static int __always_inline
+dp_parse_vlan(struct parser *p,
+              void *md,
+              struct xfi *xf)
+{
+  struct vlanhdr *vlh;
+#ifndef LL_TC_EBPF
+  int vlan_depth;
+#endif
+  vlh = DP_TC_PTR(p->dbegin);
+
+#ifndef LL_TC_EBPF
+#pragma unroll
+  for (vlan_depth = 0; vlan_depth < MAX_STACKED_VLANS; vlan_depth++) {
+    if (!proto_is_vlan(xf->l2m.dl_type))
+      break;
+
+    if (vlh + 1 > p->dend) {
+      return -1;
+    }
+
+    xf->l2m.dl_type = vlh->h_vlan_encapsulated_proto;
+    xf->l2m.vlan[vlan_depth] = vlh->h_vlan_TCI & bpf_htons(VLAN_VID_MASK);
+    vlh++;
+  }
+  p->dbegin = DP_TC_PTR(vlh);
+#else
+  dp_vlan_info(xf, md); 
+#endif
+
+  return 0;
+}
+
+static int __always_inline
+dp_parse_ivlan(struct parser *p,
+               void *md,
+               struct xfi *xf)
+{
+  struct vlanhdr *vlh;
+
+  vlh = DP_TC_PTR(p->dbegin);
+
+  /* Only one inner vlan is supported */
+  if (proto_is_vlan(xf->il2m.dl_type)) {
+
+    if (vlh + 1 > p->dend) {
+      return -1;
+    }
+
+    xf->il2m.dl_type = vlh->h_vlan_encapsulated_proto;
+    xf->il2m.vlan[0] = vlh->h_vlan_TCI & bpf_htons(VLAN_VID_MASK);
+    vlh++;
+    p->dbegin = DP_TC_PTR(vlh);
+  }
+
+  return 0;
+}
+
+static int __always_inline
+dp_parse_arp(struct parser *p,
+             void *md,
+             struct xfi *xf)
+{
+  struct arp_ethhdr *arp = DP_TC_PTR(p->dbegin);
+
+  if (arp + 1 > p->dend) {
+      return -1;
+  }
+
+  if (p->inp) {
+    if (arp->ar_pro == bpf_htons(ETH_P_IP) && 
+        arp->ar_pln == 4) {
+      xf->il34m.saddr4 = arp->ar_spa;
+      xf->il34m.daddr4 = arp->ar_tpa;
+    }
+    xf->il34m.nw_proto = bpf_ntohs(arp->ar_op) & 0xff;
+  } else {
+    if (arp->ar_pro == bpf_htons(ETH_P_IP) && 
+        arp->ar_pln == 4) {
+      xf->l34m.saddr4 = arp->ar_spa;
+      xf->l34m.daddr4 = arp->ar_tpa;
+    }
+    xf->l34m.nw_proto = bpf_ntohs(arp->ar_op) & 0xff;
+  }
+
+  return 1;
+}
+
+static int __always_inline
+dp_parse_tcp(struct parser *p,
+             void *md,
+             struct xfi *xf)
+{
+  struct tcphdr *tcp = DP_TC_PTR(p->dbegin);
+  __u8 tcp_flags = 0;
+
+  if (tcp + 1 > p->dend) {
+    /* In case of fragmented packets */
+    return 0;
+  }
+
+  if (tcp->fin)
+    tcp_flags = LLB_TCP_FIN;
+  if (tcp->rst)
+    tcp_flags |= LLB_TCP_RST;
+  if (tcp->syn)
+    tcp_flags |= LLB_TCP_SYN;
+  if (tcp->psh)
+    tcp_flags |= LLB_TCP_PSH;
+  if (tcp->ack)
+    tcp_flags |= LLB_TCP_ACK;
+  if (tcp->urg)
+    tcp_flags |= LLB_TCP_URG;
+
+  if (p->inp) {
+    if (xf->pm.tcp_flags & (LLB_TCP_FIN|LLB_TCP_RST)) {
+      xf->pm.il4fin = 1;
+    }
+
+    xf->il34m.source = tcp->source;
+    xf->il34m.dest = tcp->dest;
+    xf->il34m.seq = tcp->seq;
+    xf->pm.itcp_flags = tcp_flags;
+  } else {
+    if (xf->pm.tcp_flags & (LLB_TCP_FIN|LLB_TCP_RST)) {
+      xf->pm.l4fin = 1;
+    }
+
+    xf->l34m.source = tcp->source;
+    xf->l34m.dest = tcp->dest;
+    xf->l34m.seq = tcp->seq;
+    xf->pm.tcp_flags = tcp_flags;
+  }
+
+  return 0;
+}
+
+static int __always_inline
+dp_parse_icmp(struct parser *p,
+              void *md,
+              struct xfi *xf)
+{
+  struct icmphdr *icmp = DP_TC_PTR(p->dbegin);
+
+  if (icmp + 1 > p->dend) {
+    return 0;
+  }
+
+  if ((icmp->type == ICMP_ECHOREPLY ||
+    icmp->type == ICMP_ECHO)) {
+    if (p->inp) {
+      xf->l34m.source = icmp->un.echo.id;
+      xf->l34m.dest = icmp->un.echo.id;
+    } else {
+      xf->l34m.source = icmp->un.echo.id;
+      xf->l34m.dest = icmp->un.echo.id;
+    }
+  }
+  return 0;
+}
+
+static int __always_inline
+dp_parse_iudp(struct parser *p,
+              void *md,
+              struct xfi *xf)
+{
+  struct udphdr *udp = DP_TC_PTR(p->dbegin);
+  
+  if (udp + 1 > p->dend) {
+    return 0;
+  }
+
+  xf->il34m.source = udp->source;
+  xf->il34m.dest = udp->dest;
+
+  if (dp_pkt_is_l2mcbc(xf, md) == 1) {
+    LLBS_PPLN_TRAP(xf);
+  }
+
+  return 0;
+}
+
+static int __always_inline
+dp_parse_sctp(struct parser *p,
+              void *md,
+              struct xfi *xf)
+{
+  struct sctp_dch *c;
+  struct sctphdr *sctp = DP_TC_PTR(p->dbegin);
+
+  if (sctp + 1 > p->dend) {
+    return 0;
+  }
+
+  if (p->inp) {
+    xf->il34m.source = sctp->source;
+    xf->il34m.dest = sctp->dest;
+  } else {
+    xf->l34m.source = sctp->source;
+    xf->l34m.dest = sctp->dest;
+  }
+
+  c = DP_TC_PTR(DP_ADD_PTR(sctp, sizeof(*sctp)));
+
+  /* Chunks need not be present in all sctp packets */
+  if (c + 1 > p->dend) {
+    return 0;
+  }
+
+  /* Parsing only one-level of chunk */
+  if (c->type == SCTP_ERROR ||
+    c->type == SCTP_ABORT ||
+    c->type == SCTP_SHUT  ||
+    c->type == SCTP_SHUT_ACK ||
+    c->type == SCTP_SHUT_COMPLETE) {
+    if (p->inp) {
+      xf->pm.l4fin = 1;
+    } else {
+      xf->pm.il4fin = 0;
+    }
+  }
+
+  return 0;
+}
+
+static int __always_inline
+dp_parse_icmp6(struct parser *p,
+               void *md,
+               struct xfi *xf)
+{
+  struct icmp6hdr *icmp6 = DP_TC_PTR(p->dbegin);
+
+  if (icmp6 + 1 > p->dend) {
+    return 0;
+  }
+
+  if ((icmp6->icmp6_type == ICMPV6_ECHO_REPLY ||
+      icmp6->icmp6_type == ICMPV6_ECHO_REQUEST)) {
+    if (p->inp) {
+      xf->il34m.source = icmp6->icmp6_dataun.u_echo.identifier;
+      xf->il34m.dest = icmp6->icmp6_dataun.u_echo.identifier;
+    } else {
+      xf->l34m.source = icmp6->icmp6_dataun.u_echo.identifier;
+      xf->l34m.dest = icmp6->icmp6_dataun.u_echo.identifier;
+    }
+  } else if (icmp6->icmp6_type >= 133 &&
+            icmp6->icmp6_type <= 137) {
+    return 1;
+  }
+
+  return 0;
+}
+
+static int __always_inline
+dp_parse_in_ipv4(struct parser *p,
+                 void *md,
+                 struct xfi *xf)
+{
+  struct iphdr *iph = DP_TC_PTR(p->dbegin);
+  int iphl = iph->ihl << 2;
+
+  if (iph + 1 > p->dend) {
+    return -1;
+  }
+
+  if (DP_ADD_PTR(iph, iphl) > p->dend) {
+    return -1;
+  }
+
+  xf->pm.il3_len = bpf_ntohs(iph->tot_len);
+  xf->pm.il3_plen = xf->pm.il3_len - iphl;
+
+  xf->il34m.valid = 1;
+  xf->il34m.tos = iph->tos & 0xfc;
+  xf->il34m.nw_proto = iph->protocol;
+  xf->il34m.saddr4 = iph->saddr;
+  xf->il34m.daddr4 = iph->daddr;
+
+  /* Earlier we used to have the following check here :
+   * !ip_is_fragment(iph) || ip_is_first_fragment(iph))
+   * But it seems to be unncessary as proper bound checking
+   * is already taken care by eBPF verifier
+   */
+  xf->pm.il4_off = DP_DIFF_PTR(DP_ADD_PTR(iph, iphl), p->start);
+  p->dbegin = DP_ADD_PTR(iph, iphl);
+
+  if (xf->il34m.nw_proto == IPPROTO_TCP) {
+    return dp_parse_tcp(p, md, xf);
+  } else if (xf->il34m.nw_proto == IPPROTO_UDP) {
+    return dp_parse_iudp(p, md, xf);
+  } else if (xf->il34m.nw_proto == IPPROTO_SCTP) {
+    return dp_parse_sctp(p, md, xf);
+  } else if (xf->il34m.nw_proto == IPPROTO_ICMP) {
+    return dp_parse_icmp(p, md, xf);
+  } else if (xf->il34m.nw_proto == IPPROTO_ESP ||
+             xf->il34m.nw_proto == IPPROTO_AH) {
+    /* Let xfrm handle it */
+    return 2;
+  }
+
+  if (ip_is_fragment(iph)) {
+    xf->il34m.source = 0;
+    xf->il34m.dest = 0;
+  }
+  
+  return 0;
+}
+
+static int __always_inline
+dp_parse_in_ipv6(struct parser *p,
+                 void *md,
+                 struct xfi *xf)
+{
+  struct ipv6hdr *ip6 = DP_TC_PTR(p->dbegin);
+
+  if (ip6 + 1 > p->dend) {
+    return -1;
+  }
+
+  if (ipv6_addr_is_multicast(&ip6->daddr) ||
+      ipv6_addr_is_multicast(&ip6->saddr)) {
+    return 2;
+  }
+
+  xf->pm.il3_plen = bpf_ntohs(ip6->payload_len);
+  xf->pm.il3_len =  xf->pm.il3_plen + sizeof(*ip6);
+
+  xf->il34m.valid = 1;
+  xf->il34m.tos = ((ip6->priority << 4) |
+               ((ip6->flow_lbl[0] & 0xf0) >> 4)) & 0xfc;
+  xf->il34m.nw_proto = ip6->nexthdr;
+  memcpy(&xf->il34m.saddr, &ip6->saddr, sizeof(ip6->saddr));
+  memcpy(&xf->il34m.daddr, &ip6->daddr, sizeof(ip6->daddr));
+
+  xf->pm.il4_off = DP_DIFF_PTR(DP_ADD_PTR(ip6, sizeof(*ip6)), p->start);
+  p->dbegin = DP_ADD_PTR(ip6, sizeof(*ip6));
+
+  if (xf->il34m.nw_proto == IPPROTO_TCP) {
+    return dp_parse_tcp(p, md, xf);
+  } else if (xf->il34m.nw_proto == IPPROTO_UDP) {
+    return dp_parse_iudp(p, md, xf);
+  } else if (xf->l34m.nw_proto == IPPROTO_ICMPV6) {
+    return dp_parse_icmp6(p, md, xf);
+  }
+  return 0;
+}
+
+static int __always_inline
+dp_parse_inner_d1(struct parser *p,
+                  void *md,
+                  struct xfi *xf)
+{
+  int ret = 0;
+
+  if (p->skip_l2) {
 
     if (xf->il2m.dl_type == 0)
       return 1;
@@ -24,207 +409,27 @@ dp_parse_inner_packet(void *md,
     goto proc_inl3;
   }
 
-  ieth = DP_TC_PTR(inp);
-
-  if (ieth + 1 > dend) {
-    LLBS_PPLN_DROP(xf);
-    return -1;
+  if ((ret = dp_parse_eth(p, md, xf))) {
+    return ret;
   }
 
-  xf->il2m.valid = 1;
-  memcpy(xf->il2m.dl_dst, ieth->h_dest, 2*6);
-  xf->il2m.dl_type = ieth->h_proto;
-
-  /* 802.2 */
-  if (ieth->h_proto < bpf_htons(1536)) {
-    return XDP_PASS;
-  }
-
-  /* Only one inner vlan is supported */
-  ivlh = DP_ADD_PTR(ieth, sizeof(*ieth));
-  if (proto_is_vlan(ieth->h_proto)) {
-
-    if (ivlh + 1 > dend) {
-      LLBS_PPLN_DROP(xf);
-      return -1;
-    }
-
-    xf->il2m.dl_type = ivlh->h_vlan_encapsulated_proto;
-    xf->il2m.vlan[0] = ivlh->h_vlan_TCI & bpf_htons(VLAN_VID_MASK);
+  if ((ret = dp_parse_ivlan(p, md, xf))) {
+    return ret;
   }
 
 proc_inl3:
+  xf->pm.il3_off = DP_DIFF_PTR(p->dbegin, p->start);
+
   if (xf->il2m.dl_type == bpf_htons(ETH_P_ARP)) {
-    struct arp_ethhdr *arp = DP_TC_PTR(ivlh);
-
-    if (arp + 1 > dend) {
-      LLBS_PPLN_DROP(xf);
-      return -1;
-    }
-
-    if (arp->ar_pro == bpf_htons(ETH_P_IP) &&
-        arp->ar_pln == 4) {
-      xf->il34m.saddr4 = arp->ar_spa;
-      xf->l34m.daddr4 = arp->ar_tpa;
-    }
-    xf->il34m.nw_proto = bpf_ntohs(arp->ar_op) & 0xff;
-    return 1;
+    ret = dp_parse_arp(p, md, xf);
   } else if (xf->il2m.dl_type == bpf_htons(ETH_P_IP)) {
-    struct iphdr *iph = DP_TC_PTR(ivlh);
-    int iphl = iph->ihl << 2;
-
-    if (iph + 1 > dend) {
-      LLBS_PPLN_DROP(xf);
-      return -1;
-    }
-
-    if (DP_ADD_PTR(iph, iphl) > dend) {
-      LLBS_PPLN_DROP(xf);
-      return -1;
-    }
-
-    xf->pm.il3_len = bpf_ntohs(iph->tot_len);
-    xf->pm.il3_plen = xf->pm.il3_len - iphl;
-    xf->pm.il3_off = DP_DIFF_PTR(iph, DP_PDATA(md));
-
-    xf->il34m.valid = 1;
-    xf->il34m.tos = iph->tos & 0xfc;
-    xf->il34m.nw_proto = iph->protocol;
-    xf->il34m.saddr4 = iph->saddr;
-    xf->il34m.daddr4 = iph->daddr;
-
-    if (!ip_is_fragment(iph)) {
-
-      xf->pm.il4_off = DP_DIFF_PTR(DP_ADD_PTR(iph, iphl), DP_PDATA(md));
-
-      if (xf->il34m.nw_proto == IPPROTO_TCP) {
-        struct tcphdr *tcp = DP_ADD_PTR(iph, iphl);
-
-        if (tcp + 1 > dend) {
-          LLBS_PPLN_DROP(xf);
-          return -1;
-        }
-
-        if (tcp->fin)
-          xf->pm.itcp_flags = LLB_TCP_FIN;
-        if (tcp->rst)
-          xf->pm.itcp_flags |= LLB_TCP_RST;
-        if (tcp->syn)
-          xf->pm.itcp_flags |= LLB_TCP_SYN;
-        if (tcp->psh)
-          xf->pm.itcp_flags |= LLB_TCP_PSH;
-        if (tcp->ack)
-          xf->pm.itcp_flags |= LLB_TCP_ACK;
-        if (tcp->urg)
-          xf->pm.itcp_flags |= LLB_TCP_URG;
-
-        if (xf->pm.itcp_flags & (LLB_TCP_FIN|LLB_TCP_RST)) {
-          xf->pm.il4fin = 1;
-        }
-
-        xf->il34m.source = tcp->source;
-        xf->il34m.dest = tcp->dest;
-        xf->il34m.seq = tcp->seq;
-        xf->il34m.ack = tcp->ack_seq;
-      } else if (xf->il34m.nw_proto == IPPROTO_UDP) {
-        struct udphdr *udp = DP_ADD_PTR(iph, iphl);
-
-        if (udp + 1 > dend) {
-          LLBS_PPLN_DROP(xf);
-          return -1;
-        }
-
-        xf->il34m.source = udp->source;
-        xf->il34m.dest = udp->dest;
-      } else if (xf->il34m.nw_proto == IPPROTO_ICMP) {
-        struct icmphdr *icmp = DP_ADD_PTR(iph, iphl);
-
-        if (icmp + 1 > dend) {
-          LLBS_PPLN_DROP(xf);
-          return -1;
-        }
-
-        if (icmp->type == ICMP_ECHOREPLY ||
-            icmp->type == ICMP_ECHO) {
-           xf->il34m.source = icmp->un.echo.id;
-           xf->il34m.dest = icmp->un.echo.id;
-        }
-      } else if (xf->il34m.nw_proto == IPPROTO_SCTP) {
-        struct sctp_dch *c;
-        struct sctphdr *sctp = DP_ADD_PTR(iph, iphl);
-        
-        if (sctp + 1 > dend) {
-          LLBS_PPLN_DROP(xf);
-          return -1;
-        }
-  
-        xf->il34m.source = sctp->source;
-        xf->il34m.dest = sctp->dest;
-
-        c = DP_TC_PTR(DP_ADD_PTR(sctp, sizeof(*sctp)));
-  
-        /* Chunks need not be present in all sctp packets */
-        if (c + 1 > dend) {
-          return 0;
-        }
-
-        if (c->type == SCTP_ERROR ||
-            c->type == SCTP_ABORT ||
-            c->type == SCTP_SHUT  ||
-            c->type == SCTP_SHUT_ACK ||
-            c->type == SCTP_SHUT_COMPLETE) {
-          xf->pm.il4fin = 1;
-        } 
-
-      }
-    } else {
-      /* Let Linux stack handle it */
-      return XDP_PASS;
-    }
+    ret = dp_parse_in_ipv4(p, md, xf);
   } else if (xf->il2m.dl_type == bpf_htons(ETH_P_IPV6)) {
-    struct ipv6hdr *ip6 = DP_TC_PTR(ivlh);
-
-    if (ip6 + 1 > dend) {
-      LLBS_PPLN_DROP(xf);
-      return -1;
-    }
-
-    xf->pm.il3_plen = bpf_ntohs(ip6->payload_len);
-    xf->pm.il3_len =  xf->pm.il3_plen + sizeof(*ip6);
-    xf->pm.il4_off = DP_DIFF_PTR(DP_ADD_PTR(ip6, sizeof(*ip6)), DP_PDATA(md));
-
-    xf->il34m.valid = 1;
-    xf->il34m.tos = ((ip6->priority << 4) |
-                 ((ip6->flow_lbl[0] & 0xf0) >> 4)) & 0xfc;
-    xf->il34m.nw_proto = ip6->nexthdr;
-    memcpy(&xf->il34m.saddr, &ip6->saddr, sizeof(ip6->saddr));
-    memcpy(&xf->il34m.daddr, &ip6->daddr, sizeof(ip6->daddr));
-
-    if (xf->il34m.nw_proto == IPPROTO_TCP) {
-      struct tcphdr *tcp = DP_ADD_PTR(ip6, sizeof(*ip6));
-      if (tcp + 1 > dend) {
-        LLBS_PPLN_DROP(xf);
-        return -1;
-      }
-
-      xf->il34m.source = tcp->source;
-      xf->il34m.dest = tcp->dest;
-      xf->il34m.seq = tcp->seq;
-      xf->il34m.ack = tcp->ack_seq;
-    } else if (xf->il34m.nw_proto == IPPROTO_UDP) {
-      struct udphdr *udp = DP_ADD_PTR(ip6, sizeof(*ip6));
-
-      if (udp + 1 > dend) {
-        LLBS_PPLN_DROP(xf);
-        return -1;
-      }
-
-      xf->il34m.source = udp->source;
-      xf->il34m.dest = udp->dest;
-    }
+    if (p->skip_v6 == 0)
+      ret = dp_parse_in_ipv6(p, md, xf);
   }
 
-  return 0;
+  return ret;
 } 
 
 static int __always_inline
@@ -252,7 +457,8 @@ dp_parse_gtp_ehdr(void *nh, void *dend)
 }
 
 static int __always_inline
-dp_parse_gtp(void *md,
+dp_parse_gtp(struct parser *p,
+             void *md,
              void *inp,
              struct xfi *xf)
 {
@@ -338,7 +544,6 @@ dp_parse_gtp(void *md,
     nhl = DP_TC_PTR(nh);
 
     /* Parse maximum GTP_MAX_EXTH  gtp extension headers */
-#pragma unroll
     for (depth = 0; depth < GTP_MAX_EXTH; depth++) {
 
       if (nhl + 1 > dend) {
@@ -381,21 +586,23 @@ done:
     return 0;
   }
 
-  dp_parse_inner_packet(md, gtp_next, 1, xf);
+  p->inp = 1;
+  p->skip_l2 = 1;
+  p->dbegin = gtp_next;
+  dp_parse_inner_d1(p, md, xf);
 
   return 0;
 
 drop:
-  LLBS_PPLN_DROP(xf);
   return -1;
 
 pass:
-  LLBS_PPLN_PASS(xf);
   return 0;
 }
 
 static int __always_inline
-dp_parse_outer_udp(void *md,
+dp_parse_outer_udp(struct parser *p,
+                   void *md,
                    void *udp_next,
                    struct xfi *xf)
 {
@@ -408,7 +615,6 @@ dp_parse_outer_udp(void *md,
   case bpf_htons(VXLAN_OUDP_DPORT) :
     vx = DP_TC_PTR(udp_next);
     if (vx + 1 > dend) {
-      LLBS_PPLN_DROP(xf);
       return -1;
     }
 
@@ -418,17 +624,19 @@ dp_parse_outer_udp(void *md,
     xf->pm.tun_off = DP_DIFF_PTR(vx_next, DP_PDATA(md));
 
     LL_DBG_PRINTK("[PRSR] UDP VXLAN %u\n", xf->tm.tunnel_id);
-    dp_parse_inner_packet(md, vx_next, 0, xf);
+    p->inp = 1;
+    p->skip_l2 = 0;
+    p->dbegin = vx_next;
+    dp_parse_inner_d1(p, md, xf);
     break;
   case bpf_htons(GTPU_UDP_DPORT):
   case bpf_htons(GTPC_UDP_DPORT):
     gh = DP_TC_PTR(udp_next);
     if (gh + 1 > dend) {
-      LLBS_PPLN_DROP(xf);
       return -1;
     }
 
-    dp_parse_gtp(md, gh, xf);
+    dp_parse_gtp(p, md, gh, xf);
     break;
   default:
     return 1;
@@ -439,41 +647,203 @@ dp_parse_outer_udp(void *md,
 } 
 
 static int __always_inline
+dp_parse_llb(struct parser *p,
+             void *md,
+             struct xfi *xf)
+{
+  struct ethhdr *eth;
+  struct llb_ethhdr *llb = DP_TC_PTR(p->dbegin);
+
+  LL_DBG_PRINTK("[PRSR] LLB \n");
+
+#ifdef LL_TC_EBPF
+  return -1;
+#endif
+
+  if (DP_TC_PTR(p->dbegin) + (sizeof(struct ethhdr) + sizeof(*llb)) > p->dend) {
+    return -1;
+  }
+
+  llb = DP_ADD_PTR(p->dbegin, sizeof(struct ethhdr));
+  xf->pm.oport = (llb->oport);
+  xf->pm.iport = (llb->iport);
+
+  eth = DP_ADD_PTR(p->dbegin, (int)sizeof(struct llb_ethhdr));
+  memcpy(eth->h_dest, xf->l2m.dl_dst, 6);
+  memcpy(eth->h_source, xf->l2m.dl_src, 6);
+  eth->h_proto = llb->ntype;
+
+  if (dp_remove_l2(md, (int)sizeof(*llb))) {
+    return -1;
+  }
+
+#ifndef LL_TC_EBPF
+  if (1) {
+    struct ll_xmdi *xm;
+    if (bpf_xdp_adjust_meta(md, -(int)sizeof(*xm)) < 0) {
+      LL_DBG_PRINTK("[PRSR] adjust meta fail\n");
+      return -1;
+    }
+
+    p->dbegin = DP_TC_PTR(DP_PDATA(md));
+    xm = DP_TC_PTR(DP_MDATA(md));
+    if (xm + 1 >  p->dbegin) {
+      return -1;
+    }
+
+    xm->pi.oport = xf->pm.oport;
+    xm->pi.iport = xf->pm.iport;
+    xm->pi.skip = 0;
+  }
+#endif
+  return 0;
+}
+
+static int __always_inline
+dp_parse_udp(struct parser *p,
+             void *md,
+             struct xfi *xf)
+{
+  struct udphdr *udp = DP_TC_PTR(p->dbegin);
+  
+  if (udp + 1 > p->dend) {
+    return 0;
+  }
+
+  xf->l34m.source = udp->source;
+  xf->l34m.dest = udp->dest;
+
+  if (dp_pkt_is_l2mcbc(xf, md) == 1) {
+    LLBS_PPLN_TRAP(xf);
+  }
+
+  return dp_parse_outer_udp(p, md, udp + 1, xf);
+}
+
+static int __always_inline
+dp_parse_ipv4(struct parser *p,
+              void *md,
+              struct xfi *xf)
+{
+  struct iphdr *iph = DP_TC_PTR(p->dbegin);
+  int iphl = iph->ihl << 2;
+
+  if (iph + 1 > p->dend) {
+    return -1;
+  }
+
+  if (DP_ADD_PTR(iph, iphl) > p->dend) {
+    return -1;
+  }
+
+  xf->pm.l3_len = bpf_ntohs(iph->tot_len);
+  xf->pm.l3_plen = xf->pm.l3_len - iphl;
+
+  xf->l34m.valid = 1;
+  xf->l34m.tos = iph->tos & 0xfc;
+  xf->l34m.nw_proto = iph->protocol;
+  xf->l34m.saddr4 = iph->saddr;
+  xf->l34m.daddr4 = iph->daddr;
+
+  /* Earlier we used to have the following check here :
+   * !ip_is_fragment(iph) || ip_is_first_fragment(iph))
+   * But it seems to be unncessary as proper bound checking
+   * is already taken care by eBPF verifier
+   */
+  xf->pm.l4_off = DP_DIFF_PTR(DP_ADD_PTR(iph, iphl), p->start);
+  p->dbegin = DP_ADD_PTR(iph, iphl);
+
+  if (xf->l34m.nw_proto == IPPROTO_TCP) {
+    return dp_parse_tcp(p, md, xf);
+  } else if (xf->l34m.nw_proto == IPPROTO_UDP) {
+    return dp_parse_udp(p, md, xf);
+  } else if (xf->l34m.nw_proto == IPPROTO_SCTP) {
+    return dp_parse_sctp(p, md, xf);
+  } else if (xf->l34m.nw_proto == IPPROTO_ICMP) {
+    return dp_parse_icmp(p, md, xf);
+  } else if (xf->l34m.nw_proto == IPPROTO_ESP ||
+             xf->l34m.nw_proto == IPPROTO_AH) {
+    /* Let xfrm handle it */
+    return 2;
+  }
+
+  if (ip_is_fragment(iph)) {
+    xf->l34m.source = 0;
+    xf->l34m.dest = 0;
+  }
+  
+  return 0;
+}
+
+static int __always_inline
+dp_parse_ipv6(struct parser *p,
+              void *md,
+              struct xfi *xf)
+{
+  struct ipv6hdr *ip6 = DP_TC_PTR(p->dbegin);
+
+  if (ip6 + 1 > p->dend) {
+    return -1;
+  }
+
+  if (ipv6_addr_is_multicast(&ip6->daddr) ||
+      ipv6_addr_is_multicast(&ip6->saddr)) {
+    return 2;
+  }
+
+  xf->pm.l3_plen = bpf_ntohs(ip6->payload_len);
+  xf->pm.l3_len =  xf->pm.l3_plen + sizeof(*ip6);
+
+  xf->l34m.valid = 1;
+  xf->l34m.tos = ((ip6->priority << 4) |
+               ((ip6->flow_lbl[0] & 0xf0) >> 4)) & 0xfc;
+  xf->l34m.nw_proto = ip6->nexthdr;
+  memcpy(&xf->l34m.saddr, &ip6->saddr, sizeof(ip6->saddr));
+  memcpy(&xf->l34m.daddr, &ip6->daddr, sizeof(ip6->daddr));
+
+  xf->pm.l4_off = DP_DIFF_PTR(DP_ADD_PTR(ip6, sizeof(*ip6)), p->start);
+  p->dbegin = DP_ADD_PTR(ip6, sizeof(*ip6));
+
+  if (xf->l34m.nw_proto == IPPROTO_TCP) {
+    return dp_parse_tcp(p, md, xf);
+  } else if (xf->l34m.nw_proto == IPPROTO_UDP) {
+    return dp_parse_udp(p, md, xf);
+  } else if (xf->l34m.nw_proto == IPPROTO_SCTP) {
+    return dp_parse_sctp(p, md, xf);
+  } else if (xf->l34m.nw_proto == IPPROTO_ICMPV6) {
+    return dp_parse_icmp6(p, md, xf);
+  } else if (xf->l34m.nw_proto == IPPROTO_ESP ||
+             xf->l34m.nw_proto == IPPROTO_AH) {
+    /* Let xfrm handle it */
+    return 2;
+  }
+  return 0;
+}
+
+static int __always_inline
 dp_parse_packet(void *md,
                 struct xfi *xf,
                 int skip_v6)
 {
-#ifndef LL_TC_EBPF
-  int i = 0;
-#endif
+  int ret = 0;
   __u32 fm_data;
   __u32 fm_data_end;
-  __u16 h_proto;
-  struct ethhdr *eth;
-  struct vlanhdr *vlh;
   void *dend;
+  struct parser p;
 
   fm_data = DP_PDATA(md);
   fm_data_end = DP_PDATA_END(md);
   xf->pm.py_bytes = DP_DIFF_PTR(fm_data_end, fm_data);
 
+  p.start = DP_TC_PTR(fm_data);
+  p.dbegin = DP_TC_PTR(p.start);
+  p.dend = DP_TC_PTR(fm_data_end);
+  p.skip_v6 = skip_v6;
+
   dend = DP_TC_PTR(fm_data_end);
-  eth =  DP_TC_PTR(fm_data);
 
-  if (eth + 1 > dend) {
-    LLBS_PPLN_DROP(xf);
-    return -1;
-  }
-
-  xf->l2m.valid = 1;
-  memcpy(xf->l2m.dl_dst, eth->h_dest, 2*6);
-  memcpy(xf->pm.lkup_dmac, eth->h_dest, 6);
-  xf->l2m.dl_type = eth->h_proto;
-
-  /* 802.2 */
-  if (eth->h_proto < bpf_htons(1536)) {
-    LLBS_PPLN_TRAP(xf);
-    return 1;
+  if ((ret = dp_parse_eth(&p, md, xf))) {
+    goto handle_excp;
   }
 
   if (DP_NEED_MIRR(md)) {
@@ -481,331 +851,52 @@ dp_parse_packet(void *md,
     LL_DBG_PRINTK("[PRSR] LB %d %d\n", xf->pm.mirr, DP_IFI(md));
   }
 
-  h_proto = eth->h_proto;
-
 #ifdef HAVE_DP_IPC
   if (xdp2tc_has_xmd(md, xf)) {
     return 1;
   }
 #endif
 
-  vlh = DP_ADD_PTR(eth, sizeof(*eth));
-
-#ifndef LL_TC_EBPF
-#pragma unroll
-  for (i = 0; i < MAX_STACKED_VLANS; i++) {
-    if (!proto_is_vlan(h_proto))
-      break;
-
-    if (vlh + 1 > dend)
-      break;
-
-    h_proto = vlh->h_vlan_encapsulated_proto;
-
-    xf->l2m.vlan[i] = vlh->h_vlan_TCI & bpf_htons(VLAN_VID_MASK);
-    vlh++;
+  if ((ret = dp_parse_vlan(&p, md, xf))) {
+    goto handle_excp;
   }
-#else
-  dp_vlan_info(xf, md); 
-#endif
 
-  xf->pm.l3_off = DP_DIFF_PTR(vlh, eth);
+  xf->pm.l3_off = DP_DIFF_PTR(p.dbegin, p.start);
 
-  xf->l2m.dl_type = h_proto;
   if (xf->l2m.dl_type == bpf_htons(ETH_P_ARP)) {
-    struct arp_ethhdr *arp = DP_TC_PTR(vlh);
-
-    if (arp + 1 > dend) {
-      LLBS_PPLN_DROP(xf);
-      return -1;
-    }
-
-    if (arp->ar_pro == bpf_htons(ETH_P_IP) && 
-        arp->ar_pln == 4) {
-      xf->l34m.saddr4 = arp->ar_spa;
-      xf->l34m.daddr4 = arp->ar_tpa;
-    }
-    xf->l34m.nw_proto = bpf_ntohs(arp->ar_op) & 0xff;
-    LLBS_PPLN_TRAPC(xf, LLB_PIPE_RC_PARSER);
-    return 1;
+    ret = dp_parse_arp(&p, md, xf);
   } else if (xf->l2m.dl_type == bpf_htons(ETH_P_IP)) {
-    struct iphdr *iph = DP_TC_PTR(vlh);
-    int iphl = iph->ihl << 2;
-
-    if (iph + 1 > dend) {
-      LLBS_PPLN_DROP(xf);
-      return -1;
-    }
-
-    if (DP_ADD_PTR(iph, iphl) > dend) {
-      LLBS_PPLN_DROP(xf);
-      return -1;
-    }
-
-    xf->pm.l3_len = bpf_ntohs(iph->tot_len);
-    xf->pm.l3_plen = xf->pm.l3_len - iphl;
-
-    xf->l34m.valid = 1;
-    xf->l34m.tos = iph->tos & 0xfc;
-    xf->l34m.nw_proto = iph->protocol;
-    xf->l34m.saddr4 = iph->saddr;
-    xf->l34m.daddr4 = iph->daddr;
-
-    /* Earlier we used to have the following check here :
-     * !ip_is_fragment(iph) || ip_is_first_fragment(iph))
-     * But it seems to be unncessary as proper bound checking
-     * is already taken care by eBPF verifier
-     */
-    if (1) {
-
-      xf->pm.l4_off = DP_DIFF_PTR(DP_ADD_PTR(iph, iphl), eth);
-
-      if (xf->l34m.nw_proto == IPPROTO_TCP) {
-        struct tcphdr *tcp = DP_ADD_PTR(iph, iphl);
-
-        if (tcp + 1 > dend) {
-          /* In case of fragmented packets */
-          return 0;
-        }
-
-        if (tcp->fin)
-          xf->pm.tcp_flags = LLB_TCP_FIN;
-        if (tcp->rst)
-          xf->pm.tcp_flags |= LLB_TCP_RST;
-        if (tcp->syn)
-          xf->pm.tcp_flags |= LLB_TCP_SYN;
-        if (tcp->psh)
-          xf->pm.tcp_flags |= LLB_TCP_PSH;
-        if (tcp->ack)
-          xf->pm.tcp_flags |= LLB_TCP_ACK;
-        if (tcp->urg)
-          xf->pm.tcp_flags |= LLB_TCP_URG;
-
-        if (xf->pm.tcp_flags & (LLB_TCP_FIN|LLB_TCP_RST)) {
-          xf->pm.l4fin = 1;
-        }
-
-        xf->l34m.source = tcp->source;
-        xf->l34m.dest = tcp->dest;
-        xf->l34m.seq = tcp->seq;
-        xf->l34m.ack = tcp->ack_seq;
-      } else if (xf->l34m.nw_proto == IPPROTO_UDP) {
-        struct udphdr *udp = DP_ADD_PTR(iph, iphl);
-
-        if (udp + 1 > dend) {
-          return 0;
-        }
-
-        xf->l34m.source = udp->source;
-        xf->l34m.dest = udp->dest;
-
-        if (dp_pkt_is_l2mcbc(xf, md) == 1) {
-          LLBS_PPLN_TRAP(xf);
-        }
-
-        return dp_parse_outer_udp(md, udp + 1, xf);
-      } else if (xf->l34m.nw_proto == IPPROTO_ICMP) {
-        struct icmphdr *icmp = DP_ADD_PTR(iph, iphl);
-
-        if (icmp + 1 > dend) {
-          return 0;
-        }
-
-        if ((icmp->type == ICMP_ECHOREPLY ||
-            icmp->type == ICMP_ECHO)) {
-           xf->l34m.source = icmp->un.echo.id;
-           xf->l34m.dest = icmp->un.echo.id;
-        } 
-      } else if (xf->l34m.nw_proto == IPPROTO_SCTP) {
-        struct sctp_dch *c;
-        struct sctphdr *sctp = DP_ADD_PTR(iph, iphl);
-
-        if (sctp + 1 > dend) {
-          return 0;
-        }
-
-        xf->l34m.source = sctp->source;
-        xf->l34m.dest = sctp->dest;
-  
-        c = DP_TC_PTR(DP_ADD_PTR(sctp, sizeof(*sctp)));
-
-        /* Chunks need not be present in all sctp packets */
-        if (c + 1 > dend) {
-          return 0;
-        }
-
-        /* Parsing only one-level of chunk */
-        if (c->type == SCTP_ERROR ||
-            c->type == SCTP_ABORT ||
-            c->type == SCTP_SHUT  ||
-            c->type == SCTP_SHUT_ACK ||
-            c->type == SCTP_SHUT_COMPLETE) {
-          xf->pm.l4fin = 1;
-        }
-      } else if (xf->l34m.nw_proto == IPPROTO_ESP ||
-                 xf->l34m.nw_proto == IPPROTO_AH) {
-        /* Let xfrm handle it */
-        LLBS_PPLN_PASS(xf);
-        return 1;
-      }
-
-      if (ip_is_fragment(iph)) {
-         xf->l34m.source = 0;
-         xf->l34m.dest = 0;
-      }
-    } else {
-#ifndef LL_HANDLE_NO_FRAG
-      return 0;
-#else
-      /* Let Linux stack handle it */
-      LLBS_PPLN_PASS(xf);
-      return 1;
-#endif
-    }
+    ret = dp_parse_ipv4(&p, md, xf);
   } else if (xf->l2m.dl_type == bpf_htons(ETH_P_IPV6)) {
-    struct ipv6hdr *ip6 = DP_TC_PTR(vlh);
-
-    if (ip6 + 1 > dend) {
-      LLBS_PPLN_DROP(xf);
-      return -1;
-    }
-
-    if (skip_v6 == 1) {
+    if (p.skip_v6 == 1) {
       return 0;
     }
-
-    if (ipv6_addr_is_multicast(&ip6->daddr) ||
-        ipv6_addr_is_multicast(&ip6->saddr)) {
-      LLBS_PPLN_PASS(xf);
-      return 1;
-    }
-
-    xf->pm.l3_plen = bpf_ntohs(ip6->payload_len);
-    xf->pm.l3_len =  xf->pm.l3_plen + sizeof(*ip6);
-
-    xf->l34m.valid = 1;
-    xf->l34m.tos = ((ip6->priority << 4) |
-                 ((ip6->flow_lbl[0] & 0xf0) >> 4)) & 0xfc;
-    xf->l34m.nw_proto = ip6->nexthdr;
-    memcpy(&xf->l34m.saddr, &ip6->saddr, sizeof(ip6->saddr));
-    memcpy(&xf->l34m.daddr, &ip6->daddr, sizeof(ip6->daddr));
-
-    xf->pm.l4_off = DP_DIFF_PTR(DP_ADD_PTR(ip6, sizeof(*ip6)), eth);
-    if (xf->l34m.nw_proto == IPPROTO_TCP) {
-      struct tcphdr *tcp = DP_ADD_PTR(ip6, sizeof(*ip6));
-      if (tcp + 1 > dend) {
-        LLBS_PPLN_DROP(xf);
-        return -1;
-      }
-
-      if (tcp->fin)
-        xf->pm.tcp_flags = LLB_TCP_FIN;
-      if (tcp->rst)
-        xf->pm.tcp_flags |= LLB_TCP_RST;
-      if (tcp->syn)
-        xf->pm.tcp_flags |= LLB_TCP_SYN;
-      if (tcp->psh)
-        xf->pm.tcp_flags |= LLB_TCP_PSH;
-      if (tcp->ack)
-        xf->pm.tcp_flags |= LLB_TCP_ACK;
-      if (tcp->urg)
-        xf->pm.tcp_flags |= LLB_TCP_URG;
-
-      if (xf->pm.tcp_flags & (LLB_TCP_FIN|LLB_TCP_RST)) {
-          xf->pm.l4fin = 1;
-      }
-  
-      xf->l34m.source = tcp->source;
-      xf->l34m.dest = tcp->dest;
-      xf->l34m.seq = tcp->seq;
-      xf->l34m.ack = tcp->ack_seq;
-    } else if (xf->l34m.nw_proto == IPPROTO_UDP) {
-      struct udphdr *udp = DP_ADD_PTR(ip6, sizeof(*ip6));
-
-      if (udp + 1 > dend) {
-        LLBS_PPLN_DROP(xf);
-        return -1;
-      }
-
-      xf->l34m.source = udp->source;
-      xf->l34m.dest = udp->dest;
-    } else if (xf->l34m.nw_proto == IPPROTO_ICMPV6) {
-      struct icmp6hdr *icmp6 = DP_ADD_PTR(ip6, sizeof(*ip6));
-
-      if (icmp6 + 1 > dend) {
-        return 0;
-      }
-
-      if ((icmp6->icmp6_type == ICMPV6_ECHO_REPLY ||
-          icmp6->icmp6_type == ICMPV6_ECHO_REQUEST)) {
-        xf->l34m.source = icmp6->icmp6_dataun.u_echo.identifier;
-        xf->l34m.dest = icmp6->icmp6_dataun.u_echo.identifier;
-      } else if (icmp6->icmp6_type >= 133 &&
-                 icmp6->icmp6_type <= 137) {
-        /* NDisc related */
-        LLBS_PPLN_TRAPC(xf, LLB_PIPE_RC_PARSER);
-        return 1;
-      }
-    }
+    ret = dp_parse_ipv6(&p, md, xf);
   } else if (xf->l2m.dl_type == bpf_htons(ETH_TYPE_LLB)) {
-    struct llb_ethhdr *llb = DP_TC_PTR(vlh);
+    ret = dp_parse_llb(&p, md, xf);
+  }
 
-    LL_DBG_PRINTK("[PRSR] LLB \n");
-
-#ifdef LL_TC_EBPF
-    LLBS_PPLN_DROP(xf);
-    return -1;
-#endif
-
-    if (DP_TC_PTR(fm_data) + (sizeof(*eth) + sizeof(*llb)) > dend) {
-      LLBS_PPLN_DROP(xf);
-      return -1;
-    }
-
-    llb = DP_ADD_PTR(fm_data, sizeof(*eth));
-    xf->pm.oport = (llb->oport);
-    xf->pm.iport = (llb->iport);
-
-    eth = DP_ADD_PTR(fm_data, (int)sizeof(struct llb_ethhdr));
-    memcpy(eth->h_dest, xf->l2m.dl_dst, 6);
-    memcpy(eth->h_source, xf->l2m.dl_src, 6);
-    eth->h_proto = llb->ntype;
-
-    if (dp_remove_l2(md, (int)sizeof(*llb))) {
-      LLBS_PPLN_DROP(xf);
-      return -1;
-    }
-
-#ifndef LL_TC_EBPF
-    if (1) {
-      struct ll_xmdi *xm;
-      if (bpf_xdp_adjust_meta(md, -(int)sizeof(*xm)) < 0) {
-        LL_DBG_PRINTK("[PRSR] adjust meta fail\n");
-        LLBS_PPLN_DROP(xf);
-        return -1;
-      }
-
-      fm_data = DP_PDATA(md);
-      xm = DP_TC_PTR(DP_MDATA(md));
-      if (xm + 1 >  DP_TC_PTR(fm_data)) {
-        LLBS_PPLN_DROP(xf);
-        return -1;
-      } 
-
-      xm->pi.oport = xf->pm.oport;
-      xm->pi.iport = xf->pm.iport;
-      xm->pi.skip = 0;
-    }
-#endif
-    //LLBS_PPLN_RDR(xf);
-    return 1;
+  if (ret != 0) {
+    goto handle_excp;
   }
 
   if (dp_pkt_is_l2mcbc(xf, md) == 1) {
-    LLBS_PPLN_TRAP(xf);
-    return 1;
+    LLBS_PPLN_PASS(xf);
   }
+
   return 0;
+
+handle_excp:
+  if (ret > 0) {
+    if (ret == 2) {
+      LLBS_PPLN_PASS(xf);
+    } else {
+      LLBS_PPLN_TRAPC(xf, LLB_PIPE_RC_PARSER);
+    }
+  } else if (ret < 0) {
+    LLBS_PPLN_DROP(xf);
+  }
+  return ret;
 }
 
 static int __always_inline
