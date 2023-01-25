@@ -13,10 +13,7 @@
 #include <linux/udp.h>
 #include <linux/tcp.h>
 
-/* Header cursor to keep track of current parsing position */
-struct hdr_cursor {
-	void *pos;
-};
+#define ETH_TYPE_ETH2(x) ((x) >= bpf_htons(1536))
 
 typedef enum {
   DP_PRET_FAIL  = -1,
@@ -25,7 +22,7 @@ typedef enum {
   DP_PRET_PASS  =  2
 }dpret_t;
 
-/* Parser to help ebpf packer parsing */
+/* Parser to help ebpf packet parsing */
 struct parser {
   __u8 inp:1;
   __u8 skip_l2:1;

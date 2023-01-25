@@ -29,7 +29,7 @@ dp_parse_eth(struct parser *p,
     xf->l2m.dl_type = eth->h_proto;
   }
 
-  if (eth->h_proto < bpf_htons(1536)) {
+  if (!ETH_TYPE_ETH2(eth->h_proto)) {
     return DP_PRET_PASS;
   }
 
