@@ -39,7 +39,7 @@ dp_ing_pkt_main(void *md, struct xfi *xf)
   LL_DBG_PRINTK("[PRSR] tm  %d\n", sizeof(xf->tm));
   LL_DBG_PRINTK("[PRSR] qm  %d\n", sizeof(xf->qm));
 
-  dp_parse_packet(md, xf, 0);
+  dp_parse_d0(md, xf, 0);
 
   /* Handle parser results */
   if (xf->pm.pipe_act & LLB_PIPE_REWIRE) {
@@ -71,7 +71,7 @@ int  xdp_packet_func(struct xdp_md *ctx)
   }
   memset(xf, 0, sizeof *xf);
 
-  dp_parse_packet(ctx, xf, 0);
+  dp_parse_d0(ctx, xf, 0);
 
   return DP_PASS;
 }
@@ -115,7 +115,7 @@ int tc_packet_func_fast(struct __sk_buff *md)
   }
 #endif
 
-  dp_parse_packet(md, xf, 1);
+  dp_parse_d0(md, xf, 1);
 
   return dp_ing_fc_main(md, xf);
 #else

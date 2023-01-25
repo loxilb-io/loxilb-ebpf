@@ -18,6 +18,36 @@ struct hdr_cursor {
 	void *pos;
 };
 
+typedef enum {
+  DP_PRET_FAIL  = -1,
+  DP_PRET_OK    =  0,
+  DP_PRET_TRAP  =  1,
+  DP_PRET_PASS  =  2
+}dpret_t;
+
+/* Parser to help ebpf packer parsing */
+struct parser {
+  __u8 inp:1;
+  __u8 skip_l2:1;
+  __u8 skip_v6:1;
+  __u8 res:5;
+  void *start;
+  void *dbegin;
+  void *dend;
+};
+
+/* Parser to help gtp ebpf packer parsing */
+struct gtp_parser {
+  struct gtp_v1_hdr *gh;
+  struct gtp_v1_ehdr *geh;
+  void *nh;
+  void *gtp_next;
+  __u8 hlen;
+  __u8 *nhl;
+  __u8 *neh;
+  __u8 elen;
+};
+
 #define VLAN_VID_MASK  0x0fff
 #define VLAN_PCP_MASK  0xe000
 #define VLAN_PCP_SHIFT 13
