@@ -43,11 +43,11 @@ dp_parse_vlan(struct parser *p,
               void *md,
               struct xfi *xf)
 {
-  struct vlanhdr *vlh;
 #ifndef LL_TC_EBPF
+  struct vlanhdr *vlh;
   int vlan_depth;
-#endif
   vlh = DP_TC_PTR(p->dbegin);
+#endif
 
 #ifndef LL_TC_EBPF
 #pragma unroll
