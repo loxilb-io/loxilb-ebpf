@@ -739,7 +739,7 @@ dp_vlan_info(struct xfi *xf, void *md)
   struct __sk_buff *b = md;
 
   if (b->vlan_present) {
-    xf->l2m.dl_type = bpf_htons((__u16)(b->vlan_proto));
+    /*xf->l2m.dl_type = bpf_htons((__u16)(b->vlan_proto));*/
     xf->l2m.vlan[0] = bpf_htons((__u16)(b->vlan_tci));
     return 1;
   }
