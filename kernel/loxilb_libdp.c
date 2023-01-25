@@ -426,8 +426,9 @@ llb_setup_ctctr_map(int mapfd)
   struct dp_ct_ctrtact ctr;
 
   memset(&ctr, 0, sizeof(ctr));
-  ctr.counter = (LLB_CT_MAP_ENTRIES/LLB_MAX_DP_NODES) * xh->nodenum;
-  ctr.maxval = (LLB_CT_MAP_ENTRIES/LLB_MAX_DP_NODES);
+  ctr.start = (LLB_CT_MAP_ENTRIES/LLB_MAX_LB_NODES) * xh->nodenum;
+  ctr.counter = ctr.start;
+  ctr.entries = ctr.start + (LLB_CT_MAP_ENTRIES/LLB_MAX_LB_NODES);
   bpf_map_update_elem(mapfd, &k, &ctr, BPF_ANY);
 }
 
@@ -755,7 +756,7 @@ llb_xh_init(llb_dp_struct_t *xh)
   xh->maps[LL_DP_CRC32C_MAP].has_pb   = 0;
   xh->maps[LL_DP_CRC32C_MAP].max_entries = LLB_CRC32C_ENTRIES;
 
-  xh->maps[LL_DP_CTCTR_MAP].map_name = "ctctr_map";
+  xh->maps[LL_DP_CTCTR_MAP].map_name = "ct_ctr";
   xh->maps[LL_DP_CTCTR_MAP].has_pb   = 0;
   xh->maps[LL_DP_CTCTR_MAP].max_entries = 1;
 
@@ -2136,6 +2137,7 @@ loxilb_main(struct ebpfcfg *cfg)
   /* Save any special config parameters */
   if (cfg) {
     xh->have_mtrace = cfg->have_mtrace;
+    xh->nodenum = cfg->nodenum;
   }
 
   llb_xh_init(xh);

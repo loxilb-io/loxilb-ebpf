@@ -13,11 +13,12 @@
 #define LLB_FP_IMG_BPF        "/opt/loxilb/llb_ebpf_main.o"
 #define LLB_DB_MAP_PDIR       "/opt/loxilb/dp/bpf"
 
+#define LLB_MAX_LB_NODES      (2)
 #define LLB_MIRR_MAP_ENTRIES  (32)
 #define LLB_NH_MAP_ENTRIES    (4*1024)
 #define LLB_RTV4_MAP_ENTRIES  (32*1024)
 #define LLB_RTV4_PREF_LEN     (48)
-#define LLB_CT_MAP_ENTRIES    (256*1024)
+#define LLB_CT_MAP_ENTRIES    (256*1024*LLB_MAX_LB_NODES)
 #define LLB_ACLV6_MAP_ENTRIES (4*1024)
 #define LLB_RTV6_MAP_ENTRIES  (2*1024)
 #define LLB_TMAC_MAP_ENTRIES  (2*1024)
@@ -30,7 +31,7 @@
 #define LLB_PORT_NO           (LLB_INTERFACES-1)
 #define LLB_PORT_PIDX_START   (LLB_PORT_NO - 128)
 #define LLB_INTF_MAP_ENTRIES  (6*1024)
-#define LLB_FCV4_MAP_ENTRIES  (256*1024)
+#define LLB_FCV4_MAP_ENTRIES  (LLB_CT_MAP_ENTRIES)
 #define LLB_PGM_MAP_ENTRIES   (8)
 #define LLB_FCV4_MAP_ACTS     (DP_SET_TOCP)
 #define LLB_POL_MAP_ENTRIES   (8*1024)
@@ -38,7 +39,6 @@
 #define LLB_PSECS             (8)
 #define LLB_MAX_NXFRMS        (16)
 #define LLB_CRC32C_ENTRIES    (256)
-#define LLB_MAX_DP_NODES      (2)
 
 #define LLB_DP_SUNP_PGM_ID2    (6)
 #define LLB_DP_CRC_PGM_ID2     (5)
@@ -717,16 +717,14 @@ struct dp_sess_tact {
   uint32_t teid;
 };
 
-#define CT_CTR_SID      (0)
-#define CT_CTR_MAX_SID  (250000)
-
 struct dp_ct_ctrtact {
   struct dp_cmn_act ca; /* Possible actions :
                          * None (just place holder)
                          */
   struct bpf_spin_lock lock;
+  __u32 start;
   __u32 counter;
-  __u32 maxval;
+  __u32 entries;
 };
 
 struct ll_dp_pmdi {

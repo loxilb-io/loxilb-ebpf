@@ -52,6 +52,7 @@ unsigned long long get_os_nsecs(void);
 
 struct ebpfcfg {
   int have_mtrace;
+  int nodenum;
 };
 
 int loxilb_main(struct ebpfcfg *cfg);
