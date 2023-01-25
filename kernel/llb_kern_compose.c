@@ -635,7 +635,7 @@ dp_parse_outer_udp(struct parser *p,
     return dp_parse_gtp(p, md, gh, xf);
     break;
   default:
-    return DP_PRET_TRAP;
+    return DP_PRET_OK;
   }
 
   /* Not reached */
