@@ -5,15 +5,6 @@
  * SPDX-License-Identifier: (GPL-2.0 OR BSD-2-Clause)
  */
 
-struct parser {
-  int  inp;
-  int  skip_l2;
-  int  skip_v6;
-  void *start;
-  void *dbegin;
-  void *dend;
-};
-
 static int __always_inline
 dp_parse_eth(struct parser *p,
              void *md,
@@ -23,7 +14,7 @@ dp_parse_eth(struct parser *p,
   eth = DP_TC_PTR(p->dbegin);
 
   if (eth + 1 > p->dend) {
-    return -1;
+    return DP_PRET_FAIL;
   }
 
   if (p->inp) {
@@ -39,12 +30,12 @@ dp_parse_eth(struct parser *p,
   }
 
   if (eth->h_proto < bpf_htons(1536)) {
-    return 1;
+    return DP_PRET_PASS;
   }
 
   p->dbegin = DP_ADD_PTR(eth, sizeof(*eth));
 
-  return 0;
+  return DP_PRET_OK;
 }
 
 static int __always_inline
@@ -65,7 +56,7 @@ dp_parse_vlan(struct parser *p,
       break;
 
     if (vlh + 1 > p->dend) {
-      return -1;
+      return DP_PRET_FAIL;
     }
 
     xf->l2m.dl_type = vlh->h_vlan_encapsulated_proto;
@@ -77,11 +68,11 @@ dp_parse_vlan(struct parser *p,
   dp_vlan_info(xf, md); 
 #endif
 
-  return 0;
+  return DP_PRET_OK;
 }
 
 static int __always_inline
-dp_parse_ivlan(struct parser *p,
+dp_parse_vlan_d1(struct parser *p,
                void *md,
                struct xfi *xf)
 {
@@ -93,7 +84,7 @@ dp_parse_ivlan(struct parser *p,
   if (proto_is_vlan(xf->il2m.dl_type)) {
 
     if (vlh + 1 > p->dend) {
-      return -1;
+      return DP_PRET_FAIL;
     }
 
     xf->il2m.dl_type = vlh->h_vlan_encapsulated_proto;
@@ -102,7 +93,7 @@ dp_parse_ivlan(struct parser *p,
     p->dbegin = DP_TC_PTR(vlh);
   }
 
-  return 0;
+  return DP_PRET_OK;
 }
 
 static int __always_inline
@@ -113,7 +104,7 @@ dp_parse_arp(struct parser *p,
   struct arp_ethhdr *arp = DP_TC_PTR(p->dbegin);
 
   if (arp + 1 > p->dend) {
-      return -1;
+      return DP_PRET_FAIL;
   }
 
   if (p->inp) {
@@ -132,7 +123,7 @@ dp_parse_arp(struct parser *p,
     xf->l34m.nw_proto = bpf_ntohs(arp->ar_op) & 0xff;
   }
 
-  return 1;
+  return DP_PRET_TRAP;
 }
 
 static int __always_inline
@@ -145,7 +136,7 @@ dp_parse_tcp(struct parser *p,
 
   if (tcp + 1 > p->dend) {
     /* In case of fragmented packets */
-    return 0;
+    return DP_PRET_OK;
   }
 
   if (tcp->fin)
@@ -162,7 +153,7 @@ dp_parse_tcp(struct parser *p,
     tcp_flags |= LLB_TCP_URG;
 
   if (p->inp) {
-    if (xf->pm.tcp_flags & (LLB_TCP_FIN|LLB_TCP_RST)) {
+    if (tcp_flags & (LLB_TCP_FIN|LLB_TCP_RST)) {
       xf->pm.il4fin = 1;
     }
 
@@ -171,7 +162,7 @@ dp_parse_tcp(struct parser *p,
     xf->il34m.seq = tcp->seq;
     xf->pm.itcp_flags = tcp_flags;
   } else {
-    if (xf->pm.tcp_flags & (LLB_TCP_FIN|LLB_TCP_RST)) {
+    if (tcp_flags & (LLB_TCP_FIN|LLB_TCP_RST)) {
       xf->pm.l4fin = 1;
     }
 
@@ -181,7 +172,7 @@ dp_parse_tcp(struct parser *p,
     xf->pm.tcp_flags = tcp_flags;
   }
 
-  return 0;
+  return DP_PRET_OK;
 }
 
 static int __always_inline
@@ -192,7 +183,7 @@ dp_parse_icmp(struct parser *p,
   struct icmphdr *icmp = DP_TC_PTR(p->dbegin);
 
   if (icmp + 1 > p->dend) {
-    return 0;
+    return DP_PRET_OK;
   }
 
   if ((icmp->type == ICMP_ECHOREPLY ||
@@ -205,7 +196,7 @@ dp_parse_icmp(struct parser *p,
       xf->l34m.dest = icmp->un.echo.id;
     }
   }
-  return 0;
+  return DP_PRET_OK;
 }
 
 static int __always_inline
@@ -216,17 +207,13 @@ dp_parse_iudp(struct parser *p,
   struct udphdr *udp = DP_TC_PTR(p->dbegin);
   
   if (udp + 1 > p->dend) {
-    return 0;
+    return DP_PRET_OK;
   }
 
   xf->il34m.source = udp->source;
   xf->il34m.dest = udp->dest;
 
-  if (dp_pkt_is_l2mcbc(xf, md) == 1) {
-    LLBS_PPLN_TRAP(xf);
-  }
-
-  return 0;
+  return DP_PRET_OK;
 }
 
 static int __always_inline
@@ -238,7 +225,7 @@ dp_parse_sctp(struct parser *p,
   struct sctphdr *sctp = DP_TC_PTR(p->dbegin);
 
   if (sctp + 1 > p->dend) {
-    return 0;
+    return DP_PRET_OK;
   }
 
   if (p->inp) {
@@ -253,7 +240,7 @@ dp_parse_sctp(struct parser *p,
 
   /* Chunks need not be present in all sctp packets */
   if (c + 1 > p->dend) {
-    return 0;
+    return DP_PRET_OK;
   }
 
   /* Parsing only one-level of chunk */
@@ -269,7 +256,7 @@ dp_parse_sctp(struct parser *p,
     }
   }
 
-  return 0;
+  return DP_PRET_OK;
 }
 
 static int __always_inline
@@ -280,7 +267,7 @@ dp_parse_icmp6(struct parser *p,
   struct icmp6hdr *icmp6 = DP_TC_PTR(p->dbegin);
 
   if (icmp6 + 1 > p->dend) {
-    return 0;
+    return DP_PRET_OK;
   }
 
   if ((icmp6->icmp6_type == ICMPV6_ECHO_REPLY ||
@@ -294,14 +281,14 @@ dp_parse_icmp6(struct parser *p,
     }
   } else if (icmp6->icmp6_type >= 133 &&
             icmp6->icmp6_type <= 137) {
-    return 1;
+    return DP_PRET_PASS;
   }
 
-  return 0;
+  return DP_PRET_OK;
 }
 
 static int __always_inline
-dp_parse_in_ipv4(struct parser *p,
+dp_parse_ipv4_d1(struct parser *p,
                  void *md,
                  struct xfi *xf)
 {
@@ -309,11 +296,11 @@ dp_parse_in_ipv4(struct parser *p,
   int iphl = iph->ihl << 2;
 
   if (iph + 1 > p->dend) {
-    return -1;
+    return DP_PRET_FAIL;
   }
 
   if (DP_ADD_PTR(iph, iphl) > p->dend) {
-    return -1;
+    return DP_PRET_FAIL;
   }
 
   xf->pm.il3_len = bpf_ntohs(iph->tot_len);
@@ -344,7 +331,7 @@ dp_parse_in_ipv4(struct parser *p,
   } else if (xf->il34m.nw_proto == IPPROTO_ESP ||
              xf->il34m.nw_proto == IPPROTO_AH) {
     /* Let xfrm handle it */
-    return 2;
+    return DP_PRET_PASS;
   }
 
   if (ip_is_fragment(iph)) {
@@ -352,23 +339,23 @@ dp_parse_in_ipv4(struct parser *p,
     xf->il34m.dest = 0;
   }
   
-  return 0;
+  return DP_PRET_OK;
 }
 
 static int __always_inline
-dp_parse_in_ipv6(struct parser *p,
+dp_parse_ipv6_d1(struct parser *p,
                  void *md,
                  struct xfi *xf)
 {
   struct ipv6hdr *ip6 = DP_TC_PTR(p->dbegin);
 
   if (ip6 + 1 > p->dend) {
-    return -1;
+    return DP_PRET_FAIL;
   }
 
   if (ipv6_addr_is_multicast(&ip6->daddr) ||
       ipv6_addr_is_multicast(&ip6->saddr)) {
-    return 2;
+    return DP_PRET_PASS;
   }
 
   xf->pm.il3_plen = bpf_ntohs(ip6->payload_len);
@@ -391,21 +378,19 @@ dp_parse_in_ipv6(struct parser *p,
   } else if (xf->l34m.nw_proto == IPPROTO_ICMPV6) {
     return dp_parse_icmp6(p, md, xf);
   }
-  return 0;
+  return DP_PRET_OK;
 }
 
 static int __always_inline
-dp_parse_inner_d1(struct parser *p,
-                  void *md,
-                  struct xfi *xf)
+dp_parse_d1(struct parser *p,
+            void *md,
+            struct xfi *xf)
 {
   int ret = 0;
 
   if (p->skip_l2) {
-
     if (xf->il2m.dl_type == 0)
-      return 1;
-
+      return DP_PRET_TRAP;
     goto proc_inl3;
   }
 
@@ -413,7 +398,7 @@ dp_parse_inner_d1(struct parser *p,
     return ret;
   }
 
-  if ((ret = dp_parse_ivlan(p, md, xf))) {
+  if ((ret = dp_parse_vlan_d1(p, md, xf))) {
     return ret;
   }
 
@@ -423,10 +408,10 @@ proc_inl3:
   if (xf->il2m.dl_type == bpf_htons(ETH_P_ARP)) {
     ret = dp_parse_arp(p, md, xf);
   } else if (xf->il2m.dl_type == bpf_htons(ETH_P_IP)) {
-    ret = dp_parse_in_ipv4(p, md, xf);
+    ret = dp_parse_ipv4_d1(p, md, xf);
   } else if (xf->il2m.dl_type == bpf_htons(ETH_P_IPV6)) {
     if (p->skip_v6 == 0)
-      ret = dp_parse_in_ipv6(p, md, xf);
+      ret = dp_parse_ipv6_d1(p, md, xf);
   }
 
   return ret;
@@ -440,21 +425,37 @@ dp_parse_gtp_ehdr(void *nh, void *dend)
   int elen;
 
   if (nhl + 1 > dend) {
-    return -1;
+    return DP_PRET_FAIL;
   }
 
   elen = *nhl<<2;
 
   if (nhl + elen > dend) {
-    return -1;
+    return DP_PRET_FAIL;
   }
 
   neh = nhl + (elen - 1);
 
   if (*neh) return elen;
 
-  return 0;
+  return DP_PRET_OK;
 }
+
+#ifdef HAVE_LEGACY_BPF_MAPS
+struct bpf_map_def SEC("maps") gparser = {
+  .type = BPF_MAP_TYPE_PERCPU_ARRAY,
+  .key_size = sizeof(int),  /* Index CPU idx */
+  .value_size = sizeof(struct gtp_parser),
+  .max_entries = 1,
+};
+#else
+struct {
+        __uint(type,        BPF_MAP_TYPE_PERCPU_ARRAY);
+        __type(key,         int);
+        __type(value,       struct gtp_parser);
+        __uint(max_entries, 1);
+} gparser SEC(".maps");
+#endif
 
 static int __always_inline
 dp_parse_gtp(struct parser *p,
@@ -462,47 +463,44 @@ dp_parse_gtp(struct parser *p,
              void *inp,
              struct xfi *xf)
 {
-  struct gtp_v1_hdr *gh;
-  struct gtp_v1_ehdr *geh;
-  int hlen = GTP_HDR_LEN;
-  void *nh;
-  void *gtp_next;
-  void *dend;
-  uint8_t *nhl;
-  uint8_t *neh;
-  int elen;
-  int depth;
+  int var = 0;
+  struct gtp_parser *gp;
 
-  gh = DP_TC_PTR(inp);
-  dend = DP_TC_PTR(DP_PDATA_END(md));
-
-  if (gh + 1 > dend) {
+  gp = bpf_map_lookup_elem(&gparser, &var);
+  if (!gp) {
     goto drop;
   }
 
-  if (gh->ver != GTP_VER_1) {
-    return 0;
+  gp->hlen = GTP_HDR_LEN;
+  gp->gh = DP_TC_PTR(inp);
+
+  if (gp->gh + 1 > p->dend) {
+    goto drop;
   }
 
-  if (gh->espn) hlen += sizeof(*geh);
+  if (gp->gh->ver != GTP_VER_1) {
+    return DP_PRET_OK;
+  }
 
-  xf->tm.tunnel_id = bpf_ntohl(gh->teid);
+  if (gp->gh->espn) gp->hlen += sizeof(struct gtp_v1_ehdr);
+
+  xf->tm.tunnel_id = bpf_ntohl(gp->gh->teid);
   xf->tm.tun_type = LLB_TUN_GTP;
 
-  if (gh->espn & GTP_EXT_FM) {
-    geh = DP_ADD_PTR(gh, sizeof(*gh));
+  if (gp->gh->espn & GTP_EXT_FM) {
+    gp->geh = DP_ADD_PTR(gp->gh, sizeof(struct gtp_v1_hdr));
 
-    if (geh + 1 > dend) {
+    if (gp->geh + 1 > p->dend) {
       goto drop;
     }
 
-    nh = DP_ADD_PTR(geh, sizeof(*geh));
+    gp->nh = DP_ADD_PTR(gp->geh, sizeof(struct gtp_v1_ehdr));
 
     /* PDU session container is always first */
-    if (geh->next_hdr == GTP_NH_PDU_SESS) {
-      struct gtp_pdu_sess_cmnhdr *pch = DP_TC_PTR(nh);
+    if (gp->geh->next_hdr == GTP_NH_PDU_SESS) {
+      struct gtp_pdu_sess_cmnhdr *pch = DP_TC_PTR(gp->nh);
 
-      if (pch + 1 > dend) {
+      if (pch + 1 > p->dend) {
         goto drop;
       }
 
@@ -513,26 +511,26 @@ dp_parse_gtp(struct parser *p,
       if (pch->pdu_type == GTP_PDU_SESS_UL) {
         struct gtp_ul_pdu_sess_hdr *pul = DP_TC_PTR(pch);
 
-        if (pul + 1 > dend) {
+        if (pul + 1 > p->dend) {
           goto drop;
         }
 
-        hlen += sizeof(*pul);
+        gp->hlen += sizeof(*pul);
         xf->qm.qfi = pul->qfi;
-        nh = pul+1;
+        gp->nh = pul+1;
 
         if (pul->next_hdr == 0) goto done;
 
       } else if (pch->pdu_type == GTP_PDU_SESS_DL) {
         struct gtp_dl_pdu_sess_hdr *pdl = DP_TC_PTR(pch);
 
-        if (pdl + 1 > dend) {
+        if (pdl + 1 > p->dend) {
           goto drop;
         }
 
-        hlen += sizeof(*pdl);
+        gp->hlen += sizeof(*pdl);
         xf->qm.qfi = pdl->qfi;
-        nh = pdl+1;
+        gp->nh = pdl+1;
 
         if (pdl->next_hdr == 0) goto done;
 
@@ -541,63 +539,61 @@ dp_parse_gtp(struct parser *p,
       }
     }
 
-    nhl = DP_TC_PTR(nh);
+    gp->nhl = DP_TC_PTR(gp->nh);
 
     /* Parse maximum GTP_MAX_EXTH  gtp extension headers */
-    for (depth = 0; depth < GTP_MAX_EXTH; depth++) {
+    for (var = 0; var < GTP_MAX_EXTH; var++) {
 
-      if (nhl + 1 > dend) {
+      if (gp->nhl + 1 > p->dend) {
         goto drop;
       }
 
-      elen = *nhl<<2;
+      gp->elen = *(gp->nhl)<<2;
 
-      neh = nhl + (elen - 1);
-      if (neh + 1 > dend) {
+      gp->neh = gp->nhl + (gp->elen - 1);
+      if (gp->neh + 1 > p->dend) {
         goto drop;
       }
 
-      hlen += elen;
-      if (*neh == 0) break;
-      nhl = DP_ADD_PTR(nhl, elen);
+      gp->hlen += gp->elen;
+      if (*(gp->neh) == 0) break;
+      gp->nhl = DP_ADD_PTR(gp->nhl, gp->elen);
     }
 
-    if (depth >= GTP_MAX_EXTH) {
+    if (var >= GTP_MAX_EXTH) {
       goto pass;
     }
   }
 
 done:
-  gtp_next = DP_ADD_PTR(gh, hlen);
-  xf->pm.tun_off = DP_DIFF_PTR(gtp_next, DP_PDATA(md));
+  gp->gtp_next = DP_ADD_PTR(gp->gh, gp->hlen);
+  xf->pm.tun_off = DP_DIFF_PTR(gp->gtp_next, DP_PDATA(md));
 
-  neh = DP_TC_PTR(gtp_next);
-  if (neh + 1 > dend) {
+  gp->neh = DP_TC_PTR(gp->gtp_next);
+  if (gp->neh + 1 > p->dend) {
     return 0;
   }
 
-  __u8 nv = ((*neh & 0xf0) >> 4);
+  var = ((*(gp->neh) & 0xf0) >> 4);
 
-  if (nv == 4) {
+  if (var == 4) {
     xf->il2m.dl_type = bpf_htons(ETH_P_IP);
-  } else if (nv == 6) {
+  } else if (var == 6) {
     xf->il2m.dl_type = bpf_htons(ETH_P_IPV6);
   } else {
-    return 0;
+    return DP_PRET_OK;
   }
 
   p->inp = 1;
   p->skip_l2 = 1;
-  p->dbegin = gtp_next;
-  dp_parse_inner_d1(p, md, xf);
-
-  return 0;
+  p->dbegin = gp->gtp_next;
+  return dp_parse_d1(p, md, xf);
 
 drop:
-  return -1;
+  return DP_PRET_FAIL;
 
 pass:
-  return 0;
+  return DP_PRET_PASS;
 }
 
 static int __always_inline
@@ -615,7 +611,7 @@ dp_parse_outer_udp(struct parser *p,
   case bpf_htons(VXLAN_OUDP_DPORT) :
     vx = DP_TC_PTR(udp_next);
     if (vx + 1 > dend) {
-      return -1;
+      return DP_PRET_FAIL;
     }
 
     xf->tm.tunnel_id = (bpf_ntohl(vx->vx_vni)) >> 8 & 0xfffffff;
@@ -627,19 +623,19 @@ dp_parse_outer_udp(struct parser *p,
     p->inp = 1;
     p->skip_l2 = 0;
     p->dbegin = vx_next;
-    dp_parse_inner_d1(p, md, xf);
+    return dp_parse_d1(p, md, xf);
     break;
   case bpf_htons(GTPU_UDP_DPORT):
   case bpf_htons(GTPC_UDP_DPORT):
     gh = DP_TC_PTR(udp_next);
     if (gh + 1 > dend) {
-      return -1;
+      return DP_PRET_FAIL;
     }
 
-    dp_parse_gtp(p, md, gh, xf);
+    return dp_parse_gtp(p, md, gh, xf);
     break;
   default:
-    return 1;
+    return DP_PRET_TRAP;
   }
 
   /* Not reached */
@@ -657,11 +653,11 @@ dp_parse_llb(struct parser *p,
   LL_DBG_PRINTK("[PRSR] LLB \n");
 
 #ifdef LL_TC_EBPF
-  return -1;
+  return DP_PRET_FAIL;
 #endif
 
   if (DP_TC_PTR(p->dbegin) + (sizeof(struct ethhdr) + sizeof(*llb)) > p->dend) {
-    return -1;
+    return DP_PRET_FAIL;
   }
 
   llb = DP_ADD_PTR(p->dbegin, sizeof(struct ethhdr));
@@ -674,7 +670,7 @@ dp_parse_llb(struct parser *p,
   eth->h_proto = llb->ntype;
 
   if (dp_remove_l2(md, (int)sizeof(*llb))) {
-    return -1;
+    return DP_PRET_FAIL;
   }
 
 #ifndef LL_TC_EBPF
@@ -682,13 +678,13 @@ dp_parse_llb(struct parser *p,
     struct ll_xmdi *xm;
     if (bpf_xdp_adjust_meta(md, -(int)sizeof(*xm)) < 0) {
       LL_DBG_PRINTK("[PRSR] adjust meta fail\n");
-      return -1;
+      return DP_PRET_FAIL;
     }
 
     p->dbegin = DP_TC_PTR(DP_PDATA(md));
     xm = DP_TC_PTR(DP_MDATA(md));
     if (xm + 1 >  p->dbegin) {
-      return -1;
+      return DP_PRET_FAIL;
     }
 
     xm->pi.oport = xf->pm.oport;
@@ -696,7 +692,7 @@ dp_parse_llb(struct parser *p,
     xm->pi.skip = 0;
   }
 #endif
-  return 0;
+  return DP_PRET_OK;
 }
 
 static int __always_inline
@@ -707,7 +703,7 @@ dp_parse_udp(struct parser *p,
   struct udphdr *udp = DP_TC_PTR(p->dbegin);
   
   if (udp + 1 > p->dend) {
-    return 0;
+    return DP_PRET_OK;
   }
 
   xf->l34m.source = udp->source;
@@ -729,11 +725,11 @@ dp_parse_ipv4(struct parser *p,
   int iphl = iph->ihl << 2;
 
   if (iph + 1 > p->dend) {
-    return -1;
+    return DP_PRET_FAIL;
   }
 
   if (DP_ADD_PTR(iph, iphl) > p->dend) {
-    return -1;
+    return DP_PRET_FAIL;
   }
 
   xf->pm.l3_len = bpf_ntohs(iph->tot_len);
@@ -764,7 +760,7 @@ dp_parse_ipv4(struct parser *p,
   } else if (xf->l34m.nw_proto == IPPROTO_ESP ||
              xf->l34m.nw_proto == IPPROTO_AH) {
     /* Let xfrm handle it */
-    return 2;
+    return DP_PRET_PASS;
   }
 
   if (ip_is_fragment(iph)) {
@@ -772,7 +768,7 @@ dp_parse_ipv4(struct parser *p,
     xf->l34m.dest = 0;
   }
   
-  return 0;
+  return DP_PRET_OK;
 }
 
 static int __always_inline
@@ -783,12 +779,12 @@ dp_parse_ipv6(struct parser *p,
   struct ipv6hdr *ip6 = DP_TC_PTR(p->dbegin);
 
   if (ip6 + 1 > p->dend) {
-    return -1;
+    return DP_PRET_FAIL;
   }
 
   if (ipv6_addr_is_multicast(&ip6->daddr) ||
       ipv6_addr_is_multicast(&ip6->saddr)) {
-    return 2;
+    return DP_PRET_PASS;
   }
 
   xf->pm.l3_plen = bpf_ntohs(ip6->payload_len);
@@ -815,32 +811,26 @@ dp_parse_ipv6(struct parser *p,
   } else if (xf->l34m.nw_proto == IPPROTO_ESP ||
              xf->l34m.nw_proto == IPPROTO_AH) {
     /* Let xfrm handle it */
-    return 2;
+    return DP_PRET_PASS;
   }
-  return 0;
+  return DP_PRET_OK;
 }
 
 static int __always_inline
-dp_parse_packet(void *md,
-                struct xfi *xf,
-                int skip_v6)
+dp_parse_d0(void *md,
+            struct xfi *xf,
+            int skip_v6)
 {
   int ret = 0;
-  __u32 fm_data;
-  __u32 fm_data_end;
-  void *dend;
   struct parser p;
 
-  fm_data = DP_PDATA(md);
-  fm_data_end = DP_PDATA_END(md);
-  xf->pm.py_bytes = DP_DIFF_PTR(fm_data_end, fm_data);
-
-  p.start = DP_TC_PTR(fm_data);
-  p.dbegin = DP_TC_PTR(p.start);
-  p.dend = DP_TC_PTR(fm_data_end);
+  p.inp = 0;
+  p.skip_l2 = 0;
   p.skip_v6 = skip_v6;
-
-  dend = DP_TC_PTR(fm_data_end);
+  p.start = DP_TC_PTR(DP_PDATA(md));
+  p.dbegin = DP_TC_PTR(p.start);
+  p.dend = DP_TC_PTR(DP_PDATA_END(md));
+  xf->pm.py_bytes = DP_DIFF_PTR(p.dend, p.dbegin);
 
   if ((ret = dp_parse_eth(&p, md, xf))) {
     goto handle_excp;
@@ -887,13 +877,13 @@ dp_parse_packet(void *md,
   return 0;
 
 handle_excp:
-  if (ret > 0) {
-    if (ret == 2) {
+  if (ret > DP_PRET_OK) {
+    if (ret == DP_PRET_PASS) {
       LLBS_PPLN_PASS(xf);
     } else {
       LLBS_PPLN_TRAPC(xf, LLB_PIPE_RC_PARSER);
     }
-  } else if (ret < 0) {
+  } else if (ret < DP_PRET_OK) {
     LLBS_PPLN_DROP(xf);
   }
   return ret;
