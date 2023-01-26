@@ -933,10 +933,6 @@ dp_unparse_packet_always_slow(void *ctx,  struct xfi *xf)
         if (dp_do_dnat64(ctx, xf)) {
           return DP_DROP;
         }
-        if (xf->pm.pipe_act & (LLB_PIPE_TRAP | LLB_PIPE_PASS)) {
-          xf->pm.oport = xf->pm.iport;
-          return dp_rewire_port(&tx_intf_map, xf);
-        }
       }
     } else { /* If packet is v4 */
       if (xf->nm.nv6 == 0) {
