@@ -914,6 +914,10 @@ dp_unparse_packet_always_slow(void *ctx,  struct xfi *xf)
         if (dp_do_snat46(ctx, xf) != 0) {
           return DP_DROP;
         }
+        if (xf->pm.pipe_act & (LLB_PIPE_TRAP | LLB_PIPE_PASS)) {
+          xf->pm.oport = xf->pm.iport;
+          return dp_rewire_port(&tx_intf_map, xf);
+        }
       }
     }
   } else if (xf->pm.nf & LLB_NAT_DST) {
@@ -928,6 +932,10 @@ dp_unparse_packet_always_slow(void *ctx,  struct xfi *xf)
       } else {
         if (dp_do_dnat64(ctx, xf)) {
           return DP_DROP;
+        }
+        if (xf->pm.pipe_act & (LLB_PIPE_TRAP | LLB_PIPE_PASS)) {
+          xf->pm.oport = xf->pm.iport;
+          return dp_rewire_port(&tx_intf_map, xf);
         }
       }
     } else { /* If packet is v4 */
