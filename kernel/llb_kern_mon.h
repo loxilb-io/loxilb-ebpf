@@ -1,12 +1,11 @@
 // SPDX-License-Identifier: BSD-3-Clause
-// This file is based on https://github.com/CrowdStrike/bpfmon-example
-// And modified to work with loxilb by loxilb authors
 #ifndef __LLB_KERN_MON_H__
 #define __LLB_KERN_MON_H__
 
 #define MAX_KEY_SIZE 64
 #define MAX_VALUE_SIZE 224
 #define BPF_NAME_LEN 16U
+#define LLB_MAX_PMON_ENTRIES  (10240)
 
 enum map_updater{
     UPDATER_KERNEL,

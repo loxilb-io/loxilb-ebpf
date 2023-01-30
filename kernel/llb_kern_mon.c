@@ -11,7 +11,7 @@ struct {
     __uint(type, BPF_MAP_TYPE_PERF_EVENT_ARRAY);
     __type(key, int);
     __type(value, unsigned int);
-    __uint(max_entries, 1024);
+    __uint(max_entries, LLB_MAX_PMON_ENTRIES);
 } map_events SEC(".maps");
 
 #define MEM_READ(P) ({typeof(P) val = 0; bpf_probe_read(&val, sizeof(val), &P); val;})
