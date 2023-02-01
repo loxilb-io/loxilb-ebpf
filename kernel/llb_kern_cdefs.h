@@ -1489,9 +1489,7 @@ dp_do_dnat64(void *md, struct xfi *xf)
     return -1;
   }
 
-  if (dp_buf_delete_room(md, sizeof(struct ipv6hdr) - sizeof(*iph),
-            BPF_F_ADJ_ROOM_FIXED_GSO)  < 0) {
-    LL_DBG_PRINTK("Failed v6 remove\n");
+  if (bpf_skb_change_proto(md, bpf_htons(ETH_P_IP), 0) < 0) {
     LLBS_PPLN_DROP(xf);
     return -1;
   }
@@ -1547,11 +1545,12 @@ dp_do_dnat64(void *md, struct xfi *xf)
     }
 
     sum = bpf_csum_diff(xf->l34m.saddr, sizeof(xf->l34m.saddr),
-                &iph->saddr, sizeof(iph->saddr), tcp->check);
+                &iph->saddr, sizeof(iph->saddr), 0);
     sum = bpf_csum_diff(xf->l34m.daddr, sizeof(xf->l34m.daddr),
                 &iph->daddr, sizeof(iph->daddr), sum);
+
     bpf_l4_csum_replace(md, xf->pm.l4_off + offsetof(struct tcphdr, check),
-                      0, sum, BPF_F_PSEUDO_HDR);
+                        0, sum, BPF_F_PSEUDO_HDR);
 
     dp_set_tcp_dport(md, xf, xf->nm.nxport);
 
@@ -1586,9 +1585,7 @@ dp_do_snat46(void *md, struct xfi *xf)
     return -1;
   }
 
-  if (dp_buf_add_room(md, sizeof(*ip6h) - sizeof(struct iphdr),
-            BPF_F_ADJ_ROOM_FIXED_GSO)  < 0) {
-    LL_DBG_PRINTK("Failed v6 remove\n");
+  if (bpf_skb_change_proto(md, bpf_htons(ETH_P_IPV6), 0) < 0) {
     LLBS_PPLN_DROP(xf);
     return -1;
   }
@@ -1628,7 +1625,7 @@ dp_do_snat46(void *md, struct xfi *xf)
   /* Outer IP header */
   ip6h->version  = 6;
   ip6h->payload_len = bpf_htons(xf->pm.l3_plen);
-  ip6h->hop_limit = 64; // FIXME - Copy inner
+  ip6h->hop_limit = 64; // FIXME - Copy inner ??
   ip6h->flow_lbl[0] = 0;
   ip6h->flow_lbl[1] = 0;
   ip6h->flow_lbl[2] = 0;
@@ -1644,7 +1641,7 @@ dp_do_snat46(void *md, struct xfi *xf)
     }
 
     sum = bpf_csum_diff(&xf->l34m.saddr[0], 4,
-                        (void *)&ip6h->saddr, sizeof(ip6h->saddr), tcp->check);
+                        (void *)&ip6h->saddr, sizeof(ip6h->saddr), 0);
     sum = bpf_csum_diff(&xf->l34m.daddr[0], 4,
                         (void *)&ip6h->daddr, sizeof(ip6h->daddr), sum);
     bpf_l4_csum_replace(md, xf->pm.l4_off + offsetof(struct tcphdr, check),
