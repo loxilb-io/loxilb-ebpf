@@ -134,15 +134,15 @@ $(USER_TARGETS_LIB): %: $(USER_OBJ) $(COMMON_OBJS)
 
 $(XDP_OBJ): %.o: %.c  Makefile $(COMMON_MK) $(KERN_USER_H) $(EXTRA_DEPS) $(XDP_DEPS)
 	$(CLANG) \
-	    -target bpf \
-	    -D __BPF_TRACING__ \
-	    $(BPF_CFLAGS) \
-	    -Wall \
-	    -Wno-unused-value \
-	    -Wno-pointer-sign \
-	    -Wno-compare-distinct-pointer-types \
-	    -Werror \
-	    -O2 -g -c -o ${@:.o=.o} $<
+		-target bpf \
+		-D __BPF_TRACING__ \
+		$(BPF_CFLAGS) \
+		-Wall \
+		-Wno-unused-value \
+		-Wno-pointer-sign \
+		-Wno-compare-distinct-pointer-types \
+		-Werror \
+		-O2 -g -c -o ${@:.o=.o} $<
 	#$(LLC) -march=bpf -filetype=obj -o $@ ${@:.o=.ll}
 	sudo mv $@ /opt/loxilb/ 
 
@@ -151,16 +151,16 @@ $(XDP_OBJ): %.o: %.c  Makefile $(COMMON_MK) $(KERN_USER_H) $(EXTRA_DEPS) $(XDP_D
 
 $(TC_OBJ): %.o: %.c  Makefile $(COMMON_MK) $(KERN_USER_H) $(EXTRA_DEPS) $(XDP_DEPS)
 	$(CLANG) \
-	    -target bpf \
-	    -D __BPF_TRACING__ \
-      -DLL_TC_EBPF=1 \
-	    $(BPF_CFLAGS) \
-	    -Wall \
-	    -Wno-unused-value \
-	    -Wno-pointer-sign \
-	    -Wno-compare-distinct-pointer-types \
-	    -Werror \
-	    -O2 -g -c -o ${@:.o=.o} $<
+		-target bpf \
+		-D __BPF_TRACING__ \
+		-DLL_TC_EBPF=1 \
+		$(BPF_CFLAGS) \
+		-Wall \
+		-Wno-unused-value \
+		-Wno-pointer-sign \
+		-Wno-compare-distinct-pointer-types \
+		-Werror \
+		-O2 -g -c -o ${@:.o=.o} $<
 	#$(LLC) -march=bpf -mattr=dwarfris -filetype=obj -o $@ ${@:.o=.o}
 	sudo mv $@ /opt/loxilb/ 
 	@#sudo pahole -J /opt/loxilb/$@
@@ -170,12 +170,13 @@ vmlinux:
 
 $(MON_OBJ): %.o: %.c  Makefile $(COMMON_MK) $(KERN_USER_H) $(EXTRA_DEPS) $(XDP_DEPS) vmlinux
 	$(CLANG) \
-    -target bpf \
-    -D __BPF_TRACING__ \
-    -D__TARGET_ARCH_$(ARCH) \
-    -DLL_TC_EBPF=1 \
-    $(CLANG_BPF_SYS_INCLUDES) \
-    -O2 -g -c -o ${@:.o=.o} $<
+		-target bpf \
+		-D __BPF_TRACING__ \
+		-D__TARGET_ARCH_$(ARCH) \
+		-DLL_TC_EBPF=1 \
+		$(BPF_CFLAGS) \
+		$(CLANG_BPF_SYS_INCLUDES) \
+		-O2 -g -c -o ${@:.o=.o} $<
 	#$(LLC) -march=bpf -mattr=dwarfris -filetype=obj -o $@ ${@:.o=.o}
 	@sudo cp $@ /opt/loxilb/
 	@#sudo pahole -J /opt/loxilb/$@
