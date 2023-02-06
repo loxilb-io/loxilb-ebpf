@@ -173,6 +173,7 @@ struct dp_tun_mdi {
 #define LLB_TUN_GTP           2
 #define LLB_TUN_STT           3
 #define LLB_TUN_GRE           4
+#define LLB_TUN_IPINIP        5
     __u32            tun_type;
     __le32           tun_rip;
     __le32           tun_sip; 

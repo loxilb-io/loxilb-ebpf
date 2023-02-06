@@ -145,7 +145,8 @@ enum {
   DP_SET_FCACT           = 20,
   DP_SET_DO_CT           = 21,
   DP_SET_RM_GTP          = 22,
-  DP_SET_ADD_GTP         = 23
+  DP_SET_ADD_GTP         = 23,
+  DP_SET_IPIP_TUN        = 24
 };
 
 struct dp_cmn_act {
@@ -246,6 +247,7 @@ struct dp_nh_tact {
   union {
     struct dp_rt_l2nh_act rt_l2nh;
     struct dp_rt_l2vxnh_act rt_l2vxnh;
+    struct dp_rt_l3tun_act rt_l3t;
   };
 };
 
