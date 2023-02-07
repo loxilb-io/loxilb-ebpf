@@ -11,7 +11,7 @@
 #define DP_BUF_DATA_END(F)    (DP_TC_PTR(F->fm.data_end))
 
 #ifndef MAX_STACKED_VLANS
-#define MAX_STACKED_VLANS     3
+#define MAX_STACKED_VLANS     2
 #endif
 
 #define LLB_INGP_MARK         0xf01dab1e
@@ -137,11 +137,8 @@ struct dp_l2_mdi {
     __u8             dl_dst[6];
     __u8             dl_src[6];
     __u8             vlan_pcp;
-    __u8             mpls_bos;
-    __u8             mpls_tc;
     __u8             valid;
-    __u32            mpls_label;
-    __u32            r2;
+    __u16            res;
 };
 
 #define saddr4 saddr[0]

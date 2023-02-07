@@ -1666,6 +1666,7 @@ dp_do_snat46(void *md, struct xfi *xf)
 static __u32 __always_inline
 dp_get_pkt_hash(void *md)
 {
+  bpf_set_hash_invalid(md);
   return bpf_get_hash_recalc(md);
 }
 
