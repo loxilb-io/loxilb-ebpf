@@ -146,7 +146,8 @@ enum {
   DP_SET_DO_CT           = 21,
   DP_SET_RM_GTP          = 22,
   DP_SET_ADD_GTP         = 23,
-  DP_SET_NEIGH_IPIP      = 24
+  DP_SET_NEIGH_IPIP      = 24,
+  DP_SET_RM_IPIP         = 25
 };
 
 struct dp_cmn_act {

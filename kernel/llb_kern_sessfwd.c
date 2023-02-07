@@ -22,6 +22,15 @@ dp_pipe_set_rm_gtp_tun(void *ctx, struct xfi *xf)
 }
 
 static int __always_inline
+dp_pipe_set_rm_ipip_tun(void *ctx, struct xfi *xf)
+{
+  LL_DBG_PRINTK("[SESS] rm-ipip \n");
+  dp_pop_outer_metadata(ctx, xf, 0);
+  xf->tm.tun_type = LLB_TUN_IPIP;
+  return 0;
+}
+
+static int __always_inline
 dp_do_sess4_lkup(void *ctx, struct xfi *xf)
 {
   struct dp_sess4_key key;
@@ -67,6 +76,9 @@ dp_do_sess4_lkup(void *ctx, struct xfi *xf)
   } else if (act->ca.act_type == DP_SET_RM_GTP) {
     dp_pipe_set_rm_gtp_tun(ctx, xf);
     xf->qm.qfi = act->qfi;
+    xf->pm.phit |= LLB_DP_TMAC_HIT;
+  } else if (act->ca.act_type == DP_SET_RM_IPIP) {
+    dp_pipe_set_rm_ipip_tun(ctx, xf);
     xf->pm.phit |= LLB_DP_TMAC_HIT;
   } else {
     xf->tm.new_tunnel_id = act->teid;
