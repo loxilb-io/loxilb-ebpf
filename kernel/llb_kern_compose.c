@@ -738,6 +738,9 @@ dp_parse_ipip(struct parser *p,
     return DP_PRET_OK;
   }
 
+  xf->tm.tunnel_id = 1; // No real use
+  xf->tm.tun_type = LLB_TUN_IPIP;
+
   p->inp = 1;
   p->skip_l2 = 1;
   p->dbegin = ip;
