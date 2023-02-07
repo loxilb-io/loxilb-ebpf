@@ -239,7 +239,7 @@ dp_do_rt_l2_nh(void *ctx, struct xfi *xf,
 
 static int __always_inline
 dp_do_rt_l2_vxlan_nh(void *ctx, struct xfi *xf,
-                     struct dp_rt_l2vxnh_act *nl2vx)
+                     struct dp_rt_tunnh_act *nl2vx)
 {
   struct dp_rt_l2nh_act *nl2;
 
@@ -313,9 +313,9 @@ dp_do_nh_lkup(void *ctx, struct xfi *xf, void *fa_)
 #ifdef HAVE_DP_FC
     struct dp_fc_tact *ta = &fa->fcta[DP_SET_NEIGH_VXLAN];
     ta->ca.act_type = nha->ca.act_type;
-    memcpy(&ta->nl2vx,  &nha->rt_l2vxnh, sizeof(nha->rt_l2vxnh));
+    memcpy(&ta->nl2vx,  &nha->rt_tnh, sizeof(nha->rt_tnh));
 #endif
-    return dp_do_rt_l2_vxlan_nh(ctx, xf, &nha->rt_l2vxnh);
+    return dp_do_rt_l2_vxlan_nh(ctx, xf, &nha->rt_tnh);
   }
 
   return 0;
