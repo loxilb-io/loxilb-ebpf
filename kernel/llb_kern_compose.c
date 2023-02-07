@@ -717,6 +717,34 @@ dp_parse_udp(struct parser *p,
 }
 
 static int __always_inline
+dp_parse_ipip(struct parser *p,
+              void *md,
+              struct xfi *xf)
+{
+  struct iphdr *ip = DP_TC_PTR(p->dbegin);
+  int iphl = ip->ihl << 2;
+  
+  if (ip + 1 > p->dend) {
+    return DP_PRET_OK;
+  }
+
+  if (DP_ADD_PTR(ip, iphl) > p->dend) {
+    return DP_PRET_FAIL;
+  }
+
+  if (ip->version == 4) {
+    xf->il2m.dl_type = bpf_htons(ETH_P_IP);
+  } else {
+    return DP_PRET_OK;
+  }
+
+  p->inp = 1;
+  p->skip_l2 = 1;
+  p->dbegin = ip;
+  return dp_parse_d1(p, md, xf);
+}
+
+static int __always_inline
 dp_parse_ipv4(struct parser *p,
               void *md,
               struct xfi *xf)
@@ -757,6 +785,8 @@ dp_parse_ipv4(struct parser *p,
     return dp_parse_sctp(p, md, xf);
   } else if (xf->l34m.nw_proto == IPPROTO_ICMP) {
     return dp_parse_icmp(p, md, xf);
+  } else if (xf->l34m.nw_proto == IPPROTO_IPIP) {
+    return dp_parse_ipip(p, md, xf);
   } else if (xf->l34m.nw_proto == IPPROTO_ESP ||
              xf->l34m.nw_proto == IPPROTO_AH) {
     /* Let xfrm handle it */

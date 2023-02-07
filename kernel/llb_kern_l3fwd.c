@@ -414,7 +414,8 @@ dp_ing_l3(void *ctx,  struct xfi *xf, void *fa)
 {
   if (xf->l2m.dl_type == bpf_htons(ETH_P_IP)) {
     /* Check termination */
-    if (xf->tm.tunnel_id && xf->tm.tun_type == LLB_TUN_GTP) {
+    if (xf->tm.tunnel_id &&
+        (xf->tm.tun_type == LLB_TUN_GTP || xf->tm.tun_type == LLB_TUN_IPIP)) {
       dp_do_sess4_lkup(ctx, xf);
     }
   }
