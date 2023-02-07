@@ -312,7 +312,9 @@ struct dp_fc_tact {
                                           */
     struct dp_nat_act nat_act;           /* DP_SET_SNAT, DP_SET_DNAT */
     struct dp_rt_l2nh_act nl2;           /* DP_SET_NEIGH_L2 */
-    struct dp_rt_tunnh_act nl2vx;       /* DP_SET_NEIGH_VXLAN */
+    struct dp_rt_tunnh_act ntun;         /* DP_SET_NEIGH_VXLAN,
+                                          * DP_SET_NEIGH_IPIP
+                                          */
     struct dp_l2vlan_act l2ov;           /* DP_SET_ADD_L2VLAN,
                                           * DP_SET_RM_L2VLAN
                                           */

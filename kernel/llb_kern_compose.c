@@ -1011,6 +1011,11 @@ dp_unparse_packet(void *ctx,  struct xfi *xf)
       if (dp_do_strip_vxlan(ctx, xf, xf->pm.tun_off) != 0) {
         return DP_DROP;
       }
+    } else if (xf->tm.tun_type == LLB_TUN_IPIP) {
+      LL_DBG_PRINTK("[DEPR] LL STRIP-IPIP\n");
+      if (dp_do_strip_ipip(ctx, xf) != 0) {
+        return DP_DROP;
+      }
     }
   } else if (xf->tm.new_tunnel_id) {
     LL_DBG_PRINTK("[DEPR] LL_NEW-TUN 0x%x\n",
@@ -1021,6 +1026,16 @@ dp_unparse_packet(void *ctx,  struct xfi *xf)
                           xf->tm.tun_sip,
                           xf->tm.new_tunnel_id,
                           1)) {
+        return DP_DROP;
+      }
+    } else if (xf->tm.tun_type == LLB_TUN_IPIP) {
+      LL_DBG_PRINTK("[DEPR] LL_NEW-IPTUN 0x%x\n",
+                  bpf_ntohl(xf->tm.new_tunnel_id));
+      if (dp_do_ins_ipip(ctx, xf,
+                         xf->tm.tun_rip,
+                         xf->tm.tun_sip,
+                         xf->tm.new_tunnel_id,
+                         1)) {
         return DP_DROP;
       }
     }

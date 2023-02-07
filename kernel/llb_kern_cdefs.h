@@ -1988,6 +1988,126 @@ dp_pop_outer_metadata(void *md, struct xfi *xf, int l2tun)
 }
 
 static int __always_inline
+dp_do_strip_ipip(void *md, struct xfi *xf)
+{
+  struct ethhdr *eth;
+  void *dend;
+  int olen = sizeof(struct iphdr);
+
+  if (dp_buf_delete_room(md, olen, BPF_F_ADJ_ROOM_FIXED_GSO)  < 0) {
+    LL_DBG_PRINTK("Failed gtph remove\n");
+    LLBS_PPLN_DROP(xf);
+    return -1;
+  }
+
+  eth = DP_TC_PTR(DP_PDATA(md));
+  dend = DP_TC_PTR(DP_PDATA_END(md));
+
+  if (eth + 1 > dend) {
+    LLBS_PPLN_DROP(xf);
+    return -1;
+  }
+
+  /* Recreate eth header */
+  memcpy(eth->h_dest, xf->l2m.dl_dst, 2*6);
+  eth->h_proto = xf->l2m.dl_type;
+
+  /* We do not care about vlan's now
+   * After routing it will be set as per outgoing BD
+   */
+  xf->l2m.vlan[0] = 0;
+  xf->l2m.vlan[1] = 0;
+
+#if 0
+  /* Reset pipeline metadata */
+  memcpy(&xf->l34m, &xf->il34m, sizeof(xf->l34m));
+  memcpy(xf->pm.lkup_dmac, eth->h_dest, 6);
+
+  xf->il34m.valid = 0;
+  xf->il2m.valid = 0;
+  xf->tm.tun_decap = 1;
+#endif
+
+  return 0;
+}
+
+static int __always_inline
+dp_do_ins_ipip(void *md,
+               struct xfi *xf,
+               __be32 rip,
+               __be32 sip,
+               __be32 tid,
+               int skip_md) 
+{
+  void *dend;
+  struct ethhdr *eth;
+  struct iphdr *iph;
+  int olen;
+  __u64 flags;
+
+  olen  = sizeof(*iph);
+
+  flags = BPF_F_ADJ_ROOM_FIXED_GSO |
+          BPF_F_ADJ_ROOM_ENCAP_L3_IPV4; 
+
+  /* add room between mac and network header */
+  if (dp_buf_add_room(md, olen, flags)) {
+    LLBS_PPLN_DROP(xf);
+    return -1;
+  }
+
+  eth = DP_TC_PTR(DP_PDATA(md));
+  dend = DP_TC_PTR(DP_PDATA_END(md));
+
+  if (eth + 1 > dend) {
+    LLBS_PPLN_DROP(xf);
+    return -1;
+  }
+
+  iph = (void *)(eth + 1);
+  if (iph + 1 > dend) {
+    LLBS_PPLN_DROP(xf);
+    return -1;
+  }
+
+  /* Outer IP header */ 
+  iph->version  = 4;
+  iph->ihl      = 5;
+  iph->tot_len  = bpf_htons(xf->pm.l3_len +  olen);
+  iph->ttl      = 64; // FIXME - Copy inner
+  iph->protocol = IPPROTO_IPIP;
+  iph->saddr    = sip;
+  iph->daddr    = rip;
+
+  dp_ipv4_new_csum((void *)iph);
+
+  xf->tm.tun_encap = 1;
+
+  if (skip_md) {
+    return 0;
+  }
+
+  /* 
+   * Reset pipeline metadata 
+   * If it is called from deparser, there is no need
+   * to do the following (set skip_md = 1)
+   */
+  memcpy(&xf->il34m, &xf->l34m, sizeof(xf->l34m));
+
+  /* Outer L2 - MAC addr are invalid as of now */
+  xf->pm.lkup_dmac[0] = 0xff;
+
+  /* Outer L3 */
+  xf->l34m.saddr4 = sip;
+  xf->l34m.daddr4 = rip;
+  xf->l34m.source = 0;
+  xf->l34m.dest = 0;
+  xf->pm.l4_off = xf->pm.l3_off + sizeof(*iph);
+  
+  return 0;
+}
+
+static int __always_inline
 dp_do_strip_vxlan(void *md, struct xfi *xf, int olen)
 {
   struct ethhdr *eth;
