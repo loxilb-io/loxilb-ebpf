@@ -102,6 +102,7 @@ dp_do_fw4_main(void *ctx, struct xfi *xf)
   act = &fwe->fwa;
 
   xf->pm.dp_mark = act->ca.mark;
+  xf->pm.dp_rec = act->ca.record;
 
   if (act->ca.act_type == DP_SET_NOP) {
     goto done;

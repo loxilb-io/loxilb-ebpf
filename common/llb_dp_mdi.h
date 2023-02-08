@@ -38,6 +38,7 @@ do {                                  \
   (x)->l2m.dl_type == bpf_htons(ETH_P_IP) &&  \
   (x)->qm.ipolid == 0 &&                      \
   (x)->nm.xlate_proto == 0 &&                 \
+  (x)->pm.dp_rec == 0 &&                      \
   (x)->pm.mirr == 0)
 
 #define LL_PIPELINE_CONT(F) (!F->pm.pipe_act)
@@ -120,7 +121,8 @@ struct dp_pi_mdi {
     __u16            l3_plen;
     __u16            il3_len;
     __u16            il3_plen;
-    __u32            dp_mark;
+    __u16            dp_mark;
+    __u16            dp_rec;
     __u16            tun_off;
     __u16            fw_mid;
     __u16            fw_lid;

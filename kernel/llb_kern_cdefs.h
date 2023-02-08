@@ -802,6 +802,19 @@ dp_rewire_port(void *tbl, struct xfi *xf)
 }
 
 static int __always_inline
+dp_record_it(void *skb, struct xfi *xf)
+{
+  int *oif;
+  int key = LLB_PORT_NO;
+
+  oif = bpf_map_lookup_elem(&tx_intf_map, &key);
+  if (!oif) {
+    return TC_ACT_SHOT;
+  }
+  return bpf_clone_redirect(skb, *oif, 0); 
+}
+
+static int __always_inline
 dp_remove_vlan_tag(void *ctx, struct xfi *xf)
 {
   void *dend = DP_TC_PTR(DP_PDATA_END(ctx));
@@ -1748,6 +1761,13 @@ dp_redirect_port(void *tbl, struct xfi *xf)
 
 static int __always_inline
 dp_rewire_port(void *tbl, struct xfi *xf)
+{
+  /* Not supported */
+  return 0;
+}
+
+static int __always_inline
+dp_record_it(void *ctx, struct xfi *xf)
 {
   /* Not supported */
   return 0;

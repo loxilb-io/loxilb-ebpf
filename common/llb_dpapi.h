@@ -156,7 +156,8 @@ struct dp_cmn_act {
   __u16 oaux;
   __u32 cidx;
   __u32 fwrid;
-  __u32 mark;
+  __u16 mark;
+  __u16 record;
 };
 
 struct dp_rt_l2nh_act {

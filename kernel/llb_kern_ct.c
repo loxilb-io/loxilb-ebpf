@@ -1063,6 +1063,7 @@ dp_ct_in(void *ctx, struct xfi *xf)
     adat->ca.oaux = 0;
     adat->ca.cidx = dp_ct_get_newctr();
     adat->ca.fwrid = xf->pm.fw_rid;
+    adat->ca.record = xf->pm.dp_rec;
     memset(&adat->ctd.pi, 0, sizeof(ct_pinf_t));
     if (xi->nat_flags) {
       adat->ca.act_type = xi->nat_flags & (LLB_NAT_DST|LLB_NAT_HDST) ?
@@ -1091,6 +1092,7 @@ dp_ct_in(void *ctx, struct xfi *xf)
     axdat->ca.oaux = 0;
     axdat->ca.cidx = adat->ca.cidx + 1;
     axdat->ca.fwrid = xf->pm.fw_rid;
+    axdat->ca.record = xf->pm.dp_rec;
     memset(&axdat->ctd.pi, 0, sizeof(ct_pinf_t));
     if (xxi->nat_flags) { 
       axdat->ca.act_type = xxi->nat_flags & (LLB_NAT_DST|LLB_NAT_HDST) ?

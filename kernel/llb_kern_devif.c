@@ -448,6 +448,10 @@ dp_ing_ct_main(void *ctx,  struct xfi *xf)
       bpf_tail_call(ctx, &pgm_tbl, LLB_DP_FW_PGM_ID);
     }
 
+    if (xf->pm.dp_rec) {
+      dp_record_it(ctx, xf);
+    }
+
     dp_do_nat(ctx, xf);
   }
 

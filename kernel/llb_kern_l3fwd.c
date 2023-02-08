@@ -313,6 +313,10 @@ dp_do_ctops(void *ctx, struct xfi *xf, void *fa_,
 #endif
 
   if (act->ca.fwrid != 0) {
+    if (act->ca.record) {
+      dp_record_it(ctx, xf);
+      xf->pm.dp_rec = act->ca.record;
+    }
     dp_do_map_stats(ctx, xf, LL_DP_FW4_STATS_MAP, act->ca.fwrid);
   }
   dp_do_map_stats(ctx, xf, LL_DP_CT_STATS_MAP, act->ca.cidx);
