@@ -37,7 +37,7 @@ dp_do_sess4_lkup(void *ctx, struct xfi *xf)
   struct dp_sess_tact *act;
 
   key.r = 0;
-  if (xf->tm.tunnel_id) {
+  if (xf->tm.tunnel_id && xf->tm.tun_type != LLB_TUN_IPIP) {
     key.daddr = xf->il34m.daddr4;
     key.saddr = xf->il34m.saddr4;
     key.teid = bpf_ntohl(xf->tm.tunnel_id);
