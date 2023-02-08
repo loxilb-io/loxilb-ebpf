@@ -146,7 +146,8 @@ enum {
   DP_SET_DO_CT           = 21,
   DP_SET_RM_GTP          = 22,
   DP_SET_ADD_GTP         = 23,
-  DP_SET_NEIGH_IPIP_TUN  = 24
+  DP_SET_NEIGH_IPIP      = 24,
+  DP_SET_RM_IPIP         = 25
 };
 
 struct dp_cmn_act {
@@ -179,7 +180,7 @@ struct dp_rt_l3tun_act {
   __u32 aux;
 };
 
-struct dp_rt_l2vxnh_act {
+struct dp_rt_tunnh_act {
   struct dp_rt_l3tun_act l3t;
   struct dp_rt_l2nh_act l2nh;
 };
@@ -246,8 +247,7 @@ struct dp_nh_tact {
                          */
   union {
     struct dp_rt_l2nh_act rt_l2nh;
-    struct dp_rt_l2vxnh_act rt_l2vxnh;
-    struct dp_rt_l3tun_act rt_l3t;
+    struct dp_rt_tunnh_act rt_tnh;
   };
 };
 
@@ -313,7 +313,9 @@ struct dp_fc_tact {
                                           */
     struct dp_nat_act nat_act;           /* DP_SET_SNAT, DP_SET_DNAT */
     struct dp_rt_l2nh_act nl2;           /* DP_SET_NEIGH_L2 */
-    struct dp_rt_l2vxnh_act nl2vx;       /* DP_SET_NEIGH_VXLAN */
+    struct dp_rt_tunnh_act ntun;         /* DP_SET_NEIGH_VXLAN,
+                                          * DP_SET_NEIGH_IPIP
+                                          */
     struct dp_l2vlan_act l2ov;           /* DP_SET_ADD_L2VLAN,
                                           * DP_SET_RM_L2VLAN
                                           */
@@ -411,7 +413,7 @@ struct dp_mirr_tact {
                          * DP_SET_RM_L2VLAN
                          */
   union {
-    struct dp_rt_l2vxnh_act rt_l2vxnh;
+    struct dp_rt_tunnh_act rt_tnh;
     struct dp_l2vlan_act vlan_act;
     struct dp_rdr_act port_act;
   };

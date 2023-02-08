@@ -238,20 +238,22 @@ dp_do_rt_l2_nh(void *ctx, struct xfi *xf,
 }
 
 static int __always_inline
-dp_do_rt_l2_vxlan_nh(void *ctx, struct xfi *xf,
-                     struct dp_rt_l2vxnh_act *nl2vx)
+dp_do_rt_tun_nh(void *ctx, struct xfi *xf, __u32 tun_type,
+                struct dp_rt_tunnh_act *ntun)
 {
   struct dp_rt_l2nh_act *nl2;
 
-  xf->tm.tun_rip = nl2vx->l3t.rip;
-  xf->tm.tun_sip = nl2vx->l3t.sip;
-  xf->tm.new_tunnel_id = nl2vx->l3t.tid;
-  xf->tm.tun_type = LLB_TUN_VXLAN;
+  xf->tm.tun_rip = ntun->l3t.rip;
+  xf->tm.tun_sip = ntun->l3t.sip;
+  xf->tm.new_tunnel_id = ntun->l3t.tid;
+  xf->tm.tun_type = tun_type;
 
-  memcpy(&xf->il2m, &xf->l2m, sizeof(xf->l2m));
-  xf->il2m.vlan[0] = 0;
+  if (tun_type == LLB_TUN_VXLAN) {
+    memcpy(&xf->il2m, &xf->l2m, sizeof(xf->l2m));
+    xf->il2m.vlan[0] = 0;
+  }
 
-  nl2 = &nl2vx->l2nh;
+  nl2 = &ntun->l2nh;
   memcpy(xf->l2m.dl_dst, nl2->dmac, 6);
   memcpy(xf->l2m.dl_src, nl2->smac, 6);
   memcpy(xf->pm.lkup_dmac, nl2->dmac, 6);
@@ -313,9 +315,11 @@ dp_do_nh_lkup(void *ctx, struct xfi *xf, void *fa_)
 #ifdef HAVE_DP_FC
     struct dp_fc_tact *ta = &fa->fcta[DP_SET_NEIGH_VXLAN];
     ta->ca.act_type = nha->ca.act_type;
-    memcpy(&ta->nl2vx,  &nha->rt_l2vxnh, sizeof(nha->rt_l2vxnh));
+    memcpy(&ta->ntun,  &nha->rt_tnh, sizeof(nha->rt_tnh));
 #endif
-    return dp_do_rt_l2_vxlan_nh(ctx, xf, &nha->rt_l2vxnh);
+    return dp_do_rt_tun_nh(ctx, xf, LLB_TUN_VXLAN, &nha->rt_tnh);
+  } else if (nha->ca.act_type == DP_SET_NEIGH_IPIP) {
+    return dp_do_rt_tun_nh(ctx, xf, LLB_TUN_IPIP, &nha->rt_tnh);
   }
 
   return 0;

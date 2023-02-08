@@ -717,6 +717,37 @@ dp_parse_udp(struct parser *p,
 }
 
 static int __always_inline
+dp_parse_ipip(struct parser *p,
+              void *md,
+              struct xfi *xf)
+{
+  struct iphdr *ip = DP_TC_PTR(p->dbegin);
+  int iphl = ip->ihl << 2;
+  
+  if (ip + 1 > p->dend) {
+    return DP_PRET_OK;
+  }
+
+  if (DP_ADD_PTR(ip, iphl) > p->dend) {
+    return DP_PRET_FAIL;
+  }
+
+  if (ip->version == 4) {
+    xf->il2m.dl_type = bpf_htons(ETH_P_IP);
+  } else {
+    return DP_PRET_OK;
+  }
+
+  xf->tm.tunnel_id = 1; // No real use
+  xf->tm.tun_type = LLB_TUN_IPIP;
+
+  p->inp = 1;
+  p->skip_l2 = 1;
+  p->dbegin = ip;
+  return dp_parse_d1(p, md, xf);
+}
+
+static int __always_inline
 dp_parse_ipv4(struct parser *p,
               void *md,
               struct xfi *xf)
@@ -757,6 +788,8 @@ dp_parse_ipv4(struct parser *p,
     return dp_parse_sctp(p, md, xf);
   } else if (xf->l34m.nw_proto == IPPROTO_ICMP) {
     return dp_parse_icmp(p, md, xf);
+  } else if (xf->l34m.nw_proto == IPPROTO_IPIP) {
+    return dp_parse_ipip(p, md, xf);
   } else if (xf->l34m.nw_proto == IPPROTO_ESP ||
              xf->l34m.nw_proto == IPPROTO_AH) {
     /* Let xfrm handle it */
@@ -1011,6 +1044,11 @@ dp_unparse_packet(void *ctx,  struct xfi *xf)
       if (dp_do_strip_vxlan(ctx, xf, xf->pm.tun_off) != 0) {
         return DP_DROP;
       }
+    } else if (xf->tm.tun_type == LLB_TUN_IPIP) {
+      LL_DBG_PRINTK("[DEPR] LL STRIP-IPIP\n");
+      if (dp_do_strip_ipip(ctx, xf) != 0) {
+        return DP_DROP;
+      }
     }
   } else if (xf->tm.new_tunnel_id) {
     LL_DBG_PRINTK("[DEPR] LL_NEW-TUN 0x%x\n",
@@ -1021,6 +1059,16 @@ dp_unparse_packet(void *ctx,  struct xfi *xf)
                           xf->tm.tun_sip,
                           xf->tm.new_tunnel_id,
                           1)) {
+        return DP_DROP;
+      }
+    } else if (xf->tm.tun_type == LLB_TUN_IPIP) {
+      LL_DBG_PRINTK("[DEPR] LL_NEW-IPTUN 0x%x\n",
+                  bpf_ntohl(xf->tm.new_tunnel_id));
+      if (dp_do_ins_ipip(ctx, xf,
+                         xf->tm.tun_rip,
+                         xf->tm.tun_sip,
+                         xf->tm.new_tunnel_id,
+                         1)) {
         return DP_DROP;
       }
     }

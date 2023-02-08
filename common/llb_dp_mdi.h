@@ -11,7 +11,7 @@
 #define DP_BUF_DATA_END(F)    (DP_TC_PTR(F->fm.data_end))
 
 #ifndef MAX_STACKED_VLANS
-#define MAX_STACKED_VLANS     3
+#define MAX_STACKED_VLANS     2
 #endif
 
 #define LLB_INGP_MARK         0xf01dab1e
@@ -34,6 +34,7 @@ do {                                  \
   ((x)->pm.pipe_act == LLB_PIPE_RDR &&        \
   (x)->pm.phit & LLB_DP_ACL_HIT &&            \
   !((x)->pm.phit & LLB_DP_SESS_HIT) &&        \
+  !((x)->tm.tun_type == LLB_TUN_IPIP) &&      \
   (x)->l2m.dl_type == bpf_htons(ETH_P_IP) &&  \
   (x)->qm.ipolid == 0 &&                      \
   (x)->nm.xlate_proto == 0 &&                 \
@@ -137,11 +138,8 @@ struct dp_l2_mdi {
     __u8             dl_dst[6];
     __u8             dl_src[6];
     __u8             vlan_pcp;
-    __u8             mpls_bos;
-    __u8             mpls_tc;
     __u8             valid;
-    __u32            mpls_label;
-    __u32            r2;
+    __u16            res;
 };
 
 #define saddr4 saddr[0]
@@ -173,7 +171,7 @@ struct dp_tun_mdi {
 #define LLB_TUN_GTP           2
 #define LLB_TUN_STT           3
 #define LLB_TUN_GRE           4
-#define LLB_TUN_IPINIP        5
+#define LLB_TUN_IPIP          5
     __u32            tun_type;
     __le32           tun_rip;
     __le32           tun_sip; 

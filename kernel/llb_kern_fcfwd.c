@@ -159,7 +159,7 @@ dp_do_fcv4_lkup(void *ctx, struct xfi *xf)
   if (acts->fcta[DP_SET_NEIGH_VXLAN].ca.act_type == DP_SET_NEIGH_VXLAN) {
     LL_FC_PRINTK("[FCH4] rt-l2-nh-vxlan-act\n");
     ta = &acts->fcta[DP_SET_NEIGH_VXLAN];
-    dp_do_rt_l2_vxlan_nh(ctx, xf, &ta->nl2vx); 
+    dp_do_rt_tun_nh(ctx, xf, LLB_TUN_VXLAN, &ta->ntun);
   }
 
   if (acts->fcta[DP_SET_ADD_L2VLAN].ca.act_type == DP_SET_ADD_L2VLAN) {
