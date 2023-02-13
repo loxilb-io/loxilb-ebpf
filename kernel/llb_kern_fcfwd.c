@@ -111,6 +111,8 @@ dp_do_fcv4_lkup(void *ctx, struct xfi *xf)
   if (acts->ca.ftrap)
     return 0; 
 
+  xf->pm.phit |= LLB_DP_FC_HIT;
+
   xf->pm.zone = acts->zone;
 
   if (acts->fcta[DP_SET_RM_VXLAN].ca.act_type == DP_SET_RM_VXLAN) {
@@ -188,7 +190,6 @@ dp_do_fcv4_lkup(void *ctx, struct xfi *xf)
 
   dp_do_map_stats(ctx, xf, LL_DP_CT_STATS_MAP, acts->ca.cidx);
 
-  xf->pm.phit |= LLB_DP_FC_HIT;
   LL_FC_PRINTK("[FCH4] oport %d\n",  xf->pm.oport);
   dp_unparse_packet_always(ctx, xf);
   dp_unparse_packet(ctx, xf);
@@ -205,6 +206,7 @@ del_out:
 static int __always_inline
 dp_ing_fc_main(void *ctx, struct xfi *xf)
 {
+  int z = 0;
   __u32 idx = LLB_DP_PKT_SLOW_PGM_ID;
   LL_FC_PRINTK("[FCHM] Main--\n");
   if (xf->pm.pipe_act == 0 &&
@@ -219,6 +221,8 @@ dp_ing_fc_main(void *ctx, struct xfi *xf)
       }
     }
   }
+
+  bpf_map_update_elem(&xfis, &z, xf, BPF_ANY);
   bpf_tail_call(ctx, &pgm_tbl, idx);
   return DP_PASS;
 }
