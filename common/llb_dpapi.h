@@ -49,7 +49,7 @@
 #define LLB_DP_PKT_PGM_ID      (0)
 
 /* Hard-timeout of 40s for fc dp entry */
-#define FC_V4_DPTO            (40000000000)
+#define FC_V4_DPTO            (60000000000)
 
 /* Hard-timeout of 2m for fc cp entry */
 #define FC_V4_CPTO            (120000000000)
@@ -123,31 +123,30 @@ enum llb_dp_tid {
 
 enum {
   DP_SET_DROP            = 0,
-  DP_SET_RM_VXLAN        = 1,
-  DP_SET_RT_TUN_NH       = 2,
-  DP_SET_L3RT_TUN_NH     = 3,
-  DP_SET_SNAT            = 4,
-  DP_SET_DNAT            = 5,
-  DP_SET_NEIGH_L2        = 6,
-  DP_SET_NEIGH_VXLAN     = 7,
-  DP_SET_ADD_L2VLAN      = 8,
-  DP_SET_RM_L2VLAN       = 9,
+  DP_SET_SNAT            = 1,
+  DP_SET_DNAT            = 2,
+  DP_SET_NEIGH_L2        = 3,
+  DP_SET_RM_L2VLAN       = 4,
+  DP_SET_ADD_L2VLAN      = 5,
+  DP_SET_NEIGH_VXLAN     = 6,
+  DP_SET_RM_VXLAN        = 7,
+  DP_SET_RT_TUN_NH       = 8,
+  DP_SET_L3RT_TUN_NH     = 9,
   DP_SET_TOCP            = 10,
   DP_SET_IFI             = 11,
   DP_SET_NOP             = 12,
-  DP_SET_LOCAL_STACK     = 13,
-  DP_SET_L3_EN           = 14,
-  DP_SET_RT_NHNUM        = 15,
-  DP_SET_SESS_FWD_ACT    = 16,
-  DP_SET_RDR_PORT        = 17,
-  DP_SET_POLICER         = 18,
-  DP_SET_DO_POLICER      = 19,
-  DP_SET_FCACT           = 20,
-  DP_SET_DO_CT           = 21,
-  DP_SET_RM_GTP          = 22,
-  DP_SET_ADD_GTP         = 23,
-  DP_SET_NEIGH_IPIP      = 24,
-  DP_SET_RM_IPIP         = 25
+  DP_SET_L3_EN           = 13,
+  DP_SET_RT_NHNUM        = 14,
+  DP_SET_SESS_FWD_ACT    = 15,
+  DP_SET_RDR_PORT        = 16,
+  DP_SET_POLICER         = 17,
+  DP_SET_DO_POLICER      = 18,
+  DP_SET_FCACT           = 19,
+  DP_SET_DO_CT           = 20,
+  DP_SET_RM_GTP          = 21,
+  DP_SET_ADD_GTP         = 22,
+  DP_SET_NEIGH_IPIP      = 23,
+  DP_SET_RM_IPIP         = 24
 };
 
 struct dp_cmn_act {
