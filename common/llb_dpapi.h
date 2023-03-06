@@ -123,16 +123,16 @@ enum llb_dp_tid {
 
 enum {
   DP_SET_DROP            = 0,
-  DP_SET_RM_VXLAN        = 1,
-  DP_SET_RT_TUN_NH       = 2,
-  DP_SET_L3RT_TUN_NH     = 3,
-  DP_SET_SNAT            = 4,
-  DP_SET_DNAT            = 5,
-  DP_SET_NEIGH_L2        = 6,
-  DP_SET_NEIGH_VXLAN     = 7,
-  DP_SET_ADD_L2VLAN      = 8,
-  DP_SET_RM_L2VLAN       = 9,
-  DP_SET_TOCP            = 10,
+  DP_SET_SNAT            = 1,
+  DP_SET_DNAT            = 2,
+  DP_SET_NEIGH_L2        = 3,
+  DP_SET_ADD_L2VLAN      = 4,
+  DP_SET_RM_L2VLAN       = 5,
+  DP_SET_TOCP            = 6,
+  DP_SET_RM_VXLAN        = 7,
+  DP_SET_NEIGH_VXLAN     = 8,
+  DP_SET_RT_TUN_NH       = 9,
+  DP_SET_L3RT_TUN_NH     = 10,
   DP_SET_IFI             = 11,
   DP_SET_NOP             = 12,
   DP_SET_LOCAL_STACK     = 13,
@@ -283,18 +283,23 @@ struct dp_rt_tact {
 
 
 struct dp_fcv4_key {
+#ifdef HAVE_DP_EXTFC
   __u8  smac[6];
   __u8  dmac[6];
   __u8  in_smac[6];
   __u8  in_dmac[6];
+#endif
 
   __u32 daddr; 
   __u32 saddr; 
   __u16 sport; 
   __u16 dport; 
-  __u32 in_port;
-
   __u8  l4proto;
+  __u8  pad;
+  __u16 in_port;
+
+#ifdef HAVE_DP_EXTFC
+  __u8  pad2;
   __u8  in_l4proto;
   __u16 in_sport; 
   __u32 in_daddr; 
@@ -302,6 +307,7 @@ struct dp_fcv4_key {
   __u32 in_saddr; 
   __u16 in_dport; 
   __u16 bd;
+#endif
 };
 
 struct dp_fc_tact {

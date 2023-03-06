@@ -80,7 +80,7 @@ __dp_do_tmac_lkup(void *ctx, struct xfi *xf,
 {
   struct dp_tmac_key key;
   struct dp_tmac_tact *tma;
-#ifdef HAVE_DP_FC
+#ifdef HAVE_DP_EXTFC
   struct dp_fc_tacts *fa = fa_;
 #endif
 
@@ -119,7 +119,7 @@ __dp_do_tmac_lkup(void *ctx, struct xfi *xf,
   } else if (tma->ca.act_type == DP_SET_TOCP) {
     LLBS_PPLN_TRAP(xf);
   } else if (tma->ca.act_type == DP_SET_RT_TUN_NH) {
-#ifdef HAVE_DP_FC
+#ifdef HAVE_DP_EXTFC
     struct dp_fc_tact *ta = &fa->fcta[DP_SET_RT_TUN_NH];
     ta->ca.act_type = DP_SET_RT_TUN_NH;
     memcpy(&ta->nh_act,  &tma->rt_nh, sizeof(tma->rt_nh));
@@ -128,7 +128,7 @@ __dp_do_tmac_lkup(void *ctx, struct xfi *xf,
   } else if (tma->ca.act_type == DP_SET_L3_EN) {
     xf->pm.phit |= LLB_DP_TMAC_HIT;
   } else if (tma->ca.act_type == DP_SET_RM_VXLAN) {
-#ifdef HAVE_DP_FC
+#ifdef HAVE_DP_EXTFC
     struct dp_fc_tact *ta = &fa->fcta[DP_SET_RM_VXLAN];
     ta->ca.act_type = DP_SET_RM_VXLAN;
     memcpy(&ta->nh_act,  &tma->rt_nh, sizeof(tma->rt_nh));
@@ -312,7 +312,7 @@ dp_do_nh_lkup(void *ctx, struct xfi *xf, void *fa_)
   } 
 
   if (nha->ca.act_type == DP_SET_NEIGH_VXLAN) {
-#ifdef HAVE_DP_FC
+#ifdef HAVE_DP_EXTFC
     struct dp_fc_tact *ta = &fa->fcta[DP_SET_NEIGH_VXLAN];
     ta->ca.act_type = nha->ca.act_type;
     memcpy(&ta->ntun,  &nha->rt_tnh, sizeof(nha->rt_tnh));

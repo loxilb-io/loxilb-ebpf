@@ -376,11 +376,7 @@ dp_ing_slow_main(void *ctx,  struct xfi *xf)
   fa->fcta[2].ca.act_type = 0;
   fa->fcta[3].ca.act_type = 0;
   fa->fcta[4].ca.act_type = 0;
-  fa->fcta[5].ca.act_type = 0;
-  fa->fcta[6].ca.act_type = 0;
-  fa->fcta[7].ca.act_type = 0;
-  fa->fcta[8].ca.act_type = 0;
-  fa->fcta[9].ca.act_type = 0; // LLB_FCV4_MAP_ACTS -1 
+  fa->fcta[5].ca.act_type = 0; // LLB_FCV4_MAP_ACTS -1
 
   /* memset is too costly */
   /*memset(fa->fcta, 0, sizeof(fa->fcta));*/

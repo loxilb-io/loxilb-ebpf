@@ -34,7 +34,7 @@ do {                                  \
   ((x)->pm.pipe_act == LLB_PIPE_RDR &&        \
   (x)->pm.phit & LLB_DP_ACL_HIT &&            \
   !((x)->pm.phit & LLB_DP_SESS_HIT) &&        \
-  !((x)->tm.tun_type == LLB_TUN_IPIP) &&      \
+  ((x)->tm.tun_type == 0) &&                  \
   (x)->l2m.dl_type == bpf_htons(ETH_P_IP) &&  \
   (x)->qm.ipolid == 0 &&                      \
   (x)->nm.xlate_proto == 0 &&                 \
