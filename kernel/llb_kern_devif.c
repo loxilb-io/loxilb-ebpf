@@ -371,12 +371,10 @@ dp_ing_slow_main(void *ctx,  struct xfi *xf)
   fa->ca.cidx = 0;
   fa->zone = 0;
   fa->its = bpf_ktime_get_ns();
-  fa->fcta[0].ca.act_type = 0;
-  fa->fcta[1].ca.act_type = 0;
-  fa->fcta[2].ca.act_type = 0;
-  fa->fcta[3].ca.act_type = 0;
-  fa->fcta[4].ca.act_type = 0;
-  fa->fcta[5].ca.act_type = 0; // LLB_FCV4_MAP_ACTS -1
+#pragma clang loop unroll(full)
+  for (z = 0; z < LLB_FCV4_MAP_ACTS; z++) {
+    fa->fcta[z].ca.act_type = 0;
+  }
 
   /* memset is too costly */
   /*memset(fa->fcta, 0, sizeof(fa->fcta));*/
