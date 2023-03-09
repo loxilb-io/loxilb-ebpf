@@ -189,8 +189,8 @@ dp_parse_icmp(struct parser *p,
   if ((icmp->type == ICMP_ECHOREPLY ||
     icmp->type == ICMP_ECHO)) {
     if (p->inp) {
-      xf->l34m.source = icmp->un.echo.id;
-      xf->l34m.dest = icmp->un.echo.id;
+      xf->il34m.source = icmp->un.echo.id;
+      xf->il34m.dest = icmp->un.echo.id;
     } else {
       xf->l34m.source = icmp->un.echo.id;
       xf->l34m.dest = icmp->un.echo.id;

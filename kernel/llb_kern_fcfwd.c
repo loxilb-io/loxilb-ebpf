@@ -39,26 +39,29 @@ dp_do_fcv4_ct_helper(struct xfi *xf)
 static int  __always_inline
 dp_mk_fcv4_key(struct xfi *xf, struct dp_fcv4_key *key)
 {
+#ifdef HAVE_DP_EXTFC
   memcpy(key->smac, xf->l2m.dl_src, 6);
   memcpy(key->dmac, xf->l2m.dl_dst, 6);
   memcpy(key->in_smac, xf->il2m.dl_src, 6);
   memcpy(key->in_dmac, xf->il2m.dl_dst, 6);
+  //key->bd = xf->pm.bd;
+#endif
 
-  //key->bd         = xf->pm.bd;
-  key->bd         = 0; 
   key->daddr      = xf->l34m.daddr4;
   key->saddr      = xf->l34m.saddr4;
   key->sport      = xf->l34m.source;
   key->dport      = xf->l34m.dest;
   key->l4proto    = xf->l34m.nw_proto;
-
-  //key->in_port    = xf->pm.iport;
+  key->pad        = 0;
   key->in_port    = 0;
+
+#ifdef HAVE_DP_EXTFC
   key->in_daddr   = xf->il34m.daddr4;
   key->in_saddr   = xf->il34m.saddr4;
   key->in_sport   = xf->il34m.source;
   key->in_dport   = xf->il34m.dest;
   key->in_l4proto = xf->il34m.nw_proto;
+#endif
 
   return 0;
 }
@@ -111,13 +114,18 @@ dp_do_fcv4_lkup(void *ctx, struct xfi *xf)
   if (acts->ca.ftrap)
     return 0; 
 
+  xf->pm.phit |= LLB_DP_FC_HIT;
+
   xf->pm.zone = acts->zone;
 
+
+#ifdef HAVE_DP_EXTFC
   if (acts->fcta[DP_SET_RM_VXLAN].ca.act_type == DP_SET_RM_VXLAN) {
     LL_FC_PRINTK("[FCH4] strip-vxlan-act\n");
     ta = &acts->fcta[DP_SET_RM_VXLAN];
     dp_pipe_set_rm_vx_tun(ctx, xf, &ta->nh_act);
   }
+#endif
 
   if (acts->fcta[DP_SET_SNAT].ca.act_type == DP_SET_SNAT) {
     LL_FC_PRINTK("[FCH4] snat-act\n");
@@ -141,6 +149,8 @@ dp_do_fcv4_lkup(void *ctx, struct xfi *xf)
     dp_do_map_stats(ctx, xf, LL_DP_NAT_STATS_MAP, ta->nat_act.rid);
   }
 
+
+#ifdef HAVE_DP_EXTFC
   if (acts->fcta[DP_SET_RT_TUN_NH].ca.act_type == DP_SET_RT_TUN_NH) {
     ta = &acts->fcta[DP_SET_RT_TUN_NH];
     LL_FC_PRINTK("[FCH4] tun-nh found\n");
@@ -150,17 +160,21 @@ dp_do_fcv4_lkup(void *ctx, struct xfi *xf)
     ta = &acts->fcta[DP_SET_L3RT_TUN_NH];
     dp_pipe_set_l32_tun_nh(ctx, xf, &ta->nh_act);
   }
+#endif
 
   if (acts->fcta[DP_SET_NEIGH_L2].ca.act_type == DP_SET_NEIGH_L2) {
     LL_FC_PRINTK("[FCH4] l2-rt-nh-act\n");
     ta = &acts->fcta[DP_SET_NEIGH_L2];
     dp_do_rt_l2_nh(ctx, xf, &ta->nl2);
   }
+
+#ifdef HAVE_DP_EXTFC
   if (acts->fcta[DP_SET_NEIGH_VXLAN].ca.act_type == DP_SET_NEIGH_VXLAN) {
     LL_FC_PRINTK("[FCH4] rt-l2-nh-vxlan-act\n");
     ta = &acts->fcta[DP_SET_NEIGH_VXLAN];
     dp_do_rt_tun_nh(ctx, xf, LLB_TUN_VXLAN, &ta->ntun);
   }
+#endif
 
   if (acts->fcta[DP_SET_ADD_L2VLAN].ca.act_type == DP_SET_ADD_L2VLAN) {
     LL_FC_PRINTK("[FCH4] new-l2-vlan-act\n");
@@ -188,7 +202,6 @@ dp_do_fcv4_lkup(void *ctx, struct xfi *xf)
 
   dp_do_map_stats(ctx, xf, LL_DP_CT_STATS_MAP, acts->ca.cidx);
 
-  xf->pm.phit |= LLB_DP_FC_HIT;
   LL_FC_PRINTK("[FCH4] oport %d\n",  xf->pm.oport);
   dp_unparse_packet_always(ctx, xf);
   dp_unparse_packet(ctx, xf);
@@ -205,6 +218,7 @@ del_out:
 static int __always_inline
 dp_ing_fc_main(void *ctx, struct xfi *xf)
 {
+  int z = 0;
   __u32 idx = LLB_DP_PKT_SLOW_PGM_ID;
   LL_FC_PRINTK("[FCHM] Main--\n");
   if (xf->pm.pipe_act == 0 &&
@@ -219,6 +233,8 @@ dp_ing_fc_main(void *ctx, struct xfi *xf)
       }
     }
   }
+
+  bpf_map_update_elem(&xfis, &z, xf, BPF_ANY);
   bpf_tail_call(ctx, &pgm_tbl, idx);
   return DP_PASS;
 }
