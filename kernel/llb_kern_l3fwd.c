@@ -115,7 +115,7 @@ dp_do_rtops(void *ctx, struct xfi *xf, void *fa_, struct dp_rt_tact *act)
     xf->pm.nh_num = rnh->nh_num;
     return dp_do_rt_fwdops(ctx, xf);
   } /*else if (act->ca.act_type == DP_SET_L3RT_TUN_NH) {
-#ifdef HAVE_DP_FC
+#ifdef HAVE_DP_EXTFC
     struct dp_fc_tact *ta = &fa->fcta[DP_SET_L3RT_TUN_NH];
     ta->ca.act_type = DP_SET_L3RT_TUN_NH;
     memcpy(&ta->nh_act,  &act->rt_nh, sizeof(act->rt_nh));
