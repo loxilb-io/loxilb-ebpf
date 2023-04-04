@@ -327,7 +327,8 @@ struct sctp_dch {
 	__be16 len;
 };
 
-#define SCTP_IPV4_PARAM    0x5 
+#define SCTP_IPV4_ADDR_PARAM  0x5
+#define SCTP_MAX_BIND_ADDRS   3
 
 struct sctp_param {
   __be16 type;

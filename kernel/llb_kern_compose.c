@@ -250,9 +250,9 @@ dp_parse_sctp(struct parser *p,
     c->type == SCTP_SHUT_ACK ||
     c->type == SCTP_SHUT_COMPLETE) {
     if (p->inp) {
-      xf->pm.l4fin = 1;
+      xf->pm.il4fin = 1;
     } else {
-      xf->pm.il4fin = 0;
+      xf->pm.l4fin = 1;
     }
   }
 
