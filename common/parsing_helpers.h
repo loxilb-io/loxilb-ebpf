@@ -327,6 +327,13 @@ struct sctp_dch {
 	__be16 len;
 };
 
+#define SCTP_IPV4_PARAM    0x5 
+
+struct sctp_param {
+  __be16 type;
+  __be16 len;
+};
+
 /*
  * struct sctp_init_ch - SCTP init chunk
  */

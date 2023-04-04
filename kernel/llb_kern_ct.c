@@ -772,6 +772,7 @@ dp_ct_sctp_sm(void *ctx, struct xfi *xf,
   struct sctp_dch *c;
   struct sctp_init_ch *ic;
   struct sctp_cookie *ck;
+  struct sctp_param  *pm;
 
   if (s + 1 > dend) {
     LLBS_PPLN_DROP(xf);
@@ -820,6 +821,23 @@ dp_ct_sctp_sm(void *ctx, struct xfi *xf,
 
     ss->itag = ic->tag;
     nstate = CT_SCTP_INIT;
+
+    pm = DP_TC_PTR(DP_ADD_PTR(ic, sizeof(*ic)));
+    if (pm + 1 > dend) {
+      LLBS_PPLN_DROP(xf);
+      goto end;
+    } 
+
+    bpf_printk("PM 0x%x", bpf_ntohs(pm->type));
+
+    if (pm->type == bpf_htons(SCTP_IPV4_PARAM)) {
+      __be32 *ip = DP_TC_PTR(DP_ADD_PTR(pm, sizeof(*pm)));
+      if (ip + 1 > dend) {
+        LLBS_PPLN_DROP(xf);
+        goto end;
+      }
+      bpf_printk("IP 0x%x", bpf_ntohl(*ip));
+    }
     break;
   case CT_SCTP_INIT:
 
