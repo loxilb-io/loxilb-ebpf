@@ -1242,7 +1242,9 @@ dp_do_dnat(void *ctx, struct xfi *xf, __be32 xip, __be16 xport)
     }
     dp_set_sctp_dport(ctx, xf, xport);
 #ifdef HAVE_DP_SCTP_SUM
-    dp_csum_tcall(ctx, xf);
+    if (!xf->nm.cdis) {
+      dp_csum_tcall(ctx, xf);
+    }
 #endif
   } else if (xf->l34m.nw_proto == IPPROTO_ICMP)  {
     if (xf->nm.nrip4) {
@@ -1319,7 +1321,9 @@ dp_do_dnat6(void *ctx, struct xfi *xf, __be32 *xip, __be16 xport)
     }
     dp_set_sctp_dport(ctx, xf, xport);
 #ifdef HAVE_DP_SCTP_SUM
-    dp_csum_tcall(ctx, xf);
+    if (!xf->nm.cdis) {
+      dp_csum_tcall(ctx, xf);
+    }
 #endif
   } else if (xf->l34m.nw_proto == IPPROTO_ICMP)  {
     if (!DP_XADDR_ISZR(xf->nm.nrip)) {
@@ -1396,7 +1400,9 @@ dp_do_snat(void *ctx, struct xfi *xf, __be32 xip, __be16 xport)
     }
     dp_set_sctp_sport(ctx, xf, xport);
 #ifdef HAVE_DP_SCTP_SUM
-    dp_csum_tcall(ctx, xf);
+    if (!xf->nm.cdis) {
+      dp_csum_tcall(ctx, xf);
+    }
 #endif
   } else if (xf->l34m.nw_proto == IPPROTO_ICMP)  {
     dp_set_icmp_src_ip(ctx, xf, xip);
@@ -1473,7 +1479,9 @@ dp_do_snat6(void *ctx, struct xfi *xf, __be32 *xip, __be16 xport)
     }
     dp_set_sctp_sport(ctx, xf, xport);
 #ifdef HAVE_DP_SCTP_SUM
-    dp_csum_tcall(ctx, xf);
+    if (!xf->nm.cdis) {
+      dp_csum_tcall(ctx, xf);
+    }
 #endif
   } else if (xf->l34m.nw_proto == IPPROTO_ICMP)  {
     dp_set_icmp_src_ip6(ctx, xf, xip);

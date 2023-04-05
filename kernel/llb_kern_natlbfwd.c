@@ -93,6 +93,7 @@ dp_do_nat(void *ctx, struct xfi *xf)
     sel = dp_sel_nat_ep(ctx, act);
 
     xf->nm.dsr = act->ca.oaux ? 1: 0;
+    xf->nm.cdis = act->cdis ? 1: 0;
     xf->pm.nf = act->ca.act_type == DP_SET_SNAT ? LLB_NAT_SRC : LLB_NAT_DST;
 
     /* FIXME - Do not select inactive end-points 

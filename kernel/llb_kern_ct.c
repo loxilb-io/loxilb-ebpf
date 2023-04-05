@@ -1134,6 +1134,7 @@ dp_ct_in(void *ctx, struct xfi *xf)
       adat->nat_act.aid = xf->nm.sel_aid;
       adat->nat_act.nv6 = xf->nm.nv6 ? 1:0;
       adat->nat_act.dsr = xf->nm.dsr;
+      adat->nat_act.cdis = xf->nm.cdis;
       adat->ito = xf->nm.ito;
     } else {
       adat->ito = 0;
@@ -1163,6 +1164,7 @@ dp_ct_in(void *ctx, struct xfi *xf)
       axdat->nat_act.aid = xf->nm.sel_aid;
       axdat->nat_act.nv6 = key.v6 ? 1:0;
       axdat->nat_act.dsr = xf->nm.dsr;
+      axdat->nat_act.cdis = xf->nm.cdis;
       axdat->ito = xf->nm.ito;
     } else {
       axdat->ito = 0;
