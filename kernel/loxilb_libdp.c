@@ -1636,7 +1636,7 @@ ll_ct_map_ent_has_aged(int tid, void *k, void *ita)
 
     if (ss->state & CT_SCTP_FIN_MASK ||
         ss->state & CT_SCTP_ERR ||
-        ss->state & CT_SCTP_INIT_MASK ||
+        (ss->state & CT_SCTP_INIT_MASK && ss->state != CT_SCTP_EST) ||
         ss->state == CT_SCTP_CLOSED) {
       to = CT_SCTP_FN_CPTO;
     } else if (ss->state == CT_SCTP_EST) {

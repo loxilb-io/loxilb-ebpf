@@ -767,11 +767,14 @@ dp_ct_sctp_sm(void *ctx, struct xfi *xf,
   ct_sctp_pinf_t *ss = &tdat->pi.s;
   ct_sctp_pinf_t *xss = &xtdat->pi.s;
   uint32_t nstate = 0;
+  uint16_t sz = 0;
   void *dend = DP_TC_PTR(DP_PDATA_END(ctx));
   struct sctphdr *s = DP_ADD_PTR(DP_PDATA(ctx), xf->pm.l4_off);
   struct sctp_dch *c;
   struct sctp_init_ch *ic;
   struct sctp_cookie *ck;
+  struct sctp_param  *pm;
+  int i = 0;
 
   if (s + 1 > dend) {
     LLBS_PPLN_DROP(xf);
@@ -820,6 +823,34 @@ dp_ct_sctp_sm(void *ctx, struct xfi *xf,
 
     ss->itag = ic->tag;
     nstate = CT_SCTP_INIT;
+
+    pm = DP_TC_PTR(DP_ADD_PTR(ic, sizeof(*ic)));
+    if (pm + 1 > dend) {
+      break;
+    } 
+
+    for (i = 0; i < SCTP_MAX_BIND_ADDRS; i++) {
+      if (pm->type == bpf_htons(SCTP_IPV4_ADDR_PARAM)) {
+        __be32 *ip = DP_TC_PTR(DP_ADD_PTR(pm, sizeof(*pm)));
+        if (ip + 1 > dend) {
+          break;
+        }
+        //bpf_printk("IP 0x%x", bpf_ntohl(*ip));
+        if (atdat->nat_act.rip[0] != 0 && !atdat->nat_act.nv6) {
+          /* Checksum to be taken care of later stage */
+          *ip = atdat->nat_act.rip[0];
+        }
+      }
+
+      sz = bpf_ntohs(pm->len);
+      if (sz >= 32) {
+        break;
+      }
+      pm = DP_TC_PTR(DP_ADD_PTR(pm, sz));
+      if (pm + 1 > dend) {
+        break;
+      }
+    }
     break;
   case CT_SCTP_INIT:
 
@@ -847,6 +878,33 @@ dp_ct_sctp_sm(void *ctx, struct xfi *xf,
 
       ss->otag = ic->tag;
       nstate = CT_SCTP_INITA;
+    }
+
+    pm = DP_TC_PTR(DP_ADD_PTR(ic, sizeof(*ic)));
+    if (pm + 1 > dend) {
+      break;
+    }
+
+    for (i = 0; i < SCTP_MAX_BIND_ADDRS; i++) {
+      if (pm->type == bpf_htons(SCTP_IPV4_ADDR_PARAM)) {
+        __be32 *ip = DP_TC_PTR(DP_ADD_PTR(pm, sizeof(*pm)));
+        if (ip + 1 > dend) {
+          break;
+        }
+        //bpf_printk("ina ip 0x%x", bpf_ntohl(*ip));
+        if (axtdat->nat_act.xip[0] != 0 && !axtdat->nat_act.nv6) {
+          /* Checksum to be taken care of later stage */
+          *ip = axtdat->nat_act.xip[0];
+        }
+      }
+      sz = bpf_ntohs(pm->len);
+      if (sz >= 32) {
+        break;
+      }
+      pm = DP_TC_PTR(DP_ADD_PTR(pm, sz));
+      if (pm + 1 > dend) {
+        break;
+      }
     }
     break;
   case CT_SCTP_INITA:
