@@ -687,6 +687,7 @@ dp_ipv4_new_csum(struct iphdr *iph)
 do {                                             \
   xf->pm.phit |= LLB_DP_RES_HIT;                 \
   bpf_tail_call(ctx, &pgm_tbl, LLB_DP_CT_PGM_ID);\
+  return DP_PASS;                                \
 } while(0)
 
 #define TCALL_CRC1() bpf_tail_call(ctx, &pgm_tbl, LLB_DP_CRC_PGM_ID1)
