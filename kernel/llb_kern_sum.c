@@ -55,8 +55,10 @@ dp_sctp_csum(void *ctx, struct xfi *xf)
     } else break;
   }
   if (rlen <= 0) {
-     /* Update crc in sctp */
-      /* Reset any flag which indicates further sctp processing */
+    /*
+     * Update crc in sctp. Reset any flag which indicates
+     * further sctp processing
+     */
       if (xf->l34m.nw_proto == IPPROTO_SCTP)  {
         void *dend = DP_TC_PTR(DP_PDATA_END(ctx));
         struct sctphdr *sctp = DP_ADD_PTR(DP_PDATA(ctx), xf->pm.l4_off);
@@ -88,6 +90,8 @@ dp_sctp_csum(void *ctx, struct xfi *xf)
   } else {
     TCALL_CRC1();
   }
+
+  return DP_PASS;
  
 drop:
   /* Something went wrong here */

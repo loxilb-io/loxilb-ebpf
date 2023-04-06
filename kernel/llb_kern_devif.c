@@ -440,6 +440,7 @@ dp_ing_ct_main(void *ctx,  struct xfi *xf)
 
     if (xf->pm.fw_lid < LLB_FW4_MAP_ENTRIES) {
       bpf_tail_call(ctx, &pgm_tbl, LLB_DP_FW_PGM_ID);
+      return DP_PASS;
     }
 
     if (xf->pm.dp_rec) {
