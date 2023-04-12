@@ -5,7 +5,7 @@
  * SPDX-License-Identifier: (GPL-2.0 OR BSD-2-Clause)
  */
 
-#define DP_MAX_LOOPS_PER_TCALL (256)
+#define DP_MAX_LOOPS_PER_TCALL (288)
 
 static __u32 __always_inline
 get_crc32c_map(__u32 off)
