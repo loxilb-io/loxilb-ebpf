@@ -1559,6 +1559,7 @@ ll_ct_map_ent_has_aged(int tid, void *k, void *ita)
   uint64_t to = CT_V4_CPTO;
   char dstr[INET6_ADDRSTRLEN];
   char sstr[INET6_ADDRSTRLEN];
+  uint64_t bytes, pkts;
   llb_dp_map_t *t;
 
   if (!it|| !it->uarg || !it->val) return 0;
@@ -1601,6 +1602,9 @@ ll_ct_map_ent_has_aged(int tid, void *k, void *ita)
   if (dat->dir == CT_DIR_OUT) {
     return 0;
   } 
+
+  llb_fetch_map_stats_cached(LL_DP_CT_STATS_MAP, adat->ca.cidx, 1, &bytes, &pkts);
+  llb_fetch_map_stats_cached(LL_DP_CT_STATS_MAP, adat->ca.cidx+1, 1, &bytes, &pkts);
 
   if (key->l4proto == IPPROTO_TCP) {
     ct_tcp_pinf_t *ts = &dat->pi.t;
