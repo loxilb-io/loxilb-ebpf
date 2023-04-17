@@ -796,8 +796,19 @@ dp_ct_sctp_sm(void *ctx, struct xfi *xf,
     nstate = CT_SCTP_ERR;
     goto end;
   case SCTP_SHUT:
+    /* We expect next packet to be SHUTDOWN COMPLETE in DSR */
+    if (xf->nm.dsr) {
+      nstate = CT_SCTP_SHUTA;
+      goto end;
+    }
     nstate = CT_SCTP_SHUT;
     goto end;
+  case SCTP_SHUT_ACK:
+    /* If server initiates SHUTDOWN, we may only get its ACK*/
+    if (xf->nm.dsr && dir == CT_DIR_IN) {
+        nstate = CT_SCTP_SHUTC;
+        goto end;
+    }
   case SCTP_ABORT:
     nstate = CT_SCTP_ABRT;
     goto end;
