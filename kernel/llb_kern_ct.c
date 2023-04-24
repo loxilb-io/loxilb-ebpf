@@ -791,6 +791,14 @@ dp_ct_sctp_sm(void *ctx, struct xfi *xf,
   nstate = ss->state;
   bpf_spin_lock(&atdat->lock);
 
+  if (dir == CT_DIR_IN) {
+    atdat->ctd.pb.bytes += xf->pm.l3_len;
+    atdat->ctd.pb.packets += 1;
+  } else {
+    axtdat->ctd.pb.bytes += xf->pm.l3_len;
+    axtdat->ctd.pb.packets += 1;
+  }
+
   switch (c->type) {
   case SCTP_ERROR:
     nstate = CT_SCTP_ERR;
