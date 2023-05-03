@@ -1704,6 +1704,12 @@ dp_pktbuf_write(void *md, __u32 off, void *frmbuf, __u32 frmlen, __u64 flags)
   return bpf_skb_store_bytes(md, off, frmbuf, frmlen, flags);
 }
 
+static int __always_inline
+dp_pktbuf_expand_tail(void *md, __u32 len)
+{
+  return bpf_skb_change_tail(md, len, 0);
+}
+
 #else /* XDP utilities */
 
 #define DP_LLB_MRK_INGP(md)
@@ -1927,6 +1933,13 @@ dp_pktbuf_read(void *md, __u32 off, void *buf, __u32 tolen)
 
 static int __always_inline
 dp_pktbuf_write(void *md, __u32 off, void *frmbuf, __u32 frmlen, __u64 flags)
+{
+  /* FIXME - TODO */
+  return -1;
+}
+
+static int __always_inline
+dp_pktbuf_expand_tail(void *md, __u32 len)
 {
   /* FIXME - TODO */
   return -1;

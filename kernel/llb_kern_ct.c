@@ -766,6 +766,8 @@ dp_ct_sctp_sm(void *ctx, struct xfi *xf,
   struct dp_ct_dat *xtdat = &axtdat->ctd;
   ct_sctp_pinf_t *ss = &tdat->pi.s;
   ct_sctp_pinf_t *xss = &xtdat->pi.s;
+  ct_sctp_pinfd_t *pss = &ss->stcp_cts[CT_DIR_IN];
+  ct_sctp_pinfd_t *pxss = &ss->stcp_cts[CT_DIR_OUT];
   uint32_t nstate = 0;
   uint16_t sz = 0;
   void *dend = DP_TC_PTR(DP_PDATA_END(ctx));
@@ -837,16 +839,19 @@ dp_ct_sctp_sm(void *ctx, struct xfi *xf,
       break;
     } 
 
-    for (i = 0; i < SCTP_MAX_BIND_ADDRS; i++) {
+    for (i = 0; i < LLB_MAX_MHOSTS; i++) {
       if (pm->type == bpf_htons(SCTP_IPV4_ADDR_PARAM)) {
         __be32 *ip = DP_TC_PTR(DP_ADD_PTR(pm, sizeof(*pm)));
         if (ip + 1 > dend) {
           break;
         }
-        //bpf_printk("IP 0x%x", bpf_ntohl(*ip));
         if (atdat->nat_act.rip[0] != 0 && !atdat->nat_act.nv6) {
           /* Checksum to be taken care of later stage */
           *ip = atdat->nat_act.rip[0];
+        }
+        if (i < LLB_MAX_MHOSTS) {
+          pss->mh_host[i] = *ip;
+          pss->nh++;
         }
       }
 
@@ -893,7 +898,7 @@ dp_ct_sctp_sm(void *ctx, struct xfi *xf,
       break;
     }
 
-    for (i = 0; i < SCTP_MAX_BIND_ADDRS; i++) {
+    for (i = 0; i < LLB_MAX_MHOSTS; i++) {
       if (pm->type == bpf_htons(SCTP_IPV4_ADDR_PARAM)) {
         __be32 *ip = DP_TC_PTR(DP_ADD_PTR(pm, sizeof(*pm)));
         if (ip + 1 > dend) {
@@ -904,6 +909,10 @@ dp_ct_sctp_sm(void *ctx, struct xfi *xf,
           /* Checksum to be taken care of later stage */
           *ip = axtdat->nat_act.xip[0];
         }
+        if (i < LLB_MAX_MHOSTS) {
+          pxss->mh_host[i] = *ip;
+          pxss->nh++;
+        }
       }
       sz = bpf_ntohs(pm->len);
       if (sz >= 32) {
@@ -913,6 +922,10 @@ dp_ct_sctp_sm(void *ctx, struct xfi *xf,
       if (pm + 1 > dend) {
         break;
       }
+    }
+
+    if (pss->nh >= 1) {
+      tdat->xi.mh = 1;
     }
     break;
   case CT_SCTP_INITA:

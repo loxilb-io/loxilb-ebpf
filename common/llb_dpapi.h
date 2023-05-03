@@ -39,6 +39,7 @@
 #define LLB_PSECS             (8)
 #define LLB_MAX_NXFRMS        (16)
 #define LLB_CRC32C_ENTRIES    (256)
+#define LLB_MAX_MHOSTS        (3)
 
 #define LLB_DP_SUNP_PGM_ID2    (6)
 #define LLB_DP_CRC_PGM_ID2     (5)
@@ -537,9 +538,8 @@ typedef enum {
 } ct_icmp_state_t;
 
 typedef struct {
-  __u32 hstate;
-  __u32 seq;
-  __u16 init_acks;
+  __u32 nh;
+  __be32 mh_host[LLB_MAX_MHOSTS];
 } ct_sctp_pinfd_t;
 
 #define CT_SCTP_FIN_MASK (CT_SCTP_SHUT|CT_SCTP_SHUTA|CT_SCTP_SHUTC|CT_SCTP_ABRT)
@@ -599,7 +599,9 @@ struct mf_xfrm_inf
   uint8_t inactive;
   uint16_t wprio;
   uint8_t nv6;
-  uint8_t dsr;
+  uint8_t dsr:4;
+  uint8_t mh:2;
+  uint8_t nph:2;
   uint16_t nat_xport;
   uint32_t nat_xip[4];
   uint32_t nat_rip[4];
