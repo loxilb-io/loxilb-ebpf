@@ -337,6 +337,8 @@ struct sctp_param {
   __be16 len;
 };
 
+#define SCTP_MAX_INIT_ACK_SZ 2000
+
 /*
  * struct sctp_init_ch - SCTP init chunk
  */

@@ -957,7 +957,7 @@ add_nph:
         if (i >= LLB_MAX_MHOSTS) break;
 
         /* Keep the verifier happy */
-        if (sz > 2000) {
+        if (sz > SCTP_MAX_INIT_ACK_SZ) {
           break;
         }
 
