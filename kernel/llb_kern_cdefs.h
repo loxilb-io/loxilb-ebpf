@@ -1116,8 +1116,16 @@ dp_set_sctp_src_ip(void *md, struct xfi *xf, __be32 xip)
 {
   int ip_csum_off  = xf->pm.l3_off + offsetof(struct iphdr, check);
   int ip_src_off = xf->pm.l3_off + offsetof(struct iphdr, saddr);
+  int ip_len_off = xf->pm.l3_off + offsetof(struct iphdr, tot_len);
   __be32 old_sip = xf->l34m.saddr4;
   
+  if (xf->pm.l3_adj) {
+    __be32 old_len = bpf_htons(xf->pm.l3_len);
+    __be32 new_len = bpf_htons(xf->pm.l3_len+xf->pm.l3_adj);
+    bpf_l3_csum_replace(md, ip_csum_off, old_len, new_len, sizeof(__u16));
+    bpf_skb_store_bytes(md, ip_len_off, &new_len, sizeof(__u16), 0);
+    xf->pm.l3_plen += xf->pm.l3_adj;
+  }
   bpf_l3_csum_replace(md, ip_csum_off, old_sip, xip, sizeof(xip));
   bpf_skb_store_bytes(md, ip_src_off, &xip, sizeof(xip), 0);
   xf->l34m.saddr4 = xip;
@@ -1141,8 +1149,17 @@ dp_set_sctp_dst_ip(void *md, struct xfi *xf, __be32 xip)
 {
   int ip_csum_off  = xf->pm.l3_off + offsetof(struct iphdr, check);
   int ip_dst_off = xf->pm.l3_off + offsetof(struct iphdr, daddr);
+  int ip_len_off = xf->pm.l3_off + offsetof(struct iphdr, tot_len);
   __be32 old_dip = xf->l34m.daddr4;
-  
+
+   if (xf->pm.l3_adj) {
+    __be32 old_len = bpf_htons(xf->pm.l3_len);
+    __be32 new_len = bpf_htons(xf->pm.l3_len+xf->pm.l3_adj);
+    bpf_l3_csum_replace(md, ip_csum_off, old_len, new_len, sizeof(__u16));
+    bpf_skb_store_bytes(md, ip_len_off, &new_len, sizeof(__u16), 0);
+    xf->pm.l3_plen += xf->pm.l3_adj;
+  }
+
   bpf_l3_csum_replace(md, ip_csum_off, old_dip, xip, sizeof(xip));
   bpf_skb_store_bytes(md, ip_dst_off, &xip, sizeof(xip), 0);
   xf->l34m.daddr4 = xip;

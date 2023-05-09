@@ -895,7 +895,7 @@ dp_ct_sctp_sm(void *ctx, struct xfi *xf,
 
     pm = DP_TC_PTR(DP_ADD_PTR(ic, sizeof(*ic)));
     if (pm + 1 > dend) {
-      break;
+      goto add_nph;
     }
 
     for (i = 0; i < LLB_MAX_MHOSTS; i++) {
@@ -927,14 +927,19 @@ dp_ct_sctp_sm(void *ctx, struct xfi *xf,
       }
     }
 
+add_nph:
     if (pxss->nh < tdat->xi.nph) {
+      int grow;
       int diff = tdat->xi.nph - pxss->nh;
 
-      i = ((diff)*(sizeof(*pm)+sizeof(__u32)));
+      // FIXME - for testing
+      diff = LLB_MAX_MHOSTS;
+
+      grow = ((diff)*(sizeof(*pm)+sizeof(__u32)));
       sz = (((struct __sk_buff *)ctx)->len);
 
       bpf_spin_unlock(&atdat->lock);
-      if (dp_pktbuf_expand_tail(ctx, i)) {
+      if (dp_pktbuf_expand_tail(ctx, grow+sz) < 0) {
         bpf_spin_lock(&atdat->lock);
         break;
       }
@@ -947,17 +952,20 @@ dp_ct_sctp_sm(void *ctx, struct xfi *xf,
         break;
       }
 
-      /* Keep the verifier happy */
-      if (sz > 2000) {
-        break;
-      }
+      for (i = 0; i < diff; i++) {
 
-      pm = DP_ADD_PTR(pm, sz);
-      if (pm + 1 > dend) {
-        break;
-      }
+        if (i >= LLB_MAX_MHOSTS) break;
 
-      for (i = 0; i < diff && i < LLB_MAX_MHOSTS; i++) {
+        /* Keep the verifier happy */
+        if (sz > 2000) {
+          break;
+        }
+
+        pm = DP_ADD_PTR(pm, sz);
+        if (pm + 1 > dend) {
+          break;
+        }
+
         pm->type = bpf_htons(SCTP_IPV4_ADDR_PARAM);
         pm->len = bpf_htons(sizeof(*pm)+sizeof(__u32));
 
@@ -965,15 +973,27 @@ dp_ct_sctp_sm(void *ctx, struct xfi *xf,
         if (ip + 1 > dend) {
           break;
         }
+
         if (axtdat->nat_act.xip[i] != 0 && !axtdat->nat_act.nv6) {
           /* Checksum to be taken care of later stage */
           *ip = axtdat->nat_act.xip[i];
         }
-        pm = DP_ADD_PTR(pm, sizeof(*pm)+sizeof(__u32));
-        if (pm + 1 > dend) {
-          break;
-        }
+        sz = sizeof(*pm)+sizeof(__u32);
       }
+
+      s = DP_ADD_PTR(DP_PDATA(ctx), xf->pm.l4_off);
+      if (s + 1 > dend) {
+        break;
+      }
+
+      c = DP_TC_PTR(DP_ADD_PTR(s, sizeof(*s)));
+      if (c + 1 > dend) {
+        break;
+      }
+
+      sz = bpf_ntohs(c->len)+grow;
+      c->len = bpf_htons(sz);
+      xf->pm.l3_adj = grow;
     }
 
     if (pss->nh >= 1) {
