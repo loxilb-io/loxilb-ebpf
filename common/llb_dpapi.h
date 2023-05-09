@@ -597,11 +597,11 @@ struct mf_xfrm_inf
   /* LLB_NAT_XXX flags */
   uint8_t nat_flags;
   uint8_t inactive;
-  uint16_t wprio;
+  uint8_t wprio;
   uint8_t nv6;
-  uint8_t dsr:4;
-  uint8_t mh:2;
-  uint8_t nph:2;
+  uint8_t dsr;
+  uint8_t mh:4;
+  uint8_t nph:4;
   uint16_t nat_xport;
   uint32_t nat_xip[4];
   uint32_t nat_rip[4];

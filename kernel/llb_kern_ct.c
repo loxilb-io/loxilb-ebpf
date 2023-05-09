@@ -914,7 +914,10 @@ dp_ct_sctp_sm(void *ctx, struct xfi *xf,
           pxss->nh++;
         }
       }
+
       sz = bpf_ntohs(pm->len);
+
+      /* Keep the verifier happy */
       if (sz >= 32) {
         break;
       }
@@ -925,7 +928,52 @@ dp_ct_sctp_sm(void *ctx, struct xfi *xf,
     }
 
     if (pxss->nh < tdat->xi.nph) {
-      sz = DP_DIFF_PTR(dend, s);
+      int diff = tdat->xi.nph - pxss->nh;
+
+      i = ((diff)*(sizeof(*pm)+sizeof(__u32)));
+      sz = (((struct __sk_buff *)ctx)->len);
+
+      bpf_spin_unlock(&atdat->lock);
+      if (dp_pktbuf_expand_tail(ctx, i)) {
+        bpf_spin_lock(&atdat->lock);
+        break;
+      }
+
+      bpf_spin_lock(&atdat->lock);
+
+      pm = DP_TC_PTR(DP_PDATA(ctx));
+      dend = DP_TC_PTR(DP_PDATA_END(ctx));
+      if (pm + 1 > dend) {
+        break;
+      }
+
+      /* Keep the verifier happy */
+      if (sz > 2000) {
+        break;
+      }
+
+      pm = DP_ADD_PTR(pm, sz);
+      if (pm + 1 > dend) {
+        break;
+      }
+
+      for (i = 0; i < diff && i < LLB_MAX_MHOSTS; i++) {
+        pm->type = bpf_htons(SCTP_IPV4_ADDR_PARAM);
+        pm->len = bpf_htons(sizeof(*pm)+sizeof(__u32));
+
+        __be32 *ip = DP_TC_PTR(DP_ADD_PTR(pm, sizeof(*pm)));
+        if (ip + 1 > dend) {
+          break;
+        }
+        if (axtdat->nat_act.xip[i] != 0 && !axtdat->nat_act.nv6) {
+          /* Checksum to be taken care of later stage */
+          *ip = axtdat->nat_act.xip[i];
+        }
+        pm = DP_ADD_PTR(pm, sizeof(*pm)+sizeof(__u32));
+        if (pm + 1 > dend) {
+          break;
+        }
+      }
     }
 
     if (pss->nh >= 1) {
