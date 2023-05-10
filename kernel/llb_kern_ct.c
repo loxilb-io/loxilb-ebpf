@@ -1161,7 +1161,7 @@ dp_ct_est_post_proc(struct xfi *xf,
          struct dp_ct_tact *axtdat)
 {
   struct dp_ct_dat *tdat = &atdat->ctd;
-  struct dp_ct_dat *xtdat = &axtdat->ctd;
+  //struct dp_ct_dat *xtdat = &axtdat->ctd;
   struct dp_ct_tact *adat, *axdat;
   ct_sctp_pinf_t *ss;
   ct_sctp_pinf_t *xss;
@@ -1194,13 +1194,13 @@ dp_ct_est_post_proc(struct xfi *xf,
       key->saddr[2] = 0;
       key->saddr[3] = 0;
       for (j = 1; j < LLB_MAX_MHOSTS; j++) {
-        if (tdat->xi.nat_xip[j]) {
-          key->daddr[0] = tdat->xi.nat_xip[j];
+        if (tdat->xi.nat_rip[j]) {
+          key->daddr[0] = tdat->xi.nat_rip[j];
           key->daddr[1] = 0;
           key->daddr[2] = 0;
           key->daddr[3] = 0;
 
-          adat->nat_act.rip[0] = tdat->xi.nat_xip[j];
+          adat->nat_act.rip[0] = tdat->xi.nat_rip[j];
           bpf_map_update_elem(&ct_map, key, adat, BPF_ANY);
         }
       }
@@ -1212,13 +1212,13 @@ dp_ct_est_post_proc(struct xfi *xf,
       xkey->saddr[2] = 0;
       xkey->saddr[3] = 0;
       for (j = 1; j < LLB_MAX_MHOSTS; j++) {
-        if (tdat->xi.nat_xip[j]) {
-          xkey->daddr[0] = tdat->xi.nat_xip[j];
+        if (tdat->xi.nat_rip[j]) {
+          xkey->daddr[0] = tdat->xi.nat_rip[j];
           xkey->daddr[1] = 0;
           xkey->daddr[2] = 0;
           xkey->daddr[3] = 0;
 
-          axdat->nat_act.xip[0] = xtdat->xi.nat_rip[j];
+          axdat->nat_act.xip[0] = tdat->xi.nat_rip[j];
           bpf_map_update_elem(&ct_map, xkey, axdat, BPF_ANY);
         }
       }
