@@ -1358,6 +1358,11 @@ dp_ct_in(void *ctx, struct xfi *xf)
       if (xi->nat_flags) {
         atdat->nat_act.doct = 0;
         axtdat->nat_act.doct = 0;
+        if (atdat->ctd.dir == CT_DIR_IN) {
+          dp_ct_est_post_proc(xf, &key, &xkey, atdat, axtdat);
+        } else {
+          dp_ct_est_post_proc(xf, &xkey, &key, axtdat, atdat);
+        }
       } else {
         atdat->ca.act_type = DP_SET_NOP;
         axtdat->ca.act_type = DP_SET_NOP;
