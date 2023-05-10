@@ -845,13 +845,17 @@ dp_ct_sctp_sm(void *ctx, struct xfi *xf,
         if (ip + 1 > dend) {
           break;
         }
-        if (atdat->nat_act.rip[i] != 0 && !atdat->nat_act.nv6) {
+
+        pss->mh_host[i] = *ip;
+        pss->nh++;
+
+        if (!atdat->nat_act.nv6) {
           /* Checksum to be taken care of later stage */
-          *ip = atdat->nat_act.rip[i];
-        }
-        if (i < LLB_MAX_MHOSTS) {
-          pss->mh_host[i] = *ip;
-          pss->nh++;
+          if (atdat->nat_act.rip[i] != 0) {
+            *ip = atdat->nat_act.rip[i];
+          } else if (atdat->nat_act.rip[0] != 0) {
+            *ip = atdat->nat_act.rip[0];
+          }
         }
       }
 
@@ -904,14 +908,18 @@ dp_ct_sctp_sm(void *ctx, struct xfi *xf,
         if (ip + 1 > dend) {
           break;
         }
+
+        pxss->mh_host[i] = *ip;
+        pxss->nh++;
+
         //bpf_printk("ina ip 0x%x", bpf_ntohl(*ip));
-        if (axtdat->nat_act.xip[i] != 0 && !axtdat->nat_act.nv6) {
+        if (!axtdat->nat_act.nv6) {
           /* Checksum to be taken care of later stage */
-          *ip = axtdat->nat_act.xip[i];
-        }
-        if (i < LLB_MAX_MHOSTS) {
-          pxss->mh_host[i] = *ip;
-          pxss->nh++;
+          if (axtdat->nat_act.xip[i] != 0) {
+            *ip = axtdat->nat_act.xip[i];
+          } else if (axtdat->nat_act.xip[0] != 0) {
+            *ip = axtdat->nat_act.xip[0];
+          }
         }
       }
 
@@ -996,8 +1004,8 @@ add_nph:
       xf->pm.l3_adj = grow;
     }
 
-    if (pss->nh >= 1) {
-      tdat->xi.mh = 1;
+    if (tdat->xi.nph > 1) {
+      tdat->xi.mhon = 1;
     }
     break;
   case CT_SCTP_INITA:

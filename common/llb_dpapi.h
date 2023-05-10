@@ -600,7 +600,7 @@ struct mf_xfrm_inf
   uint8_t wprio;
   uint8_t nv6;
   uint8_t dsr;
-  uint8_t mh:4;
+  uint8_t mhon:4;
   uint8_t nph:4;
   uint16_t nat_xport;
   uint32_t nat_xip[4];
