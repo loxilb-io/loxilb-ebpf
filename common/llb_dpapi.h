@@ -557,15 +557,15 @@ typedef enum {
   CT_SCTP_SHUTC   = 0x80,
   CT_SCTP_ERR     = 0x100,
   CT_SCTP_ABRT    = 0x200
-} ct_stcp_state_t;
+} ct_sctp_state_t;
 
 typedef struct {
-  ct_stcp_state_t state;
+  ct_sctp_state_t state;
   ct_dir_t fndir;
   uint32_t itag;
   uint32_t otag;
   uint32_t cookie;
-  ct_sctp_pinfd_t stcp_cts[CT_DIR_MAX];
+  ct_sctp_pinfd_t sctp_cts[CT_DIR_MAX];
 } ct_sctp_pinf_t;
 
 typedef struct {

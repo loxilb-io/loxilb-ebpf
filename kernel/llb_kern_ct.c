@@ -766,8 +766,8 @@ dp_ct_sctp_sm(void *ctx, struct xfi *xf,
   struct dp_ct_dat *xtdat = &axtdat->ctd;
   ct_sctp_pinf_t *ss = &tdat->pi.s;
   ct_sctp_pinf_t *xss = &xtdat->pi.s;
-  ct_sctp_pinfd_t *pss = &ss->stcp_cts[CT_DIR_IN];
-  ct_sctp_pinfd_t *pxss = &ss->stcp_cts[CT_DIR_OUT];
+  ct_sctp_pinfd_t *pss = &ss->sctp_cts[CT_DIR_IN];
+  ct_sctp_pinfd_t *pxss = &ss->sctp_cts[CT_DIR_OUT];
   uint32_t nstate = 0;
   uint16_t sz = 0;
   void *dend = DP_TC_PTR(DP_PDATA_END(ctx));
@@ -1005,7 +1005,8 @@ add_nph:
     }
 
     if (tdat->xi.nph > 1) {
-      tdat->xi.mhon = 1;
+      tdat->xi.mhon = tdat->xi.nph+i;
+      xtdat->xi.mhon = tdat->xi.mhon;
     }
     break;
   case CT_SCTP_INITA:
@@ -1143,6 +1144,62 @@ struct {
         __type(value,       struct dp_ct_tact);
         __uint(max_entries, 2);
 } xctk SEC(".maps");
+
+static int __always_inline
+dp_ct_est_post_proc(struct xfi *xf,
+         struct dp_ct_key *key,
+         struct dp_ct_key *xkey,
+         struct dp_ct_tact *atdat,
+         struct dp_ct_tact *axtdat)
+{
+  struct dp_ct_dat *tdat = &atdat->ctd;
+  //struct dp_ct_dat *xtdat = &axtdat->ctd;
+  struct dp_ct_tact *adat, *axdat;
+  ct_sctp_pinf_t *ss;
+  ct_sctp_pinf_t *xss;
+  int i,j;
+  int k;
+
+  k = 0;
+  adat = bpf_map_lookup_elem(&xctk, &k);
+
+  k = 1;
+  axdat = bpf_map_lookup_elem(&xctk, &k);
+
+  if (adat == NULL || axdat == NULL || tdat->xi.dsr || tdat->xi.nv6) {
+    return 0;
+  }
+
+  memcpy(adat, atdat, sizeof(*adat));
+  memcpy(axdat, axtdat, sizeof(*axdat));
+
+  ss = &adat->ctd.pi.s;
+  xss = &axdat->ctd.pi.s;
+
+  if (xf->l34m.nw_proto == IPPROTO_SCTP && tdat->xi.mhon) {
+      ct_sctp_pinfd_t *pss = &ss->sctp_cts[CT_DIR_IN];
+      //ct_sctp_pinfd_t *pxss = &ss->sctp_cts[CT_DIR_OUT];
+
+      for (i = 0; i < pss->nh && i < LLB_MAX_MHOSTS; i++) {
+        key->saddr[0] = pss->mh_host[i];
+        key->saddr[1] = 0;
+        key->saddr[2] = 0;
+        key->saddr[3] = 0;
+        for (j = 1; j < LLB_MAX_MHOSTS; j++) {
+          if (tdat->xi.nat_xip[j]) {
+            key->daddr[0] = tdat->xi.nat_xip[j];
+            key->daddr[1] = 0;
+            key->daddr[2] = 0;
+            key->daddr[3] = 0;
+
+            adat->nat_act.rip[0] = tdat->xi.nat_xip[j];
+            bpf_map_update_elem(&ct_map, &key, adat, BPF_ANY);
+          }
+        }
+      }
+  }
+  return 0;
+}
 
 static int __always_inline
 dp_ct_in(void *ctx, struct xfi *xf)
