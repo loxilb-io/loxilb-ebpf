@@ -857,7 +857,7 @@ dp_ct_sctp_sm(void *ctx, struct xfi *xf,
         pss->nh++;
 
         if (!atdat->nat_act.nv6) {
-          /* Checksum to be taken care of later stage */
+          /* Checksum to be taken care of at a later stage */
           if (atdat->ctd.pi.pmhh[i] != 0) {
             *ip = atdat->ctd.pi.pmhh[i];
           } else if (atdat->nat_act.rip[0] != 0) {
@@ -923,7 +923,7 @@ add_nph0:
         }
 
         if (!atdat->nat_act.nv6) {
-          /* Checksum to be taken care of later stage */
+          /* Checksum to be taken care of at a later stage */
           if (atdat->ctd.pi.pmhh[i] != 0) {
             *ip = atdat->ctd.pi.pmhh[i];
           } else if (atdat->nat_act.rip[0] != 0) {
@@ -999,9 +999,8 @@ add_nph0:
         pxss->mh_host[i+1] = *ip;
         pxss->nh++;
 
-        //bpf_printk("ina ip 0x%x", bpf_ntohl(*ip));
         if (!axtdat->nat_act.nv6) {
-          /* Checksum to be taken care of later stage */
+          /* Checksum to be taken care of a later stage */
           if (axtdat->ctd.pi.pmhh[i] != 0) {
             *ip = axtdat->ctd.pi.pmhh[i];
           } else if (axtdat->nat_act.xip[0] != 0) {
@@ -1068,7 +1067,7 @@ add_nph1:
           break;
         }
 
-        /* Checksum to be taken care of later stage */
+        /* Checksum to be taken care of at a later stage */
         if (axtdat->ctd.pi.pmhh[i] != 0) {
             *ip = axtdat->ctd.pi.pmhh[i];
         } else if (axtdat->nat_act.xip[0] != 0) {
