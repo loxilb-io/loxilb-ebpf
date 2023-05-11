@@ -255,7 +255,9 @@ dp_parse_sctp(struct parser *p,
       xf->pm.l4fin = 1;
     }
   } else if (c->type == SCTP_HB_REQ ||
-             c->type == SCTP_HB_ACK) {
+             c->type == SCTP_HB_ACK ||
+             c->type == SCTP_INIT_CHUNK ||
+             c->type == SCTP_INIT_CHUNK_ACK) {
     xf->pm.goct = 1;
   }
 

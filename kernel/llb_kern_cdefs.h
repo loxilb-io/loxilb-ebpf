@@ -1125,6 +1125,8 @@ dp_set_sctp_src_ip(void *md, struct xfi *xf, __be32 xip)
     bpf_l3_csum_replace(md, ip_csum_off, old_len, new_len, sizeof(__u16));
     bpf_skb_store_bytes(md, ip_len_off, &new_len, sizeof(__u16), 0);
     xf->pm.l3_plen += xf->pm.l3_adj;
+    xf->pm.l3_len += xf->pm.l3_adj;
+    xf->pm.l3_adj = 0;
   }
   bpf_l3_csum_replace(md, ip_csum_off, old_sip, xip, sizeof(xip));
   bpf_skb_store_bytes(md, ip_src_off, &xip, sizeof(xip), 0);
@@ -1158,6 +1160,8 @@ dp_set_sctp_dst_ip(void *md, struct xfi *xf, __be32 xip)
     bpf_l3_csum_replace(md, ip_csum_off, old_len, new_len, sizeof(__u16));
     bpf_skb_store_bytes(md, ip_len_off, &new_len, sizeof(__u16), 0);
     xf->pm.l3_plen += xf->pm.l3_adj;
+    xf->pm.l3_len += xf->pm.l3_adj;
+    xf->pm.l3_adj = 0;
   }
 
   bpf_l3_csum_replace(md, ip_csum_off, old_dip, xip, sizeof(xip));

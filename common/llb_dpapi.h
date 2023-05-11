@@ -539,7 +539,7 @@ typedef enum {
 
 typedef struct {
   __u32 nh;
-  __be32 mh_host[LLB_MAX_MHOSTS];
+  __be32 mh_host[LLB_MAX_MHOSTS+1];
 } ct_sctp_pinfd_t;
 
 #define CT_SCTP_FIN_MASK (CT_SCTP_SHUT|CT_SCTP_SHUTA|CT_SCTP_SHUTC|CT_SCTP_ABRT)

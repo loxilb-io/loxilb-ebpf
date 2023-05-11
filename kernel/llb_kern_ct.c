@@ -839,21 +839,21 @@ dp_ct_sctp_sm(void *ctx, struct xfi *xf,
       break;
     } 
 
-    if (xf->l2m.dl_type != bpf_ntohs(ETH_P_IP)) {
+    if (xf->l2m.dl_type != bpf_ntohs(ETH_P_IP) || !tdat->xi.nat_flags) {
       break;
     }
 
     pss->mh_host[0] = xf->l34m.saddr[0];
     pss->nh++;
 
-    for (i = 1; i < LLB_MAX_MHOSTS; i++) {
+    for (i = 0; i < LLB_MAX_MHOSTS; i++) {
       if (pm->type == bpf_htons(SCTP_IPV4_ADDR_PARAM)) {
         __be32 *ip = DP_TC_PTR(DP_ADD_PTR(pm, sizeof(*pm)));
         if (ip + 1 > dend) {
           break;
         }
 
-        pss->mh_host[i] = *ip;
+        pss->mh_host[i+1] = *ip;
         pss->nh++;
 
         if (!atdat->nat_act.nv6) {
@@ -909,21 +909,21 @@ dp_ct_sctp_sm(void *ctx, struct xfi *xf,
       goto add_nph;
     }
 
-    if (xf->l2m.dl_type != bpf_ntohs(ETH_P_IP)) {
+    if (xf->l2m.dl_type != bpf_ntohs(ETH_P_IP) || !tdat->xi.nat_flags) {
       break;
     }
 
     pxss->mh_host[0] = xf->l34m.saddr[0];
     pxss->nh++;
 
-    for (i = 1; i < LLB_MAX_MHOSTS; i++) {
+    for (i = 0; i < LLB_MAX_MHOSTS; i++) {
       if (pm->type == bpf_htons(SCTP_IPV4_ADDR_PARAM)) {
         __be32 *ip = DP_TC_PTR(DP_ADD_PTR(pm, sizeof(*pm)));
         if (ip + 1 > dend) {
           break;
         }
 
-        pxss->mh_host[i] = *ip;
+        pxss->mh_host[i+1] = *ip;
         pxss->nh++;
 
         //bpf_printk("ina ip 0x%x", bpf_ntohl(*ip));
@@ -950,12 +950,12 @@ dp_ct_sctp_sm(void *ctx, struct xfi *xf,
     }
 
 add_nph:
-    if (pxss->nh < tdat->pi.npmhh) {
+    if ((pxss->nh - 1) < tdat->pi.npmhh) {
       int grow;
-      int diff = tdat->pi.npmhh - pxss->nh;
+      int diff = tdat->pi.npmhh - pxss->nh + 1;
 
       // FIXME - for testing
-      diff = LLB_MAX_MHOSTS;
+      //diff = LLB_MAX_MHOSTS;
 
       grow = ((diff)*(sizeof(*pm)+sizeof(__u32)));
       sz = (((struct __sk_buff *)ctx)->len);
@@ -965,7 +965,6 @@ add_nph:
         bpf_spin_lock(&atdat->lock);
         break;
       }
-
       bpf_spin_lock(&atdat->lock);
 
       pm = DP_TC_PTR(DP_PDATA(ctx));
@@ -996,10 +995,13 @@ add_nph:
           break;
         }
 
-        if (axtdat->nat_act.xip[i] != 0 && !axtdat->nat_act.nv6) {
-          /* Checksum to be taken care of later stage */
-          *ip = axtdat->nat_act.xip[i];
+        /* Checksum to be taken care of later stage */
+        if (axtdat->ctd.pi.pmhh[i] != 0) {
+            *ip = axtdat->ctd.pi.pmhh[i];
+        } else if (axtdat->nat_act.xip[0] != 0) {
+            *ip = axtdat->nat_act.xip[0];
         }
+
         sz = sizeof(*pm)+sizeof(__u32);
       }
 

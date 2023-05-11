@@ -191,8 +191,8 @@ dp_do_rtv4(void *ctx, struct xfi *xf, void *fa_)
 
   *(__u32 *)&key->v4k[2] = dp_rtv4_get_ipkey(xf);
   
-  LL_DBG_PRINTK("[RTFW] --Lookup\n");
-  LL_DBG_PRINTK("[RTFW] Zone %d 0x%x\n",
+  LL_DBG_PRINTK("[RTFW] Lookup");
+  LL_DBG_PRINTK("[RTFW] Zone %d 0x%x",
                  xf->pm.zone, *(__u32 *)&key->v4k[2]);
 
   xf->pm.table_id = LL_DP_RTV4_MAP;
@@ -221,7 +221,7 @@ dp_pipe_set_nat(void *ctx, struct xfi *xf,
   xf->nm.nv6 = na->nv6 ? 1 : 0;
   xf->nm.dsr = na->dsr;
   xf->nm.cdis = na->cdis;
-  LL_DBG_PRINTK("[ACL4] NAT ACT %x\n", xf->pm.nf);
+  LL_DBG_PRINTK("[CT] NAT ACT %x", xf->pm.nf);
 
   return 0;
 }
@@ -235,7 +235,7 @@ dp_do_ctops(void *ctx, struct xfi *xf, void *fa_,
 #endif
 
   if (!act) {
-    LL_DBG_PRINTK("[ACL] miss");
+    LL_DBG_PRINTK("[CT] miss");
     goto ct_trk;
   }
 
@@ -247,7 +247,7 @@ dp_do_ctops(void *ctx, struct xfi *xf, void *fa_,
   fa->ca.fwrid = act->ca.fwrid;
 #endif
 
-  if (act->ca.act_type == DP_SET_DO_CT || xf->pm.goct) {
+  if (act->ca.act_type == DP_SET_DO_CT) {
     goto ct_trk;
   } else if (act->ca.act_type == DP_SET_NOP) {
     struct dp_rdr_act *ar = &act->port_act;
@@ -292,7 +292,7 @@ dp_do_ctops(void *ctx, struct xfi *xf, void *fa_,
     dp_pipe_set_nat(ctx, xf, na, act->ca.act_type == DP_SET_SNAT ? 1: 0);
     dp_do_map_stats(ctx, xf, LL_DP_NAT_STATS_MAP, na->rid);
 
-    if (na->fr == 1 || na->doct) {
+    if (na->fr == 1 || na->doct || xf->pm.goct) {
       goto ct_trk;
     }
 
@@ -344,17 +344,17 @@ dp_do_ing_ct(void *ctx, struct xfi *xf, void *fa_)
 
   CT_KEY_GEN(&key, xf);
 
-  LL_DBG_PRINTK("[ACL] -- Lookup\n");
-  LL_DBG_PRINTK("[ACL] daddr %x\n", key.daddr[0]);
-  LL_DBG_PRINTK("[ACL] saddr %d\n", key.saddr[0]);
-  LL_DBG_PRINTK("[ACL] sport %d\n", key.sport);
-  LL_DBG_PRINTK("[ACL] dport %d\n", key.dport);
-  LL_DBG_PRINTK("[ACL] l4proto %d\n", key.l4proto);
+  LL_DBG_PRINTK("[CT] Lookup");
+  LL_DBG_PRINTK("[CT] daddr %x", key.daddr[0]);
+  LL_DBG_PRINTK("[CT] saddr %x", key.saddr[0]);
+  LL_DBG_PRINTK("[CT] sport %d", key.sport);
+  LL_DBG_PRINTK("[CT] dport %d", key.dport);
+  LL_DBG_PRINTK("[CT] l4proto %d", key.l4proto);
 
   xf->pm.table_id = LL_DP_CT_MAP;
   act = bpf_map_lookup_elem(&ct_map, &key);
   if (!act) {
-    LL_DBG_PRINTK("[ACL] miss");
+    LL_DBG_PRINTK("[CT] miss");
   }
 
   return dp_do_ctops(ctx, xf, fa_, act);
