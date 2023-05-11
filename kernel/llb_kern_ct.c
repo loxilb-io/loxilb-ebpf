@@ -1288,7 +1288,9 @@ dp_ct_est(struct xfi *xf,
 
           bpf_printk("%x->%x", key->saddr[0], key->daddr[0]);
           bpf_map_update_elem(&ct_map, key, adat, BPF_ANY);
-          bpf_map_update_elem(&ct_map, xkey, axdat, BPF_ANY);
+          if (i == 0) {
+            bpf_map_update_elem(&ct_map, xkey, axdat, BPF_ANY);
+          }
         }
       }
     }
