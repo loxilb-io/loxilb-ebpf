@@ -836,7 +836,7 @@ dp_ct_sctp_sm(void *ctx, struct xfi *xf,
 
     pm = DP_TC_PTR(DP_ADD_PTR(ic, sizeof(*ic)));
     if (pm + 1 > dend) {
-      break;
+      goto add_nph0;
     } 
 
     if (xf->l2m.dl_type != bpf_ntohs(ETH_P_IP) || !tdat->xi.nat_flags) {
@@ -875,6 +875,79 @@ dp_ct_sctp_sm(void *ctx, struct xfi *xf,
         break;
       }
     }
+
+add_nph0:
+    if ((pss->nh - 1) < tdat->pi.npmhh) {
+      int grow;
+      int diff = tdat->pi.npmhh - pss->nh + 1;
+
+      // FIXME - for testing only
+      //diff = LLB_MAX_MHOSTS;
+
+      grow = ((diff)*(sizeof(*pm)+sizeof(__u32)));
+      sz = (((struct __sk_buff *)ctx)->len);
+
+      bpf_spin_unlock(&atdat->lock);
+      if (dp_pktbuf_expand_tail(ctx, grow+sz) < 0) {
+        bpf_spin_lock(&atdat->lock);
+        break;
+      }
+      bpf_spin_lock(&atdat->lock);
+
+      pm = DP_TC_PTR(DP_PDATA(ctx));
+      dend = DP_TC_PTR(DP_PDATA_END(ctx));
+      if (pm + 1 > dend) {
+        break;
+      }
+
+      for (i = 0; i < diff; i++) {
+
+        if (i >= LLB_MAX_MHOSTS) break;
+
+        /* Keep the verifier happy */
+        if (sz > SCTP_MAX_INIT_ACK_SZ) {
+          break;
+        }
+
+        pm = DP_ADD_PTR(pm, sz);
+        if (pm + 1 > dend) {
+          break;
+        }
+
+        pm->type = bpf_htons(SCTP_IPV4_ADDR_PARAM);
+        pm->len = bpf_htons(sizeof(*pm)+sizeof(__u32));
+
+        __be32 *ip = DP_TC_PTR(DP_ADD_PTR(pm, sizeof(*pm)));
+        if (ip + 1 > dend) {
+          break;
+        }
+
+        if (!atdat->nat_act.nv6) {
+          /* Checksum to be taken care of later stage */
+          if (atdat->ctd.pi.pmhh[i] != 0) {
+            *ip = atdat->ctd.pi.pmhh[i];
+          } else if (atdat->nat_act.rip[0] != 0) {
+            *ip = atdat->nat_act.rip[0];
+          }
+        }
+
+        sz = sizeof(*pm)+sizeof(__u32);
+      }
+
+      s = DP_ADD_PTR(DP_PDATA(ctx), xf->pm.l4_off);
+      if (s + 1 > dend) {
+        break;
+      }
+
+      c = DP_TC_PTR(DP_ADD_PTR(s, sizeof(*s)));
+      if (c + 1 > dend) {
+        break;
+      }
+
+      sz = bpf_ntohs(c->len)+grow;
+      c->len = bpf_htons(sz);
+      xf->pm.l3_adj = grow;
+    }
     break;
   case CT_SCTP_INIT:
 
@@ -904,13 +977,13 @@ dp_ct_sctp_sm(void *ctx, struct xfi *xf,
       nstate = CT_SCTP_INITA;
     }
 
-    pm = DP_TC_PTR(DP_ADD_PTR(ic, sizeof(*ic)));
-    if (pm + 1 > dend) {
-      goto add_nph;
-    }
-
     if (xf->l2m.dl_type != bpf_ntohs(ETH_P_IP) || !tdat->xi.nat_flags) {
       break;
+    }
+
+    pm = DP_TC_PTR(DP_ADD_PTR(ic, sizeof(*ic)));
+    if (pm + 1 > dend) {
+      goto add_nph1;
     }
 
     pxss->mh_host[0] = xf->l34m.saddr[0];
@@ -949,12 +1022,12 @@ dp_ct_sctp_sm(void *ctx, struct xfi *xf,
       }
     }
 
-add_nph:
+add_nph1:
     if ((pxss->nh - 1) < tdat->pi.npmhh) {
       int grow;
       int diff = tdat->pi.npmhh - pxss->nh + 1;
 
-      // FIXME - for testing
+      // FIXME - for testing only
       //diff = LLB_MAX_MHOSTS;
 
       grow = ((diff)*(sizeof(*pm)+sizeof(__u32)));
