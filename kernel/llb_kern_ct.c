@@ -839,7 +839,14 @@ dp_ct_sctp_sm(void *ctx, struct xfi *xf,
       break;
     } 
 
-    for (i = 0; i < LLB_MAX_MHOSTS; i++) {
+    if (xf->l2m.dl_type != bpf_ntohs(ETH_P_IP)) {
+      break;
+    }
+
+    pss->mh_host[0] = xf->l34m.saddr[0];
+    pss->nh++;
+
+    for (i = 1; i < LLB_MAX_MHOSTS; i++) {
       if (pm->type == bpf_htons(SCTP_IPV4_ADDR_PARAM)) {
         __be32 *ip = DP_TC_PTR(DP_ADD_PTR(pm, sizeof(*pm)));
         if (ip + 1 > dend) {
@@ -851,8 +858,8 @@ dp_ct_sctp_sm(void *ctx, struct xfi *xf,
 
         if (!atdat->nat_act.nv6) {
           /* Checksum to be taken care of later stage */
-          if (atdat->nat_act.rip[i] != 0) {
-            *ip = atdat->nat_act.rip[i];
+          if (atdat->ctd.pi.pmhh[i] != 0) {
+            *ip = atdat->ctd.pi.pmhh[i];
           } else if (atdat->nat_act.rip[0] != 0) {
             *ip = atdat->nat_act.rip[0];
           }
@@ -902,7 +909,14 @@ dp_ct_sctp_sm(void *ctx, struct xfi *xf,
       goto add_nph;
     }
 
-    for (i = 0; i < LLB_MAX_MHOSTS; i++) {
+    if (xf->l2m.dl_type != bpf_ntohs(ETH_P_IP)) {
+      break;
+    }
+
+    pxss->mh_host[0] = xf->l34m.saddr[0];
+    pxss->nh++;
+
+    for (i = 1; i < LLB_MAX_MHOSTS; i++) {
       if (pm->type == bpf_htons(SCTP_IPV4_ADDR_PARAM)) {
         __be32 *ip = DP_TC_PTR(DP_ADD_PTR(pm, sizeof(*pm)));
         if (ip + 1 > dend) {
@@ -915,8 +929,8 @@ dp_ct_sctp_sm(void *ctx, struct xfi *xf,
         //bpf_printk("ina ip 0x%x", bpf_ntohl(*ip));
         if (!axtdat->nat_act.nv6) {
           /* Checksum to be taken care of later stage */
-          if (axtdat->nat_act.xip[i] != 0) {
-            *ip = axtdat->nat_act.xip[i];
+          if (axtdat->ctd.pi.pmhh[i] != 0) {
+            *ip = axtdat->ctd.pi.pmhh[i];
           } else if (axtdat->nat_act.xip[0] != 0) {
             *ip = axtdat->nat_act.xip[0];
           }
@@ -936,9 +950,9 @@ dp_ct_sctp_sm(void *ctx, struct xfi *xf,
     }
 
 add_nph:
-    if (pxss->nh < tdat->xi.nph) {
+    if (pxss->nh < tdat->pi.npmhh) {
       int grow;
-      int diff = tdat->xi.nph - pxss->nh;
+      int diff = tdat->pi.npmhh - pxss->nh;
 
       // FIXME - for testing
       diff = LLB_MAX_MHOSTS;
@@ -1004,9 +1018,9 @@ add_nph:
       xf->pm.l3_adj = grow;
     }
 
-    if (tdat->xi.nph > 1) {
-      tdat->xi.mhon = tdat->xi.nph+i;
-      xtdat->xi.mhon = tdat->xi.mhon;
+    if (tdat->pi.npmhh > 0) {
+      tdat->xi.mhon =  1;
+      xtdat->xi.mhon = 1;
     }
     break;
   case CT_SCTP_INITA:
@@ -1154,7 +1168,7 @@ struct {
   memcpy(&dst->nat_act, &src->nat_act, sizeof(struct dp_nat_act)); \
 
 static int __always_inline
-dp_ct_est_post_proc(struct xfi *xf,
+dp_ct_est(struct xfi *xf,
          struct dp_ct_key *key,
          struct dp_ct_key *xkey,
          struct dp_ct_tact *atdat,
@@ -1186,43 +1200,45 @@ dp_ct_est_post_proc(struct xfi *xf,
 
   if (xf->l34m.nw_proto == IPPROTO_SCTP && tdat->xi.mhon) {
     ct_sctp_pinfd_t *pss = &ss->sctp_cts[CT_DIR_IN];
-    ct_sctp_pinfd_t *pxss = &ss->sctp_cts[CT_DIR_OUT];
+    //ct_sctp_pinfd_t *pxss = &ss->sctp_cts[CT_DIR_OUT];
 
     for (i = 0; i < pss->nh && i < LLB_MAX_MHOSTS; i++) {
       key->saddr[0] = pss->mh_host[i];
-      key->saddr[1] = 0;
-      key->saddr[2] = 0;
-      key->saddr[3] = 0;
-      for (j = 1; j < LLB_MAX_MHOSTS; j++) {
-        if (tdat->xi.nat_rip[j]) {
-          key->daddr[0] = tdat->xi.nat_rip[j];
-          key->daddr[1] = 0;
-          key->daddr[2] = 0;
-          key->daddr[3] = 0;
+      for (j = 0; j < LLB_MAX_MHOSTS; j++) {
+        if (tdat->pi.pmhh[j]) {
+          key->daddr[0] = tdat->pi.pmhh[j];
+          xkey->daddr[0] = tdat->pi.pmhh[j];
 
-          adat->nat_act.rip[0] = tdat->xi.nat_rip[j];
+          adat->nat_act.rip[0] = tdat->pi.pmhh[i];
+          axdat->nat_act.xip[0] = tdat->pi.pmhh[i];
+
+          bpf_printk("%x->%x", key->saddr[0], key->daddr[0]);
           bpf_map_update_elem(&ct_map, key, adat, BPF_ANY);
+          bpf_map_update_elem(&ct_map, xkey, axdat, BPF_ANY);
         }
       }
     }
 
+#if 0
     for (i = 0; i < pxss->nh && i < LLB_MAX_MHOSTS; i++) {
       xkey->saddr[0] = pxss->mh_host[i];
       xkey->saddr[1] = 0;
       xkey->saddr[2] = 0;
       xkey->saddr[3] = 0;
       for (j = 1; j < LLB_MAX_MHOSTS; j++) {
-        if (tdat->xi.nat_rip[j]) {
-          xkey->daddr[0] = tdat->xi.nat_rip[j];
+        if (xtdat->pi.pmhh[j]) {
+          xkey->daddr[0] = xtdat->pi.pmhh[j];
           xkey->daddr[1] = 0;
           xkey->daddr[2] = 0;
           xkey->daddr[3] = 0;
 
-          axdat->nat_act.xip[0] = tdat->xi.nat_rip[j];
+          axdat->nat_act.xip[0] = xtdat->pi.pmhh[j];
+          bpf_printk("%x->%x", xkey->saddr[0], xkey->daddr[0]);
           bpf_map_update_elem(&ct_map, xkey, axdat, BPF_ANY);
         }
       }
     }
+#endif
   }
   return 0;
 }
@@ -1330,6 +1346,10 @@ dp_ct_in(void *ctx, struct xfi *xf)
     adat->ctd.rid = xf->pm.rule_id;
     adat->ctd.aid = xf->nm.sel_aid;
     adat->ctd.smr = CT_SMR_INIT;
+    adat->ctd.pi.npmhh = xf->nm.npmhh;
+    adat->ctd.pi.pmhh[0] = xf->nm.pmhh[0];
+    adat->ctd.pi.pmhh[1] = xf->nm.pmhh[1];
+    adat->ctd.pi.pmhh[2] = xf->nm.pmhh[2]; // LLB_MAX_MHOSTS
 
     axdat->ca.ftrap = 0;
     axdat->ca.oaux = 0;
@@ -1359,6 +1379,10 @@ dp_ct_in(void *ctx, struct xfi *xf)
     axdat->ctd.smr = CT_SMR_INIT;
     axdat->ctd.rid = adat->ctd.rid;
     axdat->ctd.aid = adat->ctd.aid;
+    axdat->ctd.pi.npmhh = xf->nm.npmhh;
+    axdat->ctd.pi.pmhh[0] = xf->nm.pmhh[0];
+    axdat->ctd.pi.pmhh[1] = xf->nm.pmhh[1];
+    axdat->ctd.pi.pmhh[2] = xf->nm.pmhh[2]; // LLB_MAX_MHOSTS
 
     bpf_map_update_elem(&ct_map, &xkey, axdat, BPF_ANY);
     bpf_map_update_elem(&ct_map, &key, adat, BPF_ANY);
@@ -1385,9 +1409,9 @@ dp_ct_in(void *ctx, struct xfi *xf)
         atdat->nat_act.doct = 0;
         axtdat->nat_act.doct = 0;
         if (atdat->ctd.dir == CT_DIR_IN) {
-          dp_ct_est_post_proc(xf, &key, &xkey, atdat, axtdat);
+          dp_ct_est(xf, &key, &xkey, atdat, axtdat);
         } else {
-          dp_ct_est_post_proc(xf, &xkey, &key, axtdat, atdat);
+          dp_ct_est(xf, &xkey, &key, axtdat, atdat);
         }
       } else {
         atdat->ca.act_type = DP_SET_NOP;

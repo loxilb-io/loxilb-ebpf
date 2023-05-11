@@ -254,6 +254,9 @@ dp_parse_sctp(struct parser *p,
     } else {
       xf->pm.l4fin = 1;
     }
+  } else if (c->type == SCTP_HB_REQ ||
+             c->type == SCTP_HB_ACK) {
+    xf->pm.goct = 1;
   }
 
   return DP_PRET_OK;

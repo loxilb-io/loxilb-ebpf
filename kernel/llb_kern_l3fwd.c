@@ -247,7 +247,7 @@ dp_do_ctops(void *ctx, struct xfi *xf, void *fa_,
   fa->ca.fwrid = act->ca.fwrid;
 #endif
 
-  if (act->ca.act_type == DP_SET_DO_CT) {
+  if (act->ca.act_type == DP_SET_DO_CT || xf->pm.goct) {
     goto ct_trk;
   } else if (act->ca.act_type == DP_SET_NOP) {
     struct dp_rdr_act *ar = &act->port_act;

@@ -585,7 +585,9 @@ typedef struct {
     ct_icmp_pinf_t i;
     ct_sctp_pinf_t s;
   };
-  __u32 frag;
+  __u16 frag;
+  __u16 npmhh;
+  __u32 pmhh[4];
   ct_l3inf_t l3i;
 } ct_pinf_t;
 
@@ -600,8 +602,7 @@ struct mf_xfrm_inf
   uint8_t wprio;
   uint8_t nv6;
   uint8_t dsr;
-  uint8_t mhon:4;
-  uint8_t nph:4;
+  uint8_t mhon;
   uint16_t nat_xport;
   uint32_t nat_xip[4];
   uint32_t nat_rip[4];
@@ -707,9 +708,11 @@ struct dp_nat_tacts {
   uint64_t ito;
   struct bpf_spin_lock lock;
   uint16_t nxfrm;
-  uint16_t cdis;
+  uint8_t cdis;
+  uint8_t npmhh;
   uint16_t sel_hint;
   uint16_t sel_type;
+  uint32_t pmhh[LLB_MAX_MHOSTS];
   struct mf_xfrm_inf nxfrms[LLB_MAX_NXFRMS];
 };
 

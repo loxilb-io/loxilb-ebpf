@@ -95,6 +95,10 @@ dp_do_nat(void *ctx, struct xfi *xf)
     xf->nm.dsr = act->ca.oaux ? 1: 0;
     xf->nm.cdis = act->cdis ? 1: 0;
     xf->pm.nf = act->ca.act_type == DP_SET_SNAT ? LLB_NAT_SRC : LLB_NAT_DST;
+    xf->nm.npmhh = act->npmhh;
+    xf->nm.pmhh[0] = act->pmhh[0];
+    xf->nm.pmhh[1] = act->pmhh[1];
+    xf->nm.pmhh[2] = act->pmhh[2];  // LLB_MAX_MHOSTS
 
     /* FIXME - Do not select inactive end-points 
      * Need multi-passes for selection

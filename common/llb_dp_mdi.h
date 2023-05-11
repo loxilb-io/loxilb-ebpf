@@ -116,7 +116,8 @@ struct dp_pi_mdi {
     __u8             il3_off;
     __u8             il4_off;
     __u8             itcp_flags;
-    __u8             l4fin:4;
+    __u8             l4fin:2;
+    __u8             goct:2;
     __u8             il4fin:4;
     __u16            l3_len;
     __u16            l3_plen;
@@ -200,6 +201,8 @@ struct dp_qos_mdi {
 struct dp_nat_mdi {
     __u32            nxip[4];      /* NAT xIP */
     __u32            nrip[4];      /* NAT rIP (for one-arm) */
+    __u32            pmhh[4];      /* Proxy for multi-homed hosts */
+    __u64            npmhh;        /* No. of proxy multi-homed hosts */
     __u16            nxport;       /* NAT xport */
 #define LLB_PIPE_CT_NONE  0
 #define LLB_PIPE_CT_INP   1
