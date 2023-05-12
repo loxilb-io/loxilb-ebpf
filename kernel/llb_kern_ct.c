@@ -1069,9 +1069,9 @@ add_nph1:
 
         /* Checksum to be taken care of at a later stage */
         if (axtdat->ctd.pi.pmhh[i] != 0) {
-            *ip = axtdat->ctd.pi.pmhh[i];
+          *ip = axtdat->ctd.pi.pmhh[i];
         } else if (axtdat->nat_act.xip[0] != 0) {
-            *ip = axtdat->nat_act.xip[0];
+          *ip = axtdat->nat_act.xip[0];
         }
 
         sz = sizeof(*pm)+sizeof(__u32);
