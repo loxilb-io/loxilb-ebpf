@@ -827,7 +827,6 @@ dp_ct_sctp_sm(void *ctx, struct xfi *xf,
 
     ic = DP_TC_PTR(DP_ADD_PTR(c, sizeof(*c)));
     if (ic + 1 > dend) {
-      LLBS_PPLN_DROP(xf);
       goto end;
     }
 
@@ -959,7 +958,6 @@ add_nph0:
 
     ic = DP_TC_PTR(DP_ADD_PTR(c, sizeof(*c)));
     if (ic + 1 > dend) {
-      LLBS_PPLN_DROP(xf);
       goto end;
     }
 
@@ -1108,7 +1106,6 @@ add_nph1:
     if (c->type == SCTP_INIT_CHUNK) {
       ic = DP_TC_PTR(DP_ADD_PTR(c, sizeof(*c)));
       if (ic + 1 > dend) {
-        LLBS_PPLN_DROP(xf);
         goto end;
       }
 
@@ -1120,7 +1117,6 @@ add_nph1:
 
     ck = DP_TC_PTR(DP_ADD_PTR(c, sizeof(*c)));
     if (ck + 1 > dend) {
-      LLBS_PPLN_DROP(xf);
       goto end;
     }
 
