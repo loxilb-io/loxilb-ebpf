@@ -825,7 +825,6 @@ dp_ct_sctp_sm(void *ctx, struct xfi *xf,
 
     ic = DP_TC_PTR(DP_ADD_PTR(c, sizeof(*c)));
     if (ic + 1 > dend) {
-      LLBS_PPLN_DROP(xf);
       goto end;
     }
 
@@ -843,7 +842,6 @@ dp_ct_sctp_sm(void *ctx, struct xfi *xf,
         if (ip + 1 > dend) {
           break;
         }
-        //bpf_printk("IP 0x%x", bpf_ntohl(*ip));
         if (atdat->nat_act.rip[0] != 0 && !atdat->nat_act.nv6) {
           /* Checksum to be taken care of later stage */
           *ip = atdat->nat_act.rip[0];
@@ -870,7 +868,6 @@ dp_ct_sctp_sm(void *ctx, struct xfi *xf,
 
     ic = DP_TC_PTR(DP_ADD_PTR(c, sizeof(*c)));
     if (ic + 1 > dend) {
-      LLBS_PPLN_DROP(xf);
       goto end;
     }
 
@@ -899,7 +896,6 @@ dp_ct_sctp_sm(void *ctx, struct xfi *xf,
         if (ip + 1 > dend) {
           break;
         }
-        //bpf_printk("ina ip 0x%x", bpf_ntohl(*ip));
         if (axtdat->nat_act.xip[0] != 0 && !axtdat->nat_act.nv6) {
           /* Checksum to be taken care of later stage */
           *ip = axtdat->nat_act.xip[0];
@@ -926,7 +922,6 @@ dp_ct_sctp_sm(void *ctx, struct xfi *xf,
     if (c->type == SCTP_INIT_CHUNK) {
       ic = DP_TC_PTR(DP_ADD_PTR(c, sizeof(*c)));
       if (ic + 1 > dend) {
-        LLBS_PPLN_DROP(xf);
         goto end;
       }
 
@@ -938,7 +933,6 @@ dp_ct_sctp_sm(void *ctx, struct xfi *xf,
 
     ck = DP_TC_PTR(DP_ADD_PTR(c, sizeof(*c)));
     if (ck + 1 > dend) {
-      LLBS_PPLN_DROP(xf);
       goto end;
     }
 
