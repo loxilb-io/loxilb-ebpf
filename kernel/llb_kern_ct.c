@@ -1286,7 +1286,7 @@ dp_ct_est(struct xfi *xf,
           adat->nat_act.rip[0] = tdat->pi.pmhh[i];
           axdat->nat_act.xip[0] = tdat->pi.pmhh[i];
 
-          bpf_printk("%x->%x", key->saddr[0], key->daddr[0]);
+          LL_DBG_PRINTK("[CTRK] ASSOC 0x%x->0x%x",key->saddr[0], key->daddr[0]);
           bpf_map_update_elem(&ct_map, key, adat, BPF_ANY);
           if (i == 0) {
             bpf_map_update_elem(&ct_map, xkey, axdat, BPF_ANY);
@@ -1485,9 +1485,15 @@ dp_ct_in(void *ctx, struct xfi *xf)
         atdat->nat_act.doct = 0;
         axtdat->nat_act.doct = 0;
         if (atdat->ctd.dir == CT_DIR_IN) {
-          dp_ct_est(xf, &key, &xkey, atdat, axtdat);
+          if (atdat->ctd.xi.mhon) {
+            dp_ct_est(xf, &key, &xkey, atdat, axtdat);
+            atdat->ctd.xi.mhon = 0;
+          }
         } else {
-          dp_ct_est(xf, &xkey, &key, axtdat, atdat);
+          if (axtdat->ctd.xi.mhon) {
+            dp_ct_est(xf, &xkey, &key, axtdat, atdat);
+            atdat->ctd.xi.mhon = 0;
+          }
         }
       } else {
         atdat->ca.act_type = DP_SET_NOP;
