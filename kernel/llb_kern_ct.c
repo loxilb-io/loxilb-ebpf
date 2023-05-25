@@ -1248,7 +1248,6 @@ dp_ct_est(struct xfi *xf,
   //struct dp_ct_dat *xtdat = &axtdat->ctd;
   struct dp_ct_tact *adat, *axdat;
   ct_sctp_pinf_t *ss;
-  ct_sctp_pinf_t *xss;
   int i,j;
   int k;
 
@@ -1266,7 +1265,6 @@ dp_ct_est(struct xfi *xf,
   CP_CT_NAT_TACTS(axdat, axtdat);
 
   ss = &adat->ctd.pi.s;
-  xss = &axdat->ctd.pi.s;
 
   if (xf->l34m.nw_proto == IPPROTO_SCTP && tdat->xi.mhon) {
     ct_sctp_pinfd_t *pss = &ss->sctp_cts[CT_DIR_IN];
