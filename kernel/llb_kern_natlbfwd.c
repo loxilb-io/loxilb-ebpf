@@ -74,7 +74,7 @@ dp_do_nat(void *ctx, struct xfi *xf)
     key.v6 = 1;
   }
 
-  LL_DBG_PRINTK("[NAT] --Lookup\n");
+  LL_DBG_PRINTK("[NAT] Lookup");
 
   xf->pm.table_id = LL_DP_NAT_MAP;
 
@@ -95,6 +95,10 @@ dp_do_nat(void *ctx, struct xfi *xf)
     xf->nm.dsr = act->ca.oaux ? 1: 0;
     xf->nm.cdis = act->cdis ? 1: 0;
     xf->pm.nf = act->ca.act_type == DP_SET_SNAT ? LLB_NAT_SRC : LLB_NAT_DST;
+    xf->nm.npmhh = act->npmhh;
+    xf->nm.pmhh[0] = act->pmhh[0];
+    xf->nm.pmhh[1] = act->pmhh[1];
+    xf->nm.pmhh[2] = act->pmhh[2];  // LLB_MAX_MHOSTS
 
     /* FIXME - Do not select inactive end-points 
      * Need multi-passes for selection
@@ -110,7 +114,7 @@ dp_do_nat(void *ctx, struct xfi *xf)
         xf->nm.sel_aid = sel;
         xf->nm.ito = act->ito;
         xf->pm.rule_id =  act->ca.cidx;
-        LL_DBG_PRINTK("[NAT] ACT %x\n", xf->pm.nf);
+        LL_DBG_PRINTK("[NAT] ACT %x", xf->pm.nf);
         /* Special case related to host-dnat */
         if (xf->l34m.saddr4 == xf->nm.nxip4 && xf->pm.nf == LLB_NAT_DST) {
           xf->nm.nxip4 = 0;

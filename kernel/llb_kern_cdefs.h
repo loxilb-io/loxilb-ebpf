@@ -1116,8 +1116,18 @@ dp_set_sctp_src_ip(void *md, struct xfi *xf, __be32 xip)
 {
   int ip_csum_off  = xf->pm.l3_off + offsetof(struct iphdr, check);
   int ip_src_off = xf->pm.l3_off + offsetof(struct iphdr, saddr);
+  int ip_len_off = xf->pm.l3_off + offsetof(struct iphdr, tot_len);
   __be32 old_sip = xf->l34m.saddr4;
   
+  if (xf->pm.l3_adj) {
+    __be32 old_len = bpf_htons(xf->pm.l3_len);
+    __be32 new_len = bpf_htons(xf->pm.l3_len+xf->pm.l3_adj);
+    bpf_l3_csum_replace(md, ip_csum_off, old_len, new_len, sizeof(__u16));
+    bpf_skb_store_bytes(md, ip_len_off, &new_len, sizeof(__u16), 0);
+    xf->pm.l3_plen += xf->pm.l3_adj;
+    xf->pm.l3_len += xf->pm.l3_adj;
+    xf->pm.l3_adj = 0;
+  }
   bpf_l3_csum_replace(md, ip_csum_off, old_sip, xip, sizeof(xip));
   bpf_skb_store_bytes(md, ip_src_off, &xip, sizeof(xip), 0);
   xf->l34m.saddr4 = xip;
@@ -1141,8 +1151,19 @@ dp_set_sctp_dst_ip(void *md, struct xfi *xf, __be32 xip)
 {
   int ip_csum_off  = xf->pm.l3_off + offsetof(struct iphdr, check);
   int ip_dst_off = xf->pm.l3_off + offsetof(struct iphdr, daddr);
+  int ip_len_off = xf->pm.l3_off + offsetof(struct iphdr, tot_len);
   __be32 old_dip = xf->l34m.daddr4;
-  
+
+   if (xf->pm.l3_adj) {
+    __be32 old_len = bpf_htons(xf->pm.l3_len);
+    __be32 new_len = bpf_htons(xf->pm.l3_len+xf->pm.l3_adj);
+    bpf_l3_csum_replace(md, ip_csum_off, old_len, new_len, sizeof(__u16));
+    bpf_skb_store_bytes(md, ip_len_off, &new_len, sizeof(__u16), 0);
+    xf->pm.l3_plen += xf->pm.l3_adj;
+    xf->pm.l3_len += xf->pm.l3_adj;
+    xf->pm.l3_adj = 0;
+  }
+
   bpf_l3_csum_replace(md, ip_csum_off, old_dip, xip, sizeof(xip));
   bpf_skb_store_bytes(md, ip_dst_off, &xip, sizeof(xip), 0);
   xf->l34m.daddr4 = xip;
@@ -1704,6 +1725,12 @@ dp_pktbuf_write(void *md, __u32 off, void *frmbuf, __u32 frmlen, __u64 flags)
   return bpf_skb_store_bytes(md, off, frmbuf, frmlen, flags);
 }
 
+static int __always_inline
+dp_pktbuf_expand_tail(void *md, __u32 len)
+{
+  return bpf_skb_change_tail(md, len, 0);
+}
+
 #else /* XDP utilities */
 
 #define DP_LLB_MRK_INGP(md)
@@ -1927,6 +1954,13 @@ dp_pktbuf_read(void *md, __u32 off, void *buf, __u32 tolen)
 
 static int __always_inline
 dp_pktbuf_write(void *md, __u32 off, void *frmbuf, __u32 frmlen, __u64 flags)
+{
+  /* FIXME - TODO */
+  return -1;
+}
+
+static int __always_inline
+dp_pktbuf_expand_tail(void *md, __u32 len)
 {
   /* FIXME - TODO */
   return -1;

@@ -39,6 +39,7 @@
 #define LLB_PSECS             (8)
 #define LLB_MAX_NXFRMS        (16)
 #define LLB_CRC32C_ENTRIES    (256)
+#define LLB_MAX_MHOSTS        (3)
 
 #define LLB_DP_SUNP_PGM_ID2    (6)
 #define LLB_DP_CRC_PGM_ID2     (5)
@@ -537,9 +538,8 @@ typedef enum {
 } ct_icmp_state_t;
 
 typedef struct {
-  __u32 hstate;
-  __u32 seq;
-  __u16 init_acks;
+  __u32 nh;
+  __be32 mh_host[LLB_MAX_MHOSTS+1];
 } ct_sctp_pinfd_t;
 
 #define CT_SCTP_FIN_MASK (CT_SCTP_SHUT|CT_SCTP_SHUTA|CT_SCTP_SHUTC|CT_SCTP_ABRT)
@@ -557,15 +557,15 @@ typedef enum {
   CT_SCTP_SHUTC   = 0x80,
   CT_SCTP_ERR     = 0x100,
   CT_SCTP_ABRT    = 0x200
-} ct_stcp_state_t;
+} ct_sctp_state_t;
 
 typedef struct {
-  ct_stcp_state_t state;
+  ct_sctp_state_t state;
   ct_dir_t fndir;
   uint32_t itag;
   uint32_t otag;
   uint32_t cookie;
-  ct_sctp_pinfd_t stcp_cts[CT_DIR_MAX];
+  ct_sctp_pinfd_t sctp_cts[CT_DIR_MAX];
 } ct_sctp_pinf_t;
 
 typedef struct {
@@ -585,7 +585,9 @@ typedef struct {
     ct_icmp_pinf_t i;
     ct_sctp_pinf_t s;
   };
-  __u32 frag;
+  __u16 frag;
+  __u16 npmhh;
+  __u32 pmhh[4];
   ct_l3inf_t l3i;
 } ct_pinf_t;
 
@@ -597,9 +599,10 @@ struct mf_xfrm_inf
   /* LLB_NAT_XXX flags */
   uint8_t nat_flags;
   uint8_t inactive;
-  uint16_t wprio;
+  uint8_t wprio;
   uint8_t nv6;
   uint8_t dsr;
+  uint8_t mhon;
   uint16_t nat_xport;
   uint32_t nat_xip[4];
   uint32_t nat_rip[4];
@@ -705,9 +708,11 @@ struct dp_nat_tacts {
   uint64_t ito;
   struct bpf_spin_lock lock;
   uint16_t nxfrm;
-  uint16_t cdis;
+  uint8_t cdis;
+  uint8_t npmhh;
   uint16_t sel_hint;
   uint16_t sel_type;
+  uint32_t pmhh[LLB_MAX_MHOSTS];
   struct mf_xfrm_inf nxfrms[LLB_MAX_NXFRMS];
 };
 

@@ -229,10 +229,10 @@ dp_trap_packet(void *ctx,  struct xfi *xf, void *fa_)
 static int __always_inline
 dp_redir_packet(void *ctx,  struct xfi *xf)
 {
-  LL_DBG_PRINTK("[REDI] --\n");
+  LL_DBG_PRINTK("[REDI]");
 
   if (dp_redirect_port(&tx_intf_map, xf) != DP_REDIRECT) {
-    LL_DBG_PRINTK("[REDI] FAIL--\n");
+    LL_DBG_PRINTK("[REDI] FAIL");
     return DP_DROP;
   }
 
@@ -246,10 +246,10 @@ dp_redir_packet(void *ctx,  struct xfi *xf)
 static int __always_inline
 dp_rewire_packet(void *ctx,  struct xfi *xf)
 {
-  LL_DBG_PRINTK("[REWR] --\n");
+  LL_DBG_PRINTK("[REWR]");
 
   if (dp_rewire_port(&tx_intf_map, xf) != DP_REDIRECT) {
-    LL_DBG_PRINTK("[REWR] FAIL--\n");
+    LL_DBG_PRINTK("[REWR] FAIL");
     return DP_DROP;
   }
 
@@ -263,7 +263,7 @@ static int __always_inline
 #endif
 dp_pipe_check_res(void *ctx, struct xfi *xf, void *fa)
 {
-  LL_DBG_PRINTK("[PIPE] act 0x%x\n", xf->pm.pipe_act);
+  LL_DBG_PRINTK("[PIPE] act 0x%x", xf->pm.pipe_act);
 
 #ifdef HAVE_DP_EGR_HOOK
   DP_LLB_MRK_INGP(ctx);

@@ -310,6 +310,8 @@ struct sctphdr {
 
 #define SCTP_INIT_CHUNK     1
 #define SCTP_INIT_CHUNK_ACK 2
+#define SCTP_HB_REQ         4
+#define SCTP_HB_ACK         5
 #define SCTP_ABORT          6
 #define SCTP_SHUT           7
 #define SCTP_SHUT_ACK       8
@@ -334,6 +336,8 @@ struct sctp_param {
   __be16 type;
   __be16 len;
 };
+
+#define SCTP_MAX_INIT_ACK_SZ 2000
 
 /*
  * struct sctp_init_ch - SCTP init chunk
