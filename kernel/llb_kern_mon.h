@@ -3,7 +3,7 @@
 #define __LLB_KERN_MON_H__
 
 #define MAX_KEY_SIZE 64
-#define MAX_VALUE_SIZE 224
+#define MAX_VALUE_SIZE 256
 #define BPF_NAME_LEN 16U
 #define LLB_MAX_PMON_ENTRIES  (10240)
 

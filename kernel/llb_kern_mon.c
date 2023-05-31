@@ -52,15 +52,19 @@ log_map_update(struct pt_regs *ctx, struct bpf_map* updated_map,
   // Parse the Key
   if (key_size <= MAX_KEY_SIZE) {
     bpf_probe_read(out_data.key, key_size, pKey);
+    out_data.key_size = key_size;
   } else {
     bpf_probe_read(out_data.key, MAX_KEY_SIZE, pKey);
+    out_data.key_size = MAX_KEY_SIZE;
   }
   // Parse the Value
   if (pValue) {
     if (value_size <= MAX_VALUE_SIZE) {
       bpf_probe_read(out_data.value, value_size, pValue);
+      out_data.value_size = value_size;
     } else {
       bpf_probe_read(out_data.value, MAX_VALUE_SIZE, pValue);
+      out_data.value_size = MAX_VALUE_SIZE;
     }
   } else {
     out_data.value_size = 0;
