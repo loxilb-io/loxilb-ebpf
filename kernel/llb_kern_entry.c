@@ -97,10 +97,12 @@ tc_packet_func__(struct __sk_buff *md)
     return DP_DROP;
   }
 
-  if (xf->pm.phit & LLB_DP_FC_HIT) {
-    memset(xf, 0, sizeof(*xf));
-    xf->pm.phit |= LLB_DP_FC_HIT;
-  }
+  //if (xf->pm.phit & LLB_DP_FC_HIT) {
+  //  memset(xf, 0, sizeof(*xf));
+  //  xf->pm.phit |= LLB_DP_FC_HIT;
+  //}
+
+  memset(xf, 0, sizeof(*xf));
   xf->pm.tc = 1;
 
   return dp_ing_pkt_main(md, xf);
@@ -120,7 +122,7 @@ int tc_packet_func_fast(struct __sk_buff *md)
   }
 #endif
 
-  dp_parse_d0(md, xf, 0);
+  dp_parse_d0(md, xf, 1);
 
   return dp_ing_fc_main(md, xf);
 #else
