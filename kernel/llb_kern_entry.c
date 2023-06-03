@@ -103,6 +103,7 @@ tc_packet_func__(struct __sk_buff *md)
   //}
 
   memset(xf, 0, sizeof(*xf));
+  xf->pm.phit |= LLB_DP_FC_HIT;
   xf->pm.tc = 1;
 
   return dp_ing_pkt_main(md, xf);
