@@ -6,6 +6,8 @@
 #ifndef __LOXILB_DP_H__
 #define __LOXILB_DP_H__
 
+#define LOXILB_DP_LOGF           "/var/log/loxilbdp.log"
+
 #ifndef XDP_LL_SEC_DEFAULT
 #define XDP_LL_SEC_DEFAULT       "xdp_packet_hook"
 #endif
@@ -46,6 +48,7 @@ enum llb_bpf_mnt_type {
 #include "../common/common_pdi.h"
 #include "../common/llb_dpapi.h"
 #include "../common/llb_dp_mdi.h"
+#include "../common/log.h"
 
 unsigned long long get_os_usecs(void);
 unsigned long long get_os_nsecs(void);
@@ -53,6 +56,7 @@ unsigned long long get_os_nsecs(void);
 struct ebpfcfg {
   int have_mtrace;
   int nodenum;
+  int loglevel;
 };
 
 int loxilb_main(struct ebpfcfg *cfg);

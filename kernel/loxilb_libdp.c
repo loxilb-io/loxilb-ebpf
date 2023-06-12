@@ -326,19 +326,19 @@ llb_setup_kern_mon(void)
   // Open and load eBPF Program
   prog = llb_kern_mon__open();
   if (!prog) {
-      printf("Failed to open and load BPF skeleton\n");
+      log_error("Failed to open and load BPF skeleton");
       return 1;
   }
   err = llb_kern_mon__load(prog);
   if (err) {
-      printf("Failed to load and verify BPF skeleton\n");
+      log_error("Failed to load and verify BPF skeleton");
       goto cleanup;
   }
 
   // Attach the various kProbes
   err = llb_kern_mon__attach(prog);
   if (err) {
-      printf("Failed to attach BPF skeleton\n");
+      log_error("Failed to attach BPF skeleton");
       goto cleanup;
   }
 
@@ -349,7 +349,7 @@ llb_setup_kern_mon(void)
   pb = perf_buffer__new(bpf_map__fd(prog->maps.map_events), 8, &pb_opts);
   err = libbpf_get_error(pb);
   if (err) {
-    printf("failed to setup perf_buffer: %d\n", err);
+    log_error("failed to setup perf_buffer: %d", err);
     goto cleanup;
   }
 
@@ -393,7 +393,7 @@ llb_objmap2fd(struct bpf_object *bpf_obj,
   }
 
   map_fd = bpf_map__fd(map);
-  printf("%s: %d\n", mapname, map_fd);
+  log_trace("%s: %d\n", mapname, map_fd);
 out:
   return map_fd;
 }
@@ -446,7 +446,7 @@ llb_dflt_sec_map2fd_all(struct bpf_object *bpf_obj)
   for (; i < LL_DP_MAX_MAP; i++) {
     fd = llb_objmap2fd(bpf_obj, xh->maps[i].map_name);  
     if (fd < 0) {
-      printf("BPF: map2fd failed %s\n", xh->maps[i].map_name);
+      log_error("BPF: map2fd failed %s", xh->maps[i].map_name);
       continue;
     }
     xh->maps[i].map_fd = fd;
@@ -485,13 +485,13 @@ llb_dflt_sec_map2fd_all(struct bpf_object *bpf_obj)
 
   /* Clean previous pins */
   if (bpf_object__unpin_maps(bpf_obj, xh->ll_dp_pdir) != 0) {
-    printf("%s: Unpin maps failed\n", xh->ll_dp_pdir);
+    log_error("%s: Unpin maps failed", xh->ll_dp_pdir);
   }
 
   /* This will pin all maps in our bpf_object */
   err = bpf_object__pin_maps(bpf_obj, xh->ll_dp_pdir);
   if (err) {
-    printf("BPF: Object pin failed\n");
+    log_error("BPF: Object pin failed");
     //assert(0);
   }
 
@@ -791,8 +791,7 @@ llb_clear_stats_pcpu_arr(int mfd, __u32 idx)
 
   memset(values, 0, sizeof(values));
   if (bpf_map_update_elem(mfd, &idx, values, 0) != 0) {
-    fprintf(stderr,
-      "ERR: bpf_map_lookup_elem failed idx:0x%X\n", idx);
+    log_error("bpf_map_lookup_elem failed idx:0x%X", idx);
     return;
   }
 }
@@ -811,8 +810,7 @@ ll_get_stats_pcpu_arr(int mfd, __u32 idx,
   int i;
 
   if ((bpf_map_lookup_elem(mfd, &idx, values)) != 0) {
-    fprintf(stderr,
-      "ERR: bpf_map_lookup_elem failed idx:0x%X\n", idx);
+    log_error("bpf_map_lookup_elem failed idx:0x%X", idx);
     return;
   }
   
@@ -829,7 +827,7 @@ ll_get_stats_pcpu_arr(int mfd, __u32 idx,
 
   if (s->st.packets || s->st.bytes) {
 #ifdef LLB_DP_STAT_DEBUG
-    printf("IDX %d: %llu:%llu\n",idx, 
+    log_debug("IDX %d: %llu:%llu",idx,
        (unsigned long long)(s->st.packets),
        (unsigned long long)(s->st.bytes));
 #endif
@@ -954,8 +952,7 @@ llb_fetch_pol_map_stats(int tid, uint32_t e, void *ppass, void *pdrop)
     pthread_rwlock_wrlock(&t->stat_lock);
 
     if ((bpf_map_lookup_elem(t->map_fd, &e, &pa)) != 0) {
-      fprintf(stderr,
-        "ERR: bpf_map_lookup_elem failed idx:0x%X\n", e);
+      log_error("bpf_map_lookup_elem failed idx:0x%X\n", e);
       pthread_rwlock_unlock(&t->stat_lock);
       return -1;
     }
@@ -1585,7 +1582,7 @@ ll_ct_map_ent_has_aged(int tid, void *k, void *ita)
 
   t = &xh->maps[LL_DP_CT_MAP];
   if (bpf_map_lookup_elem(t->map_fd, &xkey, &axdat) != 0) {
-    printf("rdir ct4 not found %s:%d -> %s:%d (%d)\n",
+    log_trace("rdir ct4 not found %s:%d -> %s:%d (%d)",
          dstr, ntohs(xkey.sport),
          sstr, ntohs(xkey.dport),  
          xkey.l4proto); 
@@ -1659,7 +1656,7 @@ ll_ct_map_ent_has_aged(int tid, void *k, void *ita)
   llb_fetch_map_stats_used(LL_DP_CT_STATS_MAP, adat->ca.cidx+1, 1, &used2);
 
   if (curr_ns - latest_ns > to && !used1 && !used2) {
-    printf("##%s:%d -> %s:%d (%d):%u (Aged:%d:%d:%d)\n",
+    log_trace("##%s:%d -> %s:%d (%d):%u (Aged:%d:%d:%d)",
          sstr, ntohs(key->sport),
          dstr, ntohs(key->dport),  
          key->l4proto, dat->rid, est, has_nat, used1 || used2);
@@ -1749,7 +1746,7 @@ ll_ct_map_ent_rm_related(int tid, void *k, void *ita)
         inet_ntop(AF_INET6, &key->saddr[0], sstr, INET6_ADDRSTRLEN);
         inet_ntop(AF_INET6, &key->daddr[0], dstr, INET6_ADDRSTRLEN);
       }
-      printf("related ct rm %s:%d -> %s:%d (%d)\n",
+      log_debug("related ct rm %s:%d -> %s:%d (%d)",
          sstr, ntohs(key->sport),
          dstr, ntohs(key->dport),
          key->l4proto);
@@ -1809,7 +1806,7 @@ llb_set_rlims(void)
   };
 
   if (setrlimit(RLIMIT_MEMLOCK, &rlim_new)) {
-    fprintf(stderr, "Failed to increase RLIMIT_MEMLOCK limit!\n");
+    log_error("Failed to increase RLIMIT_MEMLOCK limit!");
     exit(1);
   }
 }
@@ -1850,8 +1847,8 @@ llb_link_prop_add(const char *ifname,
       l->nm++;
       
       XH_UNLOCK();
-      printf("%s: IF-%s ref idx %d:%d type %d\n", 
-              __FUNCTION__, ifname, n, mfree - 1, mp_type);
+      log_debug("%s: IF-%s ref idx %d:%d type %d",
+                __FUNCTION__, ifname, n, mfree - 1, mp_type);
       return 0;
     }
     if (!l->valid && !free) free = n+1;
@@ -1874,8 +1871,8 @@ llb_link_prop_add(const char *ifname,
 
   XH_UNLOCK();
 
-  printf("%s: IF-%s added idx %d type %d\n", 
-         __FUNCTION__, ifname, free-1, mp_type);
+  log_debug("%s: IF-%s added idx %d type %d",
+            __FUNCTION__, ifname, free-1, mp_type);
 
   return 0;
 }
@@ -1951,7 +1948,7 @@ llb_psec_add(const char *psec)
   strncpy(s->name, psec, SECNAMSIZ);
   s->name[SECNAMSIZ-1] = '\0';
 
-  printf("%s: SEC-%s added idx %d\n", __FUNCTION__, psec, free-1);
+  log_debug("%s: SEC-%s added idx %d", __FUNCTION__, psec, free-1);
 
   XH_UNLOCK();
 
@@ -2019,18 +2016,18 @@ llb_ebpf_link_attach(struct config *cfg)
     /* ntc is netlox's modified tc tool */
     sprintf(cmd, "ntc qdisc add dev %s clsact 2>&1 >/dev/null", cfg->ifname);
     llb_sys_exec(cmd);
-    printf("%s\n", cmd);    
+    log_debug("%s", cmd);
 
     sprintf(cmd, "ntc filter add dev %s ingress bpf da obj %s sec %s 2>&1",
             cfg->ifname, cfg->filename, cfg->progsec);
     llb_sys_exec(cmd);
-    printf("%s\n", cmd);
+    log_debug("%s", cmd);
 
 #ifdef HAVE_DP_EGR_HOOK
     sprintf(cmd, "ntc filter add dev %s egress bpf da obj %s sec %s 2>&1",
             cfg->ifname, cfg->filename, cfg->progsec);
     llb_sys_exec(cmd);
-    printf("%s\n", cmd);
+    log_debug("%s", cmd);
 #endif
 
     return 0;
@@ -2048,12 +2045,12 @@ llb_ebpf_link_detach(struct config *cfg)
     /* ntc is netlox's modified tc tool */
 #ifdef HAVE_DP_EGR_HOOK
     sprintf(cmd, "ntc filter del dev %s egress 2>&1", cfg->ifname);
-    printf("%s\n", cmd);
+    log_debug("%s\n", cmd);
     llb_sys_exec(cmd);
 #endif
 
     sprintf(cmd, "ntc filter del dev %s ingress 2>&1", cfg->ifname);
-    printf("%s\n", cmd);    
+    log_debug("%s", cmd);
     llb_sys_exec(cmd);
     return 0;
   } else {
@@ -2105,7 +2102,7 @@ llb_dp_link_attach(const char *ifname,
   }
 
   nr = llb_psec_add(psec);
-  printf("NR %d PSEC %s %s\n", nr, psec, cfg.filename);
+  log_debug("NR %d PSEC %s %s", nr, psec, cfg.filename);
   if (nr > 0) {
     cfg.reuse_maps = 1;
   }
@@ -2124,7 +2121,7 @@ llb_dp_link_attach(const char *ifname,
   }
 
   if (nr == 0 && mp_type == LL_BPF_MOUNT_XDP) {
-    printf("Setting up for %s|%s\n", ifname, psec);
+    log_debug("Setting up for %s|%s", ifname, psec);
     llb_psec_setup(psec, bpf_obj);
   }
 
@@ -2134,8 +2131,18 @@ llb_dp_link_attach(const char *ifname,
 int
 loxilb_main(struct ebpfcfg *cfg)
 {
+  FILE *fp;
   libbpf_set_print(libbpf_print_fn);
   llb_set_rlims();
+
+  fp = fopen (LOXILB_DP_LOGF, "a");
+  assert(fp);
+
+  if (cfg->loglevel < 0 ||  cfg->loglevel >= LOG_FATAL) {
+    cfg->loglevel = LOG_INFO;
+  }
+  log_add_fp(fp, cfg->loglevel);
+  log_add_fp(stdout, cfg->loglevel);
 
   xh = calloc(1, sizeof(*xh));
   assert(xh);

@@ -62,7 +62,7 @@ LIBBPF_DIR ?= ../libbpf/src/
 OBJECT_LIBBPF = $(LIBBPF_DIR)/libbpf.a
 
 # Extend if including Makefile already added some
-COMMON_OBJS += $(COMMON_DIR)/common_sum.o $(COMMON_DIR)/common_user_bpf_xdp.o $(COMMON_DIR)/common_pdi.o $(COMMON_DIR)/common_frame.o
+COMMON_OBJS += $(COMMON_DIR)/common_sum.o $(COMMON_DIR)/common_user_bpf_xdp.o $(COMMON_DIR)/common_pdi.o $(COMMON_DIR)/common_frame.o $(COMMON_DIR)/log.o
 
 # Create expansions for dependencies
 COMMON_H := ${COMMON_OBJS:.o=.h}
