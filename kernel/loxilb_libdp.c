@@ -1582,7 +1582,7 @@ ll_ct_map_ent_has_aged(int tid, void *k, void *ita)
 
   t = &xh->maps[LL_DP_CT_MAP];
   if (bpf_map_lookup_elem(t->map_fd, &xkey, &axdat) != 0) {
-    log_trace("rdir ct4 not found %s:%d -> %s:%d (%d)",
+    log_trace("ct: rdir not found #%s:%d -> %s:%d (%d)#",
          dstr, ntohs(xkey.sport),
          sstr, ntohs(xkey.dport),  
          xkey.l4proto); 
@@ -1656,10 +1656,10 @@ ll_ct_map_ent_has_aged(int tid, void *k, void *ita)
   llb_fetch_map_stats_used(LL_DP_CT_STATS_MAP, adat->ca.cidx+1, 1, &used2);
 
   if (curr_ns - latest_ns > to && !used1 && !used2) {
-    log_trace("##%s:%d -> %s:%d (%d):%u (Aged:%d:%d:%d)",
+    log_trace("ct: #%s:%d -> %s:%d (%d)# rid:%u est:%d nat:%d (Aged:%dns:%d:%d)",
          sstr, ntohs(key->sport),
          dstr, ntohs(key->dport),  
-         key->l4proto, dat->rid, est, has_nat, used1 || used2);
+         key->l4proto, dat->rid, est, has_nat, to, used1, used2);
     ll_send_ctep_reset(key, adat);
     ll_send_ctep_reset(&xkey, &axdat);
     llb_clear_map_stats(LL_DP_CT_STATS_MAP, adat->ca.cidx);
