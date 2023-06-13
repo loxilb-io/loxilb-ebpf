@@ -90,6 +90,7 @@ typedef struct llb_dp_struct
   llb_dp_sect_t psecs[LLB_PSECS];
   struct pdi_map *ufw4;
   struct pdi_map *ufw6;
+  FILE *logfp;
 } llb_dp_struct_t;
 
 #define XH_LOCK()    pthread_rwlock_wrlock(&xh->lock)
@@ -2128,6 +2129,17 @@ llb_dp_link_attach(const char *ifname,
   return 0;
 }
 
+void
+loxilb_set_loglevel(struct ebpfcfg *cfg)
+{
+  if (cfg->loglevel < 0 ||  cfg->loglevel >= LOG_FATAL) {
+    cfg->loglevel = LOG_INFO;
+  }
+
+  log_set_level(cfg->loglevel);
+  log_warn("ebpf: new loglevel %d", cfg->loglevel);
+}
+
 int
 loxilb_main(struct ebpfcfg *cfg)
 {
@@ -2135,22 +2147,24 @@ loxilb_main(struct ebpfcfg *cfg)
   libbpf_set_print(libbpf_print_fn);
   llb_set_rlims();
 
-  fp = fopen (LOXILB_DP_LOGF, "a");
-  assert(fp);
-
-  if (cfg->loglevel < 0 ||  cfg->loglevel >= LOG_FATAL) {
-    cfg->loglevel = LOG_INFO;
-  }
-  log_add_fp(fp, cfg->loglevel);
-  log_add_fp(stdout, cfg->loglevel);
-
   xh = calloc(1, sizeof(*xh));
   assert(xh);
 
   /* Save any special config parameters */
   if (cfg) {
+
+    fp = fopen (LOXILB_DP_LOGF, "a");
+    assert(fp);
+
+    if (cfg->loglevel < 0 ||  cfg->loglevel >= LOG_FATAL) {
+      cfg->loglevel = LOG_INFO;
+    }
+    log_add_fp(fp, cfg->loglevel);
+    log_add_fp(stdout, LOG_TRACE);
+
     xh->have_mtrace = cfg->have_mtrace;
     xh->nodenum = cfg->nodenum;
+    xh->logfp = fp;
   }
 
   llb_xh_init(xh);

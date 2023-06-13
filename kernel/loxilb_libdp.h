@@ -59,6 +59,7 @@ struct ebpfcfg {
   int loglevel;
 };
 
+void loxilb_set_loglevel(struct ebpfcfg *cfg);
 int loxilb_main(struct ebpfcfg *cfg);
 
 
