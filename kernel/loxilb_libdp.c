@@ -1657,10 +1657,12 @@ ll_ct_map_ent_has_aged(int tid, void *k, void *ita)
   llb_fetch_map_stats_used(LL_DP_CT_STATS_MAP, adat->ca.cidx+1, 1, &used2);
 
   if (curr_ns - latest_ns > to && !used1 && !used2) {
-    log_trace("ct: #%s:%d -> %s:%d (%d)# rid:%u est:%d nat:%d (Aged:%dns:%d:%d)",
+    log_trace("ct: #%s:%d -> %s:%d (%d)# rid:%u est:%d nat:%d (Aged:%lluns:%d:%d)",
          sstr, ntohs(key->sport),
          dstr, ntohs(key->dport),  
-         key->l4proto, dat->rid, est, has_nat, to, used1, used2);
+         key->l4proto, dat->rid,
+         est, has_nat, curr_ns - latest_ns,
+         used1, used2);
     ll_send_ctep_reset(key, adat);
     ll_send_ctep_reset(&xkey, &axdat);
     llb_clear_map_stats(LL_DP_CT_STATS_MAP, adat->ca.cidx);
@@ -2137,6 +2139,9 @@ loxilb_set_loglevel(struct ebpfcfg *cfg)
   }
 
   log_set_level(cfg->loglevel);
+  if (xh->logfp) {
+      log_add_fp(xh->logfp, cfg->loglevel);
+  }
   log_warn("ebpf: new loglevel %d", cfg->loglevel);
 }
 
@@ -2160,7 +2165,6 @@ loxilb_main(struct ebpfcfg *cfg)
       cfg->loglevel = LOG_INFO;
     }
     log_add_fp(fp, cfg->loglevel);
-    log_add_fp(stdout, LOG_TRACE);
 
     xh->have_mtrace = cfg->have_mtrace;
     xh->nodenum = cfg->nodenum;
