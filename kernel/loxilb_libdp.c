@@ -1583,10 +1583,18 @@ ll_ct_map_ent_has_aged(int tid, void *k, void *ita)
 
   t = &xh->maps[LL_DP_CT_MAP];
   if (bpf_map_lookup_elem(t->map_fd, &xkey, &axdat) != 0) {
+    if (key->v6 == 0) {
+      inet_ntop(AF_INET, xkey.saddr, sstr, INET_ADDRSTRLEN);
+      inet_ntop(AF_INET, xkey.daddr, dstr, INET_ADDRSTRLEN);
+    } else {
+      inet_ntop(AF_INET6, xkey.saddr, sstr, INET6_ADDRSTRLEN);
+      inet_ntop(AF_INET6, xkey.daddr, dstr, INET6_ADDRSTRLEN);
+    }
+
     log_trace("ct: rdir not found #%s:%d -> %s:%d (%d)#",
-         dstr, ntohs(xkey.sport),
-         sstr, ntohs(xkey.dport),  
-         xkey.l4proto); 
+         sstr, ntohs(xkey.sport),
+         dstr, ntohs(xkey.dport),
+         xkey.l4proto);
     llb_clear_map_stats(LL_DP_CT_STATS_MAP, adat->ca.cidx);
     return 1;
   }
