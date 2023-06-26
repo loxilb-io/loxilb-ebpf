@@ -16,6 +16,8 @@
 #include <time.h>
 #include <assert.h>
 #include <pthread.h>
+#include <netdb.h>
+#include <ifaddrs.h>
 #include <sys/time.h>
 #include <sys/resource.h>
 
@@ -538,7 +540,7 @@ llb_set_dev_up(char *ifname, bool up)
 }
 
 static int
-llb_mgmt_ch_init(llb_dp_struct_t *xh)
+llb_lower_init(llb_dp_struct_t *xh)
 {
   int fd;
   int ret;
@@ -589,6 +591,41 @@ llb_mgmt_ch_init(llb_dp_struct_t *xh)
     close(fd);
     return ret;
   }
+
+#define HAVE_DP_RSS
+#ifdef HAVE_DP_RSS
+  if (1) {
+    struct ifaddrs *allifa;
+    struct ifaddrs *ifa;
+    if (getifaddrs(&allifa) == -1) {
+      log_error("getifaddrs call failed");
+      return -1;
+    }
+
+    ifa = allifa;
+    while (ifa) {
+      int inf = ifa->ifa_addr->sa_family;
+      if ((inf == AF_INET || inf == AF_INET6) &&
+          strncmp(ifa->ifa_name, "lo", IFNAMSIZ)) {
+        log_debug("xdp:%s", ifa->ifa_name);
+        llb_dp_link_attach(ifa->ifa_name, XDP_LL_SEC_DEFAULT,
+                     LL_BPF_MOUNT_XDP, 1);
+        ret = llb_dp_link_attach(ifa->ifa_name, XDP_LL_SEC_DEFAULT,
+                     LL_BPF_MOUNT_XDP, 0);
+        if (ret != 0 ) {
+          ifa = allifa;
+          while (ifa) {
+            llb_dp_link_attach(ifa->ifa_name, XDP_LL_SEC_DEFAULT,
+                     LL_BPF_MOUNT_XDP, 1);
+          }
+          close(fd);
+          return ret;
+        }
+      }
+      ifa = ifa->ifa_next;
+    }
+  }
+#endif
 
   return 0;
 }
@@ -771,7 +808,7 @@ llb_xh_init(llb_dp_struct_t *xh)
   xh->ufw6 = pdi_map_alloc("ufw6", NULL, NULL);
   assert(xh->ufw6);
 
-  if (llb_mgmt_ch_init(xh) != 0) {
+  if (llb_lower_init(xh) != 0) {
     assert(0);
   }
 
@@ -1933,17 +1970,15 @@ llb_psec_add(const char *psec)
   for (; n < LLB_PSECS; n++) {
     s = &xh->psecs[n];
     if (strncmp(s->name, psec, SECNAMSIZ) == 0) {
-      if (s->valid) {
-        s->ref++;
-        ret = s->ref;
-        XH_UNLOCK();
-        return ret;
-      } else {
+      if (!s->valid) {
+        ret = 0;
         s->valid = 1;
-        s->ref = 0;
-        XH_UNLOCK();
-        return 0;
+      } else {
+        ret = 1;
       }
+      s->ref++;
+      XH_UNLOCK();
+      return ret;
     }
     if (!s->valid && !free) free = n+1;
   }
@@ -2096,6 +2131,9 @@ llb_dp_link_attach(const char *ifname,
   strncpy(cfg.pin_dir,  xh->ll_dp_pdir,  sizeof(cfg.pin_dir));
   if (strcmp(ifname, LLB_MGMT_CHANNEL) == 0)
     cfg.xdp_flags |= XDP_FLAGS_SKB_MODE;
+
+  /* Large MTU not supported until kernel 5.18 */
+  cfg.xdp_flags |= XDP_FLAGS_SKB_MODE;
   cfg.xdp_flags &= ~XDP_FLAGS_UPDATE_IF_NOEXIST;
   cfg.ifname = (char *)&cfg.ifname_buf;
   strncpy(cfg.ifname, ifname, IF_NAMESIZE);
