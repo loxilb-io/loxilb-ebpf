@@ -614,7 +614,7 @@ llb_lower_init(llb_dp_struct_t *xh)
     close(fd);
     return ret;
   }
-
+#define HAVE_DP_RSS
 #ifdef HAVE_DP_RSS
   if (1) {
     struct ifaddrs *allifa;
@@ -2163,7 +2163,7 @@ llb_dp_link_attach(const char *ifname,
     cfg.xdp_flags |= XDP_FLAGS_SKB_MODE;
 
   /* Large MTU not supported until kernel 5.18 */
-  //cfg.xdp_flags |= XDP_FLAGS_SKB_MODE;
+  cfg.xdp_flags |= XDP_FLAGS_SKB_MODE;
   cfg.xdp_flags &= ~XDP_FLAGS_UPDATE_IF_NOEXIST;
   cfg.ifname = (char *)&cfg.ifname_buf;
   strncpy(cfg.ifname, ifname, IF_NAMESIZE);
