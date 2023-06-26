@@ -18,6 +18,8 @@
 #include "../common/llb_dp_mdi.h"
 #include "../common/llb_dpapi.h"
 
+#define HAVE_DP_RSS
+
 #ifndef __stringify
 # define __stringify(X)   #X
 #endif
@@ -562,6 +564,20 @@ struct {
         __type(value,       __u32);
         __uint(max_entries, LLB_CRC32C_ENTRIES);
 } crc32c_map SEC(".maps");
+
+struct {
+	      __uint(type,        BPF_MAP_TYPE_CPUMAP);
+	      __type(key,         __u32);
+	      __type(value,       __u32);
+	      __uint(max_entries, MAX_CPUS);
+} cpu_map SEC(".maps");
+
+struct {
+	      __uint(type,        BPF_MAP_TYPE_ARRAY);
+	      __type(key,         __u32);
+	      __type(value,       __u32);
+	      __uint(max_entries, MAX_CPUS);
+} cpu_live SEC(".maps");
 
 #endif
 
