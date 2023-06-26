@@ -769,6 +769,7 @@ dp_ct_sctp_sm(void *ctx, struct xfi *xf,
   ct_sctp_pinfd_t *pss = &ss->sctp_cts[CT_DIR_IN];
   ct_sctp_pinfd_t *pxss = &ss->sctp_cts[CT_DIR_OUT];
   uint32_t nstate = 0;
+  uint32_t npmhh = tdat->pi.npmhh;
   uint16_t sz = 0;
   void *dend = DP_TC_PTR(DP_PDATA_END(ctx));
   struct sctphdr *s = DP_ADD_PTR(DP_PDATA(ctx), xf->pm.l4_off);
@@ -843,22 +844,26 @@ dp_ct_sctp_sm(void *ctx, struct xfi *xf,
     }
 
     pss->mh_host[0] = xf->l34m.saddr[0];
-    pss->nh++;
+    pss->nh = 1;
 
-    for (i = 0; i < LLB_MAX_MHOSTS; i++) {
+    for (i = 0; i < LLB_MAX_MPHOSTS; i++) {
       if (pm->type == bpf_htons(SCTP_IPV4_ADDR_PARAM)) {
         __be32 *ip = DP_TC_PTR(DP_ADD_PTR(pm, sizeof(*pm)));
         if (ip + 1 > dend) {
           break;
         }
 
-        pss->mh_host[i+1] = *ip;
-        pss->nh++;
+        if (i < LLB_MAX_MHOSTS) {
+          pss->mh_host[i+1] = *ip;
+          pss->nh++;
+        }
 
         if (!atdat->nat_act.nv6) {
           /* Checksum to be taken care of at a later stage */
-          if (atdat->ctd.pi.pmhh[i] != 0) {
+          if (i < LLB_MAX_MHOSTS && atdat->ctd.pi.pmhh[i] != 0) {
             *ip = atdat->ctd.pi.pmhh[i];
+          } else if (atdat->ctd.pi.pmhh[0] != 0) {
+            *ip = atdat->ctd.pi.pmhh[0];
           } else if (atdat->nat_act.rip[0] != 0) {
             *ip = atdat->nat_act.rip[0];
           }
@@ -866,7 +871,7 @@ dp_ct_sctp_sm(void *ctx, struct xfi *xf,
       }
 
       sz = bpf_ntohs(pm->len);
-      if (sz >= 32) {
+      if (sz >= 512) {
         break;
       }
       pm = DP_TC_PTR(DP_ADD_PTR(pm, sz));
@@ -876,9 +881,9 @@ dp_ct_sctp_sm(void *ctx, struct xfi *xf,
     }
 
 add_nph0:
-    if ((pss->nh - 1) < tdat->pi.npmhh) {
+    if ((pss->nh - 1) < npmhh) {
       int grow;
-      int diff = tdat->pi.npmhh - pss->nh + 1;
+      int diff = npmhh - pss->nh + 1;
 
       // FIXME - for testing only
       //diff = LLB_MAX_MHOSTS;
@@ -888,6 +893,7 @@ add_nph0:
 
       bpf_spin_unlock(&atdat->lock);
       if (dp_pktbuf_expand_tail(ctx, grow+sz) < 0) {
+        LLBS_PPLN_DROP(xf);
         bpf_spin_lock(&atdat->lock);
         break;
       }
@@ -923,8 +929,10 @@ add_nph0:
 
         if (!atdat->nat_act.nv6) {
           /* Checksum to be taken care of at a later stage */
-          if (atdat->ctd.pi.pmhh[i] != 0) {
+          if (i < LLB_MAX_MHOSTS && atdat->ctd.pi.pmhh[i] != 0) {
             *ip = atdat->ctd.pi.pmhh[i];
+          } else if (atdat->ctd.pi.pmhh[0] != 0) {
+            *ip = atdat->ctd.pi.pmhh[0];
           } else if (atdat->nat_act.rip[0] != 0) {
             *ip = atdat->nat_act.rip[0];
           }
@@ -985,22 +993,26 @@ add_nph0:
     }
 
     pxss->mh_host[0] = xf->l34m.saddr[0];
-    pxss->nh++;
+    pxss->nh = 1;
 
-    for (i = 0; i < LLB_MAX_MHOSTS; i++) {
+    for (i = 0; i < LLB_MAX_MPHOSTS; i++) {
       if (pm->type == bpf_htons(SCTP_IPV4_ADDR_PARAM)) {
         __be32 *ip = DP_TC_PTR(DP_ADD_PTR(pm, sizeof(*pm)));
         if (ip + 1 > dend) {
           break;
         }
 
-        pxss->mh_host[i+1] = *ip;
-        pxss->nh++;
+        if (i < LLB_MAX_MHOSTS) {
+          pxss->mh_host[i+1] = *ip;
+          pxss->nh++;
+        }
 
         if (!axtdat->nat_act.nv6) {
           /* Checksum to be taken care of a later stage */
-          if (axtdat->ctd.pi.pmhh[i] != 0) {
+          if (i < LLB_MAX_MHOSTS && axtdat->ctd.pi.pmhh[i] != 0) {
             *ip = axtdat->ctd.pi.pmhh[i];
+          } else if (axtdat->ctd.pi.pmhh[0] != 0) {
+            *ip = axtdat->ctd.pi.pmhh[0];
           } else if (axtdat->nat_act.xip[0] != 0) {
             *ip = axtdat->nat_act.xip[0];
           }
@@ -1010,7 +1022,7 @@ add_nph0:
       sz = bpf_ntohs(pm->len);
 
       /* Keep the verifier happy */
-      if (sz >= 32) {
+      if (sz >= 512) {
         break;
       }
       pm = DP_TC_PTR(DP_ADD_PTR(pm, sz));
@@ -1020,9 +1032,9 @@ add_nph0:
     }
 
 add_nph1:
-    if ((pxss->nh - 1) < tdat->pi.npmhh) {
+    if ((pxss->nh - 1) < npmhh) {
       int grow;
-      int diff = tdat->pi.npmhh - pxss->nh + 1;
+      int diff = npmhh - pxss->nh + 1;
 
       // FIXME - for testing only
       //diff = LLB_MAX_MHOSTS;
@@ -1032,6 +1044,7 @@ add_nph1:
 
       bpf_spin_unlock(&atdat->lock);
       if (dp_pktbuf_expand_tail(ctx, grow+sz) < 0) {
+        LLBS_PPLN_DROP(xf);
         bpf_spin_lock(&atdat->lock);
         break;
       }
@@ -1066,8 +1079,10 @@ add_nph1:
         }
 
         /* Checksum to be taken care of at a later stage */
-        if (axtdat->ctd.pi.pmhh[i] != 0) {
+        if (i < LLB_MAX_MHOSTS && axtdat->ctd.pi.pmhh[i] != 0) {
           *ip = axtdat->ctd.pi.pmhh[i];
+        } else if (axtdat->ctd.pi.pmhh[0] != 0) {
+          *ip = axtdat->ctd.pi.pmhh[0];
         } else if (axtdat->nat_act.xip[0] != 0) {
           *ip = axtdat->nat_act.xip[0];
         }
@@ -1090,7 +1105,7 @@ add_nph1:
       xf->pm.l3_adj = grow;
     }
 
-    if (tdat->pi.npmhh > 0) {
+    if (npmhh > 0) {
       tdat->xi.mhon =  1;
       xtdat->xi.mhon = 1;
     }

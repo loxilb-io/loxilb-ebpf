@@ -40,6 +40,7 @@
 #define LLB_MAX_NXFRMS        (16)
 #define LLB_CRC32C_ENTRIES    (256)
 #define LLB_MAX_MHOSTS        (3)
+#define LLB_MAX_MPHOSTS       (5)
 
 #define LLB_DP_SUNP_PGM_ID2    (6)
 #define LLB_DP_CRC_PGM_ID2     (5)
