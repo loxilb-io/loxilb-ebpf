@@ -577,7 +577,7 @@ struct {
 	      __type(key,         __u32);
 	      __type(value,       __u32);
 	      __uint(max_entries, MAX_CPUS);
-} cpu_live SEC(".maps");
+} live_cpu_map SEC(".maps");
 
 #endif
 

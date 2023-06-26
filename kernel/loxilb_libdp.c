@@ -435,6 +435,21 @@ llb_setup_ctctr_map(int mapfd)
   bpf_map_update_elem(mapfd, &k, &ctr, BPF_ANY);
 }
 
+static void
+llb_setup_cpu_map(int mapfd)
+{
+  uint32_t qsz = 2048;
+  unsigned int live_cpus = bpf_num_possible_cpus();
+	int ret, i;
+
+	for (i = 0; i < live_cpus; i++) {
+    ret = bpf_map_update_elem(mapfd, &i, &qsz, BPF_ANY);
+    if (ret < 0) {
+      log_error("Failed to update cpu-map %d ent", i);
+    }
+  }
+}
+
 static int
 llb_dflt_sec_map2fd_all(struct bpf_object *bpf_obj)
 {
@@ -483,6 +498,14 @@ llb_dflt_sec_map2fd_all(struct bpf_object *bpf_obj)
       llb_setup_crc32c_map(fd);
     } else if (i == LL_DP_CTCTR_MAP) {
       llb_setup_ctctr_map(fd);
+    } else if (i == LL_DP_CPU_MAP) {
+      struct bpf_map *cpu_map = bpf_object__find_map_by_name(bpf_obj,
+                                                  xh->maps[i].map_name);
+      if (bpf_map__set_max_entries(cpu_map, libbpf_num_possible_cpus()) < 0) {
+        log_error("Failed to set max entries for cpu_map map: %s", strerror(errno));
+        //assert(0);
+      }
+      llb_setup_cpu_map(fd);
     }
   }
 
@@ -796,6 +819,14 @@ llb_xh_init(llb_dp_struct_t *xh)
   xh->maps[LL_DP_CTCTR_MAP].map_name = "ct_ctr";
   xh->maps[LL_DP_CTCTR_MAP].has_pb   = 0;
   xh->maps[LL_DP_CTCTR_MAP].max_entries = 1;
+
+  xh->maps[LL_DP_CPU_MAP].map_name = "cpu_map";
+  xh->maps[LL_DP_CPU_MAP].has_pb   = 0;
+  xh->maps[LL_DP_CPU_MAP].max_entries = 128;
+
+  xh->maps[LL_DP_LCPU_MAP].map_name = "live_cpu_map";
+  xh->maps[LL_DP_LCPU_MAP].has_pb   = 0;
+  xh->maps[LL_DP_LCPU_MAP].max_entries = 128;
 
   strcpy(xh->psecs[0].name, LLB_SECTION_PASS);
   strcpy(xh->psecs[1].name, XDP_LL_SEC_DEFAULT);
