@@ -120,6 +120,8 @@ enum llb_dp_tid {
   LL_DP_FW4_STATS_MAP,
   LL_DP_CRC32C_MAP,
   LL_DP_CTCTR_MAP,
+  LL_DP_CPU_MAP,
+  LL_DP_LCPU_MAP,
   LL_DP_MAX_MAP
 };
 

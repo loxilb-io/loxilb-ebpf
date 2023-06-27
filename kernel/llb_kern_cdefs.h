@@ -563,6 +563,20 @@ struct {
         __uint(max_entries, LLB_CRC32C_ENTRIES);
 } crc32c_map SEC(".maps");
 
+struct {
+	      __uint(type,        BPF_MAP_TYPE_CPUMAP);
+	      __type(key,         __u32);
+	      __type(value,       __u32);
+	      __uint(max_entries, MAX_CPUS);
+} cpu_map SEC(".maps");
+
+struct {
+	      __uint(type,        BPF_MAP_TYPE_ARRAY);
+	      __type(key,         __u32);
+	      __type(value,       __u32);
+	      __uint(max_entries, MAX_CPUS);
+} live_cpu_map SEC(".maps");
+
 #endif
 
 static void __always_inline

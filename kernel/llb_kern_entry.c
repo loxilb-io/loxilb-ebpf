@@ -73,7 +73,32 @@ int  xdp_packet_func(struct xdp_md *ctx)
   }
   memset(xf, 0, sizeof *xf);
 
-  dp_parse_d0(ctx, xf, 0);
+  dp_parse_d0(ctx, xf, 1);
+
+#ifdef HAVE_DP_RSS
+  if (xf->l2m.dl_type == bpf_ntohs(ETH_P_IP) &&
+      xf->l34m.nw_proto == IPPROTO_SCTP) {
+      __u32 dcpu;
+      __u32 *mcpu;
+      __u32 hash = ((__u32)(xf->l34m.daddr[0]) * 92) ^
+                    ((__u32)(xf->l34m.saddr[0])) ^
+                    ((__u32)(xf->l34m.source) << 16) ^
+                    ((__u32)(xf->l34m.dest)) ^
+                    ((__u32)(xf->l34m.nw_proto));
+      dcpu = hash % MAX_REAL_CPUS;
+      mcpu = bpf_map_lookup_elem(&live_cpu_map, &z);
+      if (mcpu == NULL) {
+        return DP_PASS;
+      }
+
+      if (dcpu >= *mcpu) {
+        dcpu = 0;
+      }
+
+      //bpf_printk("cpumap%d : ud %u", dcpu, *mcpu, ret); 
+      return bpf_redirect_map(&cpu_map, dcpu, 0);
+  }
+#endif
 
   return DP_PASS;
 }

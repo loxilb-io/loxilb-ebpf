@@ -16,6 +16,8 @@
 #include <time.h>
 #include <assert.h>
 #include <pthread.h>
+#include <netdb.h>
+#include <ifaddrs.h>
 #include <sys/time.h>
 #include <sys/resource.h>
 
@@ -103,11 +105,11 @@ llb_dp_struct_t *xh;
 static inline unsigned int
 bpf_num_possible_cpus(void)
 {
-	int possible_cpus = libbpf_num_possible_cpus();
-	if (possible_cpus < 0) {
-		return 0;
-	}
-	return possible_cpus;
+  int possible_cpus = libbpf_num_possible_cpus();
+  if (possible_cpus < 0) {
+    return 0;
+  }
+  return possible_cpus;
 }
 
 static void
@@ -433,6 +435,35 @@ llb_setup_ctctr_map(int mapfd)
   bpf_map_update_elem(mapfd, &k, &ctr, BPF_ANY);
 }
 
+static void
+llb_setup_cpu_map(int mapfd)
+{
+  uint32_t qsz = 2048;
+  unsigned int live_cpus = bpf_num_possible_cpus();
+  int ret, i;
+
+  for (i = 0; i < live_cpus; i++) {
+    ret = bpf_map_update_elem(mapfd, &i, &qsz, BPF_ANY);
+    if (ret < 0) {
+      log_error("Failed to update cpu-map %d ent", i);
+    }
+  }
+}
+
+static void
+llb_setup_lcpu_map(int mapfd)
+{
+  unsigned int live_cpus = bpf_num_possible_cpus();
+  int ret, i;
+
+  i = 0;
+  ret = bpf_map_update_elem(mapfd, &i, &live_cpus, BPF_ANY);
+  if (ret < 0) {
+    log_error("Failed to update live cpu-map %d ent", i);
+    assert(0);
+  }
+}
+
 static int
 llb_dflt_sec_map2fd_all(struct bpf_object *bpf_obj)
 {
@@ -442,7 +473,7 @@ llb_dflt_sec_map2fd_all(struct bpf_object *bpf_obj)
   int err;
   int key = 0;
   struct bpf_program *prog;
-	const char *section;
+  const char *section;
 
   for (; i < LL_DP_MAX_MAP; i++) {
     fd = llb_objmap2fd(bpf_obj, xh->maps[i].map_name);  
@@ -481,6 +512,16 @@ llb_dflt_sec_map2fd_all(struct bpf_object *bpf_obj)
       llb_setup_crc32c_map(fd);
     } else if (i == LL_DP_CTCTR_MAP) {
       llb_setup_ctctr_map(fd);
+    } else if (i == LL_DP_CPU_MAP) {
+      struct bpf_map *cpu_map = bpf_object__find_map_by_name(bpf_obj,
+                                                  xh->maps[i].map_name);
+      if (bpf_map__set_max_entries(cpu_map, libbpf_num_possible_cpus()) < 0) {
+        log_error("Failed to set max entries for cpu_map map: %s", strerror(errno));
+        //assert(0);
+      }
+      llb_setup_cpu_map(fd);
+    } else if (i == LL_DP_LCPU_MAP) {
+      llb_setup_lcpu_map(fd);
     }
   }
 
@@ -538,7 +579,7 @@ llb_set_dev_up(char *ifname, bool up)
 }
 
 static int
-llb_mgmt_ch_init(llb_dp_struct_t *xh)
+llb_lower_init(llb_dp_struct_t *xh)
 {
   int fd;
   int ret;
@@ -761,6 +802,14 @@ llb_xh_init(llb_dp_struct_t *xh)
   xh->maps[LL_DP_CTCTR_MAP].has_pb   = 0;
   xh->maps[LL_DP_CTCTR_MAP].max_entries = 1;
 
+  xh->maps[LL_DP_CPU_MAP].map_name = "cpu_map";
+  xh->maps[LL_DP_CPU_MAP].has_pb   = 0;
+  xh->maps[LL_DP_CPU_MAP].max_entries = 128;
+
+  xh->maps[LL_DP_LCPU_MAP].map_name = "live_cpu_map";
+  xh->maps[LL_DP_LCPU_MAP].has_pb   = 0;
+  xh->maps[LL_DP_LCPU_MAP].max_entries = 128;
+
   strcpy(xh->psecs[0].name, LLB_SECTION_PASS);
   strcpy(xh->psecs[1].name, XDP_LL_SEC_DEFAULT);
   xh->psecs[1].setup = llb_dflt_sec_map2fd_all;
@@ -771,7 +820,7 @@ llb_xh_init(llb_dp_struct_t *xh)
   xh->ufw6 = pdi_map_alloc("ufw6", NULL, NULL);
   assert(xh->ufw6);
 
-  if (llb_mgmt_ch_init(xh) != 0) {
+  if (llb_lower_init(xh) != 0) {
     assert(0);
   }
 
@@ -1933,17 +1982,15 @@ llb_psec_add(const char *psec)
   for (; n < LLB_PSECS; n++) {
     s = &xh->psecs[n];
     if (strncmp(s->name, psec, SECNAMSIZ) == 0) {
-      if (s->valid) {
-        s->ref++;
-        ret = s->ref;
-        XH_UNLOCK();
-        return ret;
-      } else {
+      if (!s->valid) {
+        ret = 0;
         s->valid = 1;
-        s->ref = 0;
-        XH_UNLOCK();
-        return 0;
+      } else {
+        ret = 1;
       }
+      s->ref++;
+      XH_UNLOCK();
+      return ret;
     }
     if (!s->valid && !free) free = n+1;
   }
@@ -1977,12 +2024,13 @@ llb_psec_del(const char *psec)
     s = &xh->psecs[n];
     if (strncmp(s->name, psec, SECNAMSIZ) == 0 && s->valid) {
       if (s->ref == 0)  {
-        s->valid = 0;
         s->ref = 0;
         XH_UNLOCK();
         return 0;
       } else {
-        s->ref--;
+        if (s->ref > 0) {
+          s->ref--;
+        }
         XH_UNLOCK();
         return 0;
       }
@@ -2076,13 +2124,14 @@ llb_dp_link_attach(const char *ifname,
                    int unload)
 {
   struct bpf_object *bpf_obj;
-	struct config cfg;
+  struct config cfg;
   int nr = 0;
+  int must_load = 0;
 
   assert(psec);
   assert(ifname);
 
-	/* Cmdline options can change progsec */
+  /* Cmdline options can change progsec */
   memset(&cfg, 0, sizeof(cfg));
   strncpy(cfg.progsec,  psec,  sizeof(cfg.progsec));
 
@@ -2094,8 +2143,13 @@ llb_dp_link_attach(const char *ifname,
   }
 
   strncpy(cfg.pin_dir,  xh->ll_dp_pdir,  sizeof(cfg.pin_dir));
-  if (strcmp(ifname, LLB_MGMT_CHANNEL) == 0)
+  if (strcmp(ifname, LLB_MGMT_CHANNEL) == 0) {
     cfg.xdp_flags |= XDP_FLAGS_SKB_MODE;
+    must_load = 1;
+  }
+
+  /* Large MTU not supported until kernel 5.18 */
+  cfg.xdp_flags |= XDP_FLAGS_SKB_MODE;
   cfg.xdp_flags &= ~XDP_FLAGS_UPDATE_IF_NOEXIST;
   cfg.ifname = (char *)&cfg.ifname_buf;
   strncpy(cfg.ifname, ifname, IF_NAMESIZE);
@@ -2119,7 +2173,7 @@ llb_dp_link_attach(const char *ifname,
   }
 
   bpf_obj = llb_ebpf_link_attach(&cfg);
-  if (!bpf_obj && mp_type == LL_BPF_MOUNT_XDP) {
+  if (!bpf_obj && mp_type == LL_BPF_MOUNT_XDP && must_load) {
     llb_psec_del(psec);
     return -1;
   }
