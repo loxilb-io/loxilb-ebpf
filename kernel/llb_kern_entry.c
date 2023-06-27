@@ -80,11 +80,8 @@ int  xdp_packet_func(struct xdp_md *ctx)
       xf->l34m.nw_proto == IPPROTO_SCTP) {
       __u32 dcpu;
       __u32 *mcpu;
-      __u32 hash = ((__u32)(xf->l34m.daddr[0]) * 92) ^
-                    ((__u32)(xf->l34m.saddr[0])) ^
-                    ((__u32)(xf->l34m.source) << 16) ^
-                    ((__u32)(xf->l34m.dest)) ^
-                    ((__u32)(xf->l34m.nw_proto));
+      __u32 hash = (__u32)(xf->l34m.saddr[0]) ^
+                   ((__u32)(xf->l34m.source));
       dcpu = hash % MAX_REAL_CPUS;
       mcpu = bpf_map_lookup_elem(&live_cpu_map, &z);
       if (mcpu == NULL) {
@@ -95,7 +92,6 @@ int  xdp_packet_func(struct xdp_md *ctx)
         dcpu = 0;
       }
 
-      //bpf_printk("cpumap%d : ud %u", dcpu, *mcpu, ret); 
       return bpf_redirect_map(&cpu_map, dcpu, 0);
   }
 #endif
