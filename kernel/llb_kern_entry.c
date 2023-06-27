@@ -76,7 +76,8 @@ int  xdp_packet_func(struct xdp_md *ctx)
   dp_parse_d0(ctx, xf, 1);
 
 #ifdef HAVE_DP_RSS
-  if (xf->l2m.dl_type == bpf_ntohs(ETH_P_IP) &&  xf->l34m.nw_proto == IPPROTO_SCTP) {
+  if (xf->l2m.dl_type == bpf_ntohs(ETH_P_IP) &&
+      xf->l34m.nw_proto == IPPROTO_SCTP) {
       __u32 dcpu;
       __u32 *mcpu;
       __u32 hash = ((__u32)(xf->l34m.daddr[0]) * 92) ^
