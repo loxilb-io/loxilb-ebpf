@@ -105,11 +105,11 @@ llb_dp_struct_t *xh;
 static inline unsigned int
 bpf_num_possible_cpus(void)
 {
-	int possible_cpus = libbpf_num_possible_cpus();
-	if (possible_cpus < 0) {
-		return 0;
-	}
-	return possible_cpus;
+  int possible_cpus = libbpf_num_possible_cpus();
+  if (possible_cpus < 0) {
+    return 0;
+  }
+  return possible_cpus;
 }
 
 static void
@@ -440,9 +440,9 @@ llb_setup_cpu_map(int mapfd)
 {
   uint32_t qsz = 2048;
   unsigned int live_cpus = bpf_num_possible_cpus();
-	int ret, i;
+  int ret, i;
 
-	for (i = 0; i < live_cpus; i++) {
+  for (i = 0; i < live_cpus; i++) {
     ret = bpf_map_update_elem(mapfd, &i, &qsz, BPF_ANY);
     if (ret < 0) {
       log_error("Failed to update cpu-map %d ent", i);
@@ -454,7 +454,7 @@ static void
 llb_setup_lcpu_map(int mapfd)
 {
   unsigned int live_cpus = bpf_num_possible_cpus();
-	int ret, i;
+  int ret, i;
 
   i = 0;
   ret = bpf_map_update_elem(mapfd, &i, &live_cpus, BPF_ANY);
@@ -473,7 +473,7 @@ llb_dflt_sec_map2fd_all(struct bpf_object *bpf_obj)
   int err;
   int key = 0;
   struct bpf_program *prog;
-	const char *section;
+  const char *section;
 
   for (; i < LL_DP_MAX_MAP; i++) {
     fd = llb_objmap2fd(bpf_obj, xh->maps[i].map_name);  
@@ -630,39 +630,6 @@ llb_lower_init(llb_dp_struct_t *xh)
     close(fd);
     return ret;
   }
-#ifdef HAVE_DP_RSS
-  if (1) {
-    struct ifaddrs *allifa;
-    struct ifaddrs *ifa;
-    if (getifaddrs(&allifa) == -1) {
-      log_error("getifaddrs call failed");
-      return -1;
-    }
-
-    ifa = allifa;
-    while (ifa) {
-      int inf = ifa->ifa_addr->sa_family;
-      if ((inf == AF_INET || inf == AF_INET6) &&
-          strncmp(ifa->ifa_name, "lo", IFNAMSIZ)) {
-        log_debug("xdp:%s", ifa->ifa_name);
-        llb_dp_link_attach(ifa->ifa_name, XDP_LL_SEC_DEFAULT,
-                     LL_BPF_MOUNT_XDP, 1);
-        ret = llb_dp_link_attach(ifa->ifa_name, XDP_LL_SEC_DEFAULT,
-                     LL_BPF_MOUNT_XDP, 0);
-        if (0 && ret != 0 ) {
-          ifa = allifa;
-          while (ifa) {
-            llb_dp_link_attach(ifa->ifa_name, XDP_LL_SEC_DEFAULT,
-                     LL_BPF_MOUNT_XDP, 1);
-          }
-          close(fd);
-          return ret;
-        }
-      }
-      ifa = ifa->ifa_next;
-    }
-  }
-#endif
 
   return 0;
 }
@@ -2057,12 +2024,13 @@ llb_psec_del(const char *psec)
     s = &xh->psecs[n];
     if (strncmp(s->name, psec, SECNAMSIZ) == 0 && s->valid) {
       if (s->ref == 0)  {
-        s->valid = 0;
         s->ref = 0;
         XH_UNLOCK();
         return 0;
       } else {
-        s->ref--;
+        if (s->ref > 0) {
+          s->ref--;
+        }
         XH_UNLOCK();
         return 0;
       }
@@ -2156,14 +2124,14 @@ llb_dp_link_attach(const char *ifname,
                    int unload)
 {
   struct bpf_object *bpf_obj;
-	struct config cfg;
+  struct config cfg;
   int nr = 0;
   int must_load = 0;
 
   assert(psec);
   assert(ifname);
 
-	/* Cmdline options can change progsec */
+  /* Cmdline options can change progsec */
   memset(&cfg, 0, sizeof(cfg));
   strncpy(cfg.progsec,  psec,  sizeof(cfg.progsec));
 
