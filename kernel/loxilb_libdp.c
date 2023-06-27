@@ -450,6 +450,20 @@ llb_setup_cpu_map(int mapfd)
   }
 }
 
+static void
+llb_setup_lcpu_map(int mapfd)
+{
+  unsigned int live_cpus = bpf_num_possible_cpus();
+	int ret, i;
+
+  i = 0;
+  ret = bpf_map_update_elem(mapfd, &i, &live_cpus, BPF_ANY);
+  if (ret < 0) {
+    log_error("Failed to update live cpu-map %d ent", i);
+    assert(0);
+  }
+}
+
 static int
 llb_dflt_sec_map2fd_all(struct bpf_object *bpf_obj)
 {
@@ -506,6 +520,8 @@ llb_dflt_sec_map2fd_all(struct bpf_object *bpf_obj)
         //assert(0);
       }
       llb_setup_cpu_map(fd);
+    } else if (i == LL_DP_LCPU_MAP) {
+      llb_setup_lcpu_map(fd);
     }
   }
 
@@ -614,7 +630,6 @@ llb_lower_init(llb_dp_struct_t *xh)
     close(fd);
     return ret;
   }
-#define HAVE_DP_RSS
 #ifdef HAVE_DP_RSS
   if (1) {
     struct ifaddrs *allifa;
@@ -634,7 +649,7 @@ llb_lower_init(llb_dp_struct_t *xh)
                      LL_BPF_MOUNT_XDP, 1);
         ret = llb_dp_link_attach(ifa->ifa_name, XDP_LL_SEC_DEFAULT,
                      LL_BPF_MOUNT_XDP, 0);
-        if (ret != 0 ) {
+        if (0 && ret != 0 ) {
           ifa = allifa;
           while (ifa) {
             llb_dp_link_attach(ifa->ifa_name, XDP_LL_SEC_DEFAULT,
@@ -2143,6 +2158,7 @@ llb_dp_link_attach(const char *ifname,
   struct bpf_object *bpf_obj;
 	struct config cfg;
   int nr = 0;
+  int must_load = 0;
 
   assert(psec);
   assert(ifname);
@@ -2159,8 +2175,10 @@ llb_dp_link_attach(const char *ifname,
   }
 
   strncpy(cfg.pin_dir,  xh->ll_dp_pdir,  sizeof(cfg.pin_dir));
-  if (strcmp(ifname, LLB_MGMT_CHANNEL) == 0)
+  if (strcmp(ifname, LLB_MGMT_CHANNEL) == 0) {
     cfg.xdp_flags |= XDP_FLAGS_SKB_MODE;
+    must_load = 1;
+  }
 
   /* Large MTU not supported until kernel 5.18 */
   cfg.xdp_flags |= XDP_FLAGS_SKB_MODE;
@@ -2187,7 +2205,7 @@ llb_dp_link_attach(const char *ifname,
   }
 
   bpf_obj = llb_ebpf_link_attach(&cfg);
-  if (!bpf_obj && mp_type == LL_BPF_MOUNT_XDP) {
+  if (!bpf_obj && mp_type == LL_BPF_MOUNT_XDP && must_load) {
     llb_psec_del(psec);
     return -1;
   }

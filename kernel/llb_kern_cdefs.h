@@ -18,8 +18,6 @@
 #include "../common/llb_dp_mdi.h"
 #include "../common/llb_dpapi.h"
 
-#define HAVE_DP_RSS
-
 #ifndef __stringify
 # define __stringify(X)   #X
 #endif
