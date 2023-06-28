@@ -5,7 +5,7 @@
  * SPDX-License-Identifier: (GPL-2.0 OR BSD-2-Clause)
  */
 
-#define DP_MAX_LOOPS_PER_TCALL (304)
+#define DP_MAX_LOOPS_PER_TCALL (2000)
 
 static __u32 __always_inline
 get_crc32c_map(__u32 off)
@@ -91,7 +91,7 @@ dp_sctp_csum(void *ctx, struct xfi *xf)
     TCALL_CRC1();
   }
 
-  return DP_PASS;
+  bpf_printk("Too many tcalls");
  
 drop:
   /* Something went wrong here */
