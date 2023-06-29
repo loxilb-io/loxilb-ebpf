@@ -33,6 +33,8 @@ dp_sctp_csum(void *ctx, struct xfi *xf)
   int loop = 0;
   __u32 crc = 0xffffffff;
 
+  xf->pm.phit |= LLB_DP_CSUM_HIT;
+
   tcall = ~xf->km.skey[0]; // Next tail-call
   off = *(__u16 *)&xf->km.skey[2];
   rlen = *(__u16 *)&xf->km.skey[4];

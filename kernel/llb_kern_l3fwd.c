@@ -172,7 +172,7 @@ dp_do_rtv6(void *ctx, struct xfi *xf, void *fa_)
     return 0;
   }
 
-  xf->pm.phit |= LLB_XDP_RT_HIT;
+  xf->pm.phit |= LLB_DP_RT_HIT;
   dp_do_map_stats(ctx, xf, LL_DP_RTV6_STATS_MAP, act->ca.cidx);
 
   return dp_do_rtops(ctx, xf, fa_, act);
@@ -204,7 +204,7 @@ dp_do_rtv4(void *ctx, struct xfi *xf, void *fa_)
     return 0;
   }
 
-  xf->pm.phit |= LLB_XDP_RT_HIT;
+  xf->pm.phit |= LLB_DP_RT_HIT;
   dp_do_map_stats(ctx, xf, LL_DP_RTV4_STATS_MAP, act->ca.cidx);
 
   return dp_do_rtops(ctx, xf, fa_, act);
@@ -239,7 +239,7 @@ dp_do_ctops(void *ctx, struct xfi *xf, void *fa_,
     goto ct_trk;
   }
 
-  xf->pm.phit |= LLB_DP_ACL_HIT;
+  xf->pm.phit |= LLB_DP_CTM_HIT;
   act->lts = bpf_ktime_get_ns();
 
 #ifdef HAVE_DP_FC

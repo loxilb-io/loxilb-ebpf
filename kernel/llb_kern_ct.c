@@ -1481,9 +1481,11 @@ dp_ct_in(void *ctx, struct xfi *xf)
     axtdat->lts = atdat->lts;
     if (atdat->ctd.dir == CT_DIR_IN) {
       LL_DBG_PRINTK("[CTRK] in-dir");
+      xf->pm.phit |= LLB_DP_CTSI_HIT;
       smr = dp_ct_sm(ctx, xf, atdat, axtdat, CT_DIR_IN);
     } else {
       LL_DBG_PRINTK("[CTRK] out-dir");
+      xf->pm.phit |= LLB_DP_CTSO_HIT;
       smr = dp_ct_sm(ctx, xf, axtdat, atdat, CT_DIR_OUT);
     }
 

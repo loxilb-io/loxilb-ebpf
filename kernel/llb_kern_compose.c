@@ -930,6 +930,8 @@ handle_excp:
 static int __always_inline
 dp_unparse_packet_always_slow(void *ctx,  struct xfi *xf)
 {
+  xf->pm.phit |= LLB_DP_UNPS_HIT;
+
   if (xf->pm.nf & LLB_NAT_SRC) {
     LL_DBG_PRINTK("[DEPR] LL_SNAT 0x%lx:%x\n", xf->nm.nxip4, xf->nm.nxport);
     /* If packet is v6 */

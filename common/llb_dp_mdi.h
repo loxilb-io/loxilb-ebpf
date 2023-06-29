@@ -32,7 +32,7 @@ do {                                  \
 
 #define LL_PIPE_FC_CAP(x)                     \
   ((x)->pm.pipe_act == LLB_PIPE_RDR &&        \
-  (x)->pm.phit & LLB_DP_ACL_HIT &&            \
+  (x)->pm.phit & LLB_DP_CTM_HIT &&            \
   !((x)->pm.phit & LLB_DP_SESS_HIT) &&        \
   ((x)->tm.tun_type == 0) &&                  \
   (x)->l2m.dl_type == bpf_htons(ETH_P_IP) &&  \
@@ -69,24 +69,36 @@ struct dp_pi_mdi {
 #define LLB_PIPE_RDR_PRIO     0x20
 #define LLB_PIPE_SET_CT       0x40      
     __u8             pipe_act;
-#define LLB_PIPE_RC_PARSER    0x1
-#define LLB_PIPE_RC_ACL_MISS  0x2
-#define LLB_PIPE_RC_TUN_DECAP 0x4 
-#define LLB_PIPE_RC_FW_RDR    0x8 
-    __u8             rcode;
-    __u8             tc;
     __u8             l3_off;
-    __u16            nh_num;
-    __u16            qos_id;
 #define LLB_DP_TMAC_HIT       0x1
-#define LLB_DP_ACL_HIT        0x2
-#define LLB_XDP_PDR_HIT       0x4
-#define LLB_XDP_RT_HIT        0x8
+#define LLB_DP_CTM_HIT        0x2
+#define LLB_DP_PDR_HIT        0x4
+#define LLB_DP_RT_HIT         0x8
 #define LLB_DP_FC_HIT         0x10
 #define LLB_DP_SESS_HIT       0x20
 #define LLB_DP_RES_HIT        0x40
 #define LLB_DP_FW_HIT         0x80
-    __u8             phit;
+#define LLB_DP_CTSI_HIT       0x100
+#define LLB_DP_CTSO_HIT       0x200
+#define LLB_DP_NAT_HIT        0x400
+#define LLB_DP_CSUM_HIT       0x800
+#define LLB_DP_UNPS_HIT       0x1000
+    __u16            phit;
+
+    __u16            nh_num;
+    __u16            qos_id;
+#define LLB_PIPE_RC_PARSER    0x1
+#define LLB_PIPE_RC_ACL_MISS  0x2
+#define LLB_PIPE_RC_TUN_DECAP 0x4
+#define LLB_PIPE_RC_FW_RDR    0x8
+#define LLB_PIPE_RC_FW_DRP    0x10
+#define LLB_PIPE_RC_UNPS_DRP  0x20
+#define LLB_PIPE_RC_CSUM_DRP  0x20
+#define LLB_PIPE_RC_UNX_DRP   0x40
+#define LLB_PIPE_RC_MPT_PASS  0x80
+    __u32            rcode;
+
+    __u8             tc;
 #define LLB_DP_PORT_UPP       0x1
     __u8             pprop;
     __u8             lkup_dmac[6];
