@@ -11,7 +11,7 @@ dp_do_rt4_fwdops(void *ctx, struct xfi *xf)
   void *dend = DP_TC_PTR(DP_PDATA_END(ctx));
 
   if (iph + 1 > dend)  {
-    LLBS_PPLN_DROP(xf);
+    LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLRT_ERR);
     return -1;
   }
   ip_decrease_ttl(iph);
@@ -25,7 +25,7 @@ dp_do_rt6_fwdops(void *ctx, struct xfi *xf)
   void *dend = DP_TC_PTR(DP_PDATA_END(ctx));
 
   if (ip6h + 1 > dend)  {
-    LLBS_PPLN_DROP(xf);
+    LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLRT_ERR);
     return -1;
   }
   ip6h->hop_limit--;
@@ -103,9 +103,9 @@ dp_do_rtops(void *ctx, struct xfi *xf, void *fa_, struct dp_rt_tact *act)
                 act->ca.act_type, xf->pm.pipe_act);
 
   if (act->ca.act_type == DP_SET_DROP) {
-    LLBS_PPLN_DROP(xf);
+    LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_ACT_DROP);
   } else if (act->ca.act_type == DP_SET_TOCP) {
-    LLBS_PPLN_TRAP(xf);
+    LLBS_PPLN_TRAPC(xf, LLB_PIPE_RC_ACT_TRAP);
   } else if (act->ca.act_type == DP_SET_RDR_PORT) {
     struct dp_rdr_act *ra = &act->port_act;
     LLBS_PPLN_RDR(xf);
@@ -122,7 +122,7 @@ dp_do_rtops(void *ctx, struct xfi *xf, void *fa_, struct dp_rt_tact *act)
 #endif
     return dp_pipe_set_l32_tun_nh(ctx, xf, &act->rt_nh);
   } */ else {
-    LLBS_PPLN_DROP(xf);
+    LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_ACT_UNK);
   }
 
   return 0;
@@ -304,7 +304,7 @@ dp_do_ctops(void *ctx, struct xfi *xf, void *fa_,
     xf->pm.sess_id = pa->sess_id;
   } else {
     /* Same for DP_SET_DROP */
-    LLBS_PPLN_DROP(xf);
+    LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_ACT_DROP);
   }
 
 #ifdef HAVE_DP_EXTCT

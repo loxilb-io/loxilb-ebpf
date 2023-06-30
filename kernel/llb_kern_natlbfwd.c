@@ -125,7 +125,7 @@ dp_do_nat(void *ctx, struct xfi *xf)
       xf->pm.nf = 0;
     }
   } else { 
-    LLBS_PPLN_DROP(xf);
+    LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_ACT_UNK);
   }
 
   return 1;

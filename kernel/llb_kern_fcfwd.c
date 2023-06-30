@@ -106,18 +106,19 @@ dp_do_fcv4_lkup(void *ctx, struct xfi *xf)
     LL_FC_PRINTK("[FCH4] hto");
     bpf_map_update_elem(&xfck, &z, &key, BPF_ANY);
     bpf_map_delete_elem(&fc_v4_map, &key);
+    xf->pm.rcode |= LLB_PIPE_RC_FCTO;
     return 0; 
   }
 
   LL_FC_PRINTK("[FCH4] key found act-sz %d\n", sizeof(struct dp_fc_tacts));
 
-  if (acts->ca.ftrap)
+  if (acts->ca.ftrap) {
+    xf->pm.rcode |= LLB_PIPE_RC_FCBP;
     return 0; 
+  }
 
   xf->pm.phit |= LLB_DP_FC_HIT;
-
   xf->pm.zone = acts->zone;
-
 
 #ifdef HAVE_DP_EXTFC
   if (acts->fcta[DP_SET_RM_VXLAN].ca.act_type == DP_SET_RM_VXLAN) {
@@ -132,6 +133,7 @@ dp_do_fcv4_lkup(void *ctx, struct xfi *xf)
     ta = &acts->fcta[DP_SET_SNAT];
 
     if (ta->nat_act.fr == 1 || ta->nat_act.doct) {
+      xf->pm.rcode |= LLB_PIPE_RC_FCBP;
       return 0;
     }
 
@@ -142,6 +144,7 @@ dp_do_fcv4_lkup(void *ctx, struct xfi *xf)
     ta = &acts->fcta[DP_SET_DNAT];
 
     if (ta->nat_act.fr == 1 || ta->nat_act.doct) {
+      xf->pm.rcode |= LLB_PIPE_RC_FCBP;
       return 0;
     }
 
@@ -212,6 +215,7 @@ dp_do_fcv4_lkup(void *ctx, struct xfi *xf)
 
 del_out:
   bpf_map_delete_elem(&fc_v4_map, &key);
+  xf->pm.rcode |= LLB_PIPE_RC_FCBP;
   return 0;
 }
 

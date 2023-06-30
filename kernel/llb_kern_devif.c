@@ -34,18 +34,18 @@ dp_do_if_lkup(void *ctx, struct xfi *xf)
 
   l2a = bpf_map_lookup_elem(&intf_map, &key);
   if (!l2a) {
-    //LLBS_PPLN_DROP(xf);
     LL_DBG_PRINTK("[INTF] not found");
-    LLBS_PPLN_PASS(xf);
+    LLBS_PPLN_PASSC(xf, LLB_PIPE_RC_UNX_DRP);
     return -1;
   }
 
+  xf->pm.phit |= LLB_DP_IF_HIT;
   LL_DBG_PRINTK("[INTF] L2 action %d\n", l2a->ca.act_type);
 
   if (l2a->ca.act_type == DP_SET_DROP) {
-    LLBS_PPLN_DROP(xf);
+    LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_ACT_DROP);
   } else if (l2a->ca.act_type == DP_SET_TOCP) {
-    LLBS_PPLN_TRAP(xf);
+    LLBS_PPLN_TRAPC(xf, LLB_PIPE_RC_ACT_TRAP);
   } else if (l2a->ca.act_type == DP_SET_IFI) {
     xf->pm.iport = l2a->set_ifi.xdp_ifidx;
     xf->pm.zone  = l2a->set_ifi.zone;
@@ -54,7 +54,7 @@ dp_do_if_lkup(void *ctx, struct xfi *xf)
     xf->pm.pprop = l2a->set_ifi.pprop;
     xf->qm.ipolid = l2a->set_ifi.polid;
   } else {
-    LLBS_PPLN_DROP(xf);
+    LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_ACT_UNK);
   }
 
   return 0;
@@ -92,7 +92,7 @@ dp_do_mirr_lkup(void *ctx, struct xfi *xf)
 
   ma = bpf_map_lookup_elem(&mirr_map, &mkey);
   if (!ma) {
-    LLBS_PPLN_DROP(xf);
+    LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_UNX_DRP);
     return -1;
   }
 
@@ -107,7 +107,7 @@ dp_do_mirr_lkup(void *ctx, struct xfi *xf)
   }
   /* VXLAN to be done */
 
-  LLBS_PPLN_DROP(xf);
+  LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_ACT_UNK);
   return -1;
 }
 

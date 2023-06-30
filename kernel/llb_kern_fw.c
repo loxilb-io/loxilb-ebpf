@@ -114,7 +114,7 @@ dp_do_fw4_main(void *ctx, struct xfi *xf)
     LLBS_PPLN_TRAPC(xf, LLB_PIPE_RC_FW_RDR);
   } else {
     /* Same for DP_SET_DROP */
-    LLBS_PPLN_DROP(xf);
+    LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_ACT_UNK);
   }
 
   xf->pm.phit |= LLB_DP_RES_HIT;
@@ -124,6 +124,7 @@ done:
   xf->pm.fw_rid = act->ca.cidx;
 
   RETURN_TO_MP();
+  xf->pm.rcode |= LLB_PIPE_RC_TCALL_ERR;
   return DP_DROP;
 }
 

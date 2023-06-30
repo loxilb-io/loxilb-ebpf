@@ -1238,7 +1238,7 @@ dp_do_dnat(void *ctx, struct xfi *xf, __be32 xip, __be16 xport)
   if (xf->l34m.nw_proto == IPPROTO_TCP)  {
     struct tcphdr *tcp = DP_ADD_PTR(DP_PDATA(ctx), xf->pm.l4_off);
     if (tcp + 1 > dend) {
-      LLBS_PPLN_DROP(xf);
+      LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLERR);
       return -1;
     }
 
@@ -1258,7 +1258,7 @@ dp_do_dnat(void *ctx, struct xfi *xf, __be32 xip, __be16 xport)
     struct udphdr *udp = DP_ADD_PTR(DP_PDATA(ctx), xf->pm.l4_off);
 
     if (udp + 1 > dend) {
-      LLBS_PPLN_DROP(xf);
+      LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLERR);
       return -1;
     }
 
@@ -1278,7 +1278,7 @@ dp_do_dnat(void *ctx, struct xfi *xf, __be32 xip, __be16 xport)
     struct sctphdr *sctp = DP_ADD_PTR(DP_PDATA(ctx), xf->pm.l4_off);
 
     if (sctp + 1 > dend) {
-      LLBS_PPLN_DROP(xf);
+      LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLERR);
       return -1;
     }
 
@@ -1317,7 +1317,7 @@ dp_do_dnat6(void *ctx, struct xfi *xf, __be32 *xip, __be16 xport)
   if (xf->l34m.nw_proto == IPPROTO_TCP)  {
     struct tcphdr *tcp = DP_ADD_PTR(DP_PDATA(ctx), xf->pm.l4_off);
     if (tcp + 1 > dend) {
-      LLBS_PPLN_DROP(xf);
+      LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLERR);
       return -1;
     }
 
@@ -1337,7 +1337,7 @@ dp_do_dnat6(void *ctx, struct xfi *xf, __be32 *xip, __be16 xport)
     struct udphdr *udp = DP_ADD_PTR(DP_PDATA(ctx), xf->pm.l4_off);
 
     if (udp + 1 > dend) {
-      LLBS_PPLN_DROP(xf);
+      LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLERR);
       return -1;
     }
 
@@ -1357,7 +1357,7 @@ dp_do_dnat6(void *ctx, struct xfi *xf, __be32 *xip, __be16 xport)
     struct sctphdr *sctp = DP_ADD_PTR(DP_PDATA(ctx), xf->pm.l4_off);
 
     if (sctp + 1 > dend) {
-      LLBS_PPLN_DROP(xf);
+      LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLERR);
       return -1;
     }
 
@@ -1396,7 +1396,7 @@ dp_do_snat(void *ctx, struct xfi *xf, __be32 xip, __be16 xport)
   if (xf->l34m.nw_proto == IPPROTO_TCP)  {
     struct tcphdr *tcp = DP_ADD_PTR(DP_PDATA(ctx), xf->pm.l4_off);
     if (tcp + 1 > dend) {
-      LLBS_PPLN_DROP(xf);
+      LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLERR);
       return -1;
     }
 
@@ -1416,7 +1416,7 @@ dp_do_snat(void *ctx, struct xfi *xf, __be32 xip, __be16 xport)
     struct udphdr *udp = DP_ADD_PTR(DP_PDATA(ctx), xf->pm.l4_off);
 
     if (udp + 1 > dend) {
-      LLBS_PPLN_DROP(xf);
+      LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLERR);
       return -1;
     }
 
@@ -1436,7 +1436,7 @@ dp_do_snat(void *ctx, struct xfi *xf, __be32 xip, __be16 xport)
     struct sctphdr *sctp = DP_ADD_PTR(DP_PDATA(ctx), xf->pm.l4_off);
 
     if (sctp + 1 > dend) {
-      LLBS_PPLN_DROP(xf);
+      LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLERR);
       return -1;
     }
 
@@ -1475,7 +1475,7 @@ dp_do_snat6(void *ctx, struct xfi *xf, __be32 *xip, __be16 xport)
   if (xf->l34m.nw_proto == IPPROTO_TCP)  {
     struct tcphdr *tcp = DP_ADD_PTR(DP_PDATA(ctx), xf->pm.l4_off);
     if (tcp + 1 > dend) {
-      LLBS_PPLN_DROP(xf);
+      LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLERR);
       return -1;
     }
 
@@ -1495,7 +1495,7 @@ dp_do_snat6(void *ctx, struct xfi *xf, __be32 *xip, __be16 xport)
     struct udphdr *udp = DP_ADD_PTR(DP_PDATA(ctx), xf->pm.l4_off);
 
     if (udp + 1 > dend) {
-      LLBS_PPLN_DROP(xf);
+      LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLERR);
       return -1;
     }
 
@@ -1515,7 +1515,7 @@ dp_do_snat6(void *ctx, struct xfi *xf, __be32 *xip, __be16 xport)
     struct sctphdr *sctp = DP_ADD_PTR(DP_PDATA(ctx), xf->pm.l4_off);
 
     if (sctp + 1 > dend) {
-      LLBS_PPLN_DROP(xf);
+      LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLERR);
       return -1;
     }
 
@@ -1559,12 +1559,12 @@ dp_do_dnat64(void *md, struct xfi *xf)
 
   if (xf->l34m.nw_proto != IPPROTO_TCP &&
       xf->l34m.nw_proto != IPPROTO_UDP) {
-    LLBS_PPLN_DROP(xf);
+    LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLERR);
     return -1;
   }
 
   if (bpf_skb_change_proto(md, bpf_htons(ETH_P_IP), 0) < 0) {
-    LLBS_PPLN_DROP(xf);
+    LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PROTO_ERR);
     return -1;
   }
 
@@ -1572,7 +1572,7 @@ dp_do_dnat64(void *md, struct xfi *xf)
   dend = DP_TC_PTR(DP_PDATA_END(md));
 
   if (eth + 1 > dend) {
-    LLBS_PPLN_DROP(xf);
+    LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLERR);
     return -1;
   }
 
@@ -1581,7 +1581,7 @@ dp_do_dnat64(void *md, struct xfi *xf)
   if (xf->l2m.vlan[0] != 0) {
     vlh = DP_ADD_PTR(eth, sizeof(*eth));
     if (vlh + 1 > dend) {
-      LLBS_PPLN_DROP(xf);
+      LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLERR);
       return -1;
     }
     eth->h_proto = bpf_htons(0x8100);
@@ -1592,7 +1592,7 @@ dp_do_dnat64(void *md, struct xfi *xf)
 
   iph = (void *)(eth + 1);
   if (iph + 1 > dend) {
-    LLBS_PPLN_DROP(xf);
+    LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLERR);
     return -1;
   }
 
@@ -1614,7 +1614,7 @@ dp_do_dnat64(void *md, struct xfi *xf)
   if (xf->l34m.nw_proto == IPPROTO_TCP) {
     tcp = (void *)(iph + 1);
     if (tcp + 1 > dend) {
-      LLBS_PPLN_DROP(xf);
+      LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLERR);
       return -1;
     }
 
@@ -1632,7 +1632,7 @@ dp_do_dnat64(void *md, struct xfi *xf)
 
     udp = (void *)(iph + 1);
     if (udp + 1 > dend) {
-      LLBS_PPLN_DROP(xf);
+      LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLERR);
       return -1;
     }
 
@@ -1655,12 +1655,12 @@ dp_do_snat46(void *md, struct xfi *xf)
 
   if (xf->l34m.nw_proto != IPPROTO_TCP &&
       xf->l34m.nw_proto != IPPROTO_UDP) {
-    LLBS_PPLN_DROP(xf);
+    LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PROTO_ERR);
     return -1;
   }
 
   if (bpf_skb_change_proto(md, bpf_htons(ETH_P_IPV6), 0) < 0) {
-    LLBS_PPLN_DROP(xf);
+    LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PROTO_ERR);
     return -1;
   }
 
@@ -1668,7 +1668,7 @@ dp_do_snat46(void *md, struct xfi *xf)
   dend = DP_TC_PTR(DP_PDATA_END(md));
 
   if (eth + 1 > dend) {
-    LLBS_PPLN_DROP(xf);
+    LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLERR);
     return -1;
   }
 
@@ -1677,7 +1677,7 @@ dp_do_snat46(void *md, struct xfi *xf)
   if (xf->l2m.vlan[0] != 0) {
     vlh = DP_ADD_PTR(eth, sizeof(*eth));
     if (vlh + 1 > dend) {
-      LLBS_PPLN_DROP(xf);
+      LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLERR);
       return -1;
     }
     eth->h_proto = bpf_htons(0x8100);
@@ -1688,7 +1688,7 @@ dp_do_snat46(void *md, struct xfi *xf)
 
   ip6h = (void *)(eth + 1);
   if (ip6h + 1 > dend) {
-    LLBS_PPLN_DROP(xf);
+    LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLERR);
     return -1;
   }
 
@@ -1710,7 +1710,7 @@ dp_do_snat46(void *md, struct xfi *xf)
   if (xf->l34m.nw_proto == IPPROTO_TCP) {
     tcp = (void *)(ip6h + 1);
     if (tcp + 1 > dend) {
-      LLBS_PPLN_DROP(xf);
+      LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLERR);
       return -1;
     }
 
@@ -1727,7 +1727,7 @@ dp_do_snat46(void *md, struct xfi *xf)
 
     udp = (void *)(ip6h + 1);
     if (udp + 1 > dend) {
-      LLBS_PPLN_DROP(xf);
+      LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLERR);
       return -1;
     }
 
@@ -2013,12 +2013,12 @@ dp_do_out_vlan(void *ctx, struct xfi *xf)
     /* Strip existing vlan. Nothing to do if there was no vlan tag */
     if (xf->l2m.vlan[0] != 0) {
       if (dp_remove_vlan_tag(ctx, xf) != 0) {
-        LLBS_PPLN_DROP(xf);
+        LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLERR);
         return -1;
       }
     } else {
       if (start + sizeof(*eth) > dend) {
-        LLBS_PPLN_DROP(xf);
+        LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLERR);
         return -1;
       }
       eth = DP_TC_PTR(DP_PDATA(ctx));
@@ -2033,12 +2033,12 @@ dp_do_out_vlan(void *ctx, struct xfi *xf)
     eth = DP_TC_PTR(DP_PDATA(ctx));
     if (xf->l2m.vlan[0] != 0) {
       if (dp_swap_vlan_tag(ctx, xf, vlan) != 0) {
-        LLBS_PPLN_DROP(xf);
+        LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLERR);
         return -1;
       }
     } else {
       if (dp_insert_vlan_tag(ctx, xf, vlan) != 0) {
-        LLBS_PPLN_DROP(xf);
+        LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLERR);
         return -1;
       }
     }
@@ -2089,8 +2089,8 @@ dp_do_strip_ipip(void *md, struct xfi *xf)
   int olen = sizeof(struct iphdr);
 
   if (dp_buf_delete_room(md, olen, BPF_F_ADJ_ROOM_FIXED_GSO)  < 0) {
-    LL_DBG_PRINTK("Failed gtph remove\n");
-    LLBS_PPLN_DROP(xf);
+    LL_DBG_PRINTK("Failed ipip remove");
+    LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLERR);
     return -1;
   }
 
@@ -2098,7 +2098,7 @@ dp_do_strip_ipip(void *md, struct xfi *xf)
   dend = DP_TC_PTR(DP_PDATA_END(md));
 
   if (eth + 1 > dend) {
-    LLBS_PPLN_DROP(xf);
+    LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLERR);
     return -1;
   }
 
@@ -2146,7 +2146,7 @@ dp_do_ins_ipip(void *md,
 
   /* add room between mac and network header */
   if (dp_buf_add_room(md, olen, flags)) {
-    LLBS_PPLN_DROP(xf);
+    LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLERR);
     return -1;
   }
 
@@ -2154,13 +2154,13 @@ dp_do_ins_ipip(void *md,
   dend = DP_TC_PTR(DP_PDATA_END(md));
 
   if (eth + 1 > dend) {
-    LLBS_PPLN_DROP(xf);
+    LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLERR);
     return -1;
   }
 
   iph = (void *)(eth + 1);
   if (iph + 1 > dend) {
-    LLBS_PPLN_DROP(xf);
+    LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLERR);
     return -1;
   }
 
@@ -2210,7 +2210,7 @@ dp_do_strip_vxlan(void *md, struct xfi *xf, int olen)
 
   if (dp_buf_delete_room(md, olen, BPF_F_ADJ_ROOM_FIXED_GSO)  < 0) {
     LL_DBG_PRINTK("Failed MAC remove\n");
-    LLBS_PPLN_DROP(xf);
+    LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLERR);
     return -1;
   }
 
@@ -2218,14 +2218,14 @@ dp_do_strip_vxlan(void *md, struct xfi *xf, int olen)
   dend = DP_TC_PTR(DP_PDATA_END(md));
 
   if (eth + 1 > dend) {
-    LLBS_PPLN_DROP(xf);
+    LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLERR);
     return -1;
   }
   memcpy(eth->h_dest, xf->il2m.dl_dst, 2*6);
   if (xf->il2m.vlan[0] != 0) {
     vlh = DP_ADD_PTR(eth, sizeof(*eth));
     if (vlh + 1 > dend) {
-      LLBS_PPLN_DROP(xf);
+      LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLERR);
       return -1;
     }
     vlh->h_vlan_encapsulated_proto = xf->il2m.dl_type;
@@ -2268,7 +2268,7 @@ dp_do_ins_vxlan(void *md,
   /* We do not pass vlan header inside vxlan */
   if (xf->l2m.vlan[0] != 0) {
     if (dp_remove_vlan_tag(md, xf) < 0) {
-      LLBS_PPLN_DROP(xf);
+      LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLERR);
       return -1;
     }
   }
@@ -2284,7 +2284,7 @@ dp_do_ins_vxlan(void *md,
 
     /* add room between mac and network header */
     if (dp_buf_add_room(md, olen, flags)) {
-    LLBS_PPLN_DROP(xf);
+    LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLERR);
     return -1;
   }
 
@@ -2292,7 +2292,7 @@ dp_do_ins_vxlan(void *md,
   dend = DP_TC_PTR(DP_PDATA_END(md));
 
   if (eth + 1 > dend) {
-    LLBS_PPLN_DROP(xf);
+    LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLERR);
     return -1;
   }
 
@@ -2312,7 +2312,7 @@ dp_do_ins_vxlan(void *md,
 
   iph = (void *)(eth + 1);
   if (iph + 1 > dend) {
-    LLBS_PPLN_DROP(xf);
+    LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLERR);
     return -1;
   }
 
@@ -2329,7 +2329,7 @@ dp_do_ins_vxlan(void *md,
 
   udp = (void *)(iph + 1);
   if (udp + 1 > dend) {
-    LLBS_PPLN_DROP(xf);
+    LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLERR);
     return -1;
   }
 
@@ -2342,7 +2342,7 @@ dp_do_ins_vxlan(void *md,
   /* VxLAN header */
   vx = (void *)(udp + 1);
   if (vx + 1 > dend) {
-    LLBS_PPLN_DROP(xf);
+    LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLERR);
     return -1;
   }
 
@@ -2357,7 +2357,7 @@ dp_do_ins_vxlan(void *md,
    */
   ieth = (void *)(vx + 1);
   if (ieth + 1 > dend) {
-    LLBS_PPLN_DROP(xf);
+    LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLERR);
     return -1;
   }
 
@@ -2410,13 +2410,13 @@ dp_do_strip_gtp(void *md, struct xfi *xf, int olen)
   void *dend;
 
   if (olen < sizeof(*eth)) {
-    LLBS_PPLN_DROP(xf);
+    LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLERR);
     return -1;
   }
 
   if (dp_buf_delete_room(md, olen - sizeof(*eth), BPF_F_ADJ_ROOM_FIXED_GSO)  < 0) {
     LL_DBG_PRINTK("Failed gtph remove\n");
-    LLBS_PPLN_DROP(xf);
+    LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLERR);
     return -1;
   }
 
@@ -2424,7 +2424,7 @@ dp_do_strip_gtp(void *md, struct xfi *xf, int olen)
   dend = DP_TC_PTR(DP_PDATA_END(md));
 
   if (eth + 1 > dend) {
-    LLBS_PPLN_DROP(xf);
+    LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLERR);
     return -1;
   }
 
@@ -2488,7 +2488,7 @@ dp_do_ins_gtp(void *md,
 
   /* add room between mac and network header */
   if (dp_buf_add_room(md, olen, flags)) {
-    LLBS_PPLN_DROP(xf);
+    LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLERR);
     return -1;
   }
 
@@ -2496,13 +2496,13 @@ dp_do_ins_gtp(void *md,
   dend = DP_TC_PTR(DP_PDATA_END(md));
 
   if (eth + 1 > dend) {
-    LLBS_PPLN_DROP(xf);
+    LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLERR);
     return -1;
   }
 
   iph = (void *)(eth + 1);
   if (iph + 1 > dend) {
-    LLBS_PPLN_DROP(xf);
+    LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLERR);
     return -1;
   }
 
@@ -2519,7 +2519,7 @@ dp_do_ins_gtp(void *md,
 
   udp = (void *)(iph + 1);
   if (udp + 1 > dend) {
-    LLBS_PPLN_DROP(xf);
+    LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLERR);
     return -1;
   }
 
@@ -2532,7 +2532,7 @@ dp_do_ins_gtp(void *md,
   /* GTP header */
   gh = (void *)(udp + 1);
   if (gh + 1 > dend) {
-    LLBS_PPLN_DROP(xf);
+    LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLERR);
     return -1;
   }
 
@@ -2547,7 +2547,7 @@ dp_do_ins_gtp(void *md,
     /* GTP extension header */
     geh = (void *)(gh + 1);
     if (geh + 1 > dend) {
-      LLBS_PPLN_DROP(xf);
+      LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLERR);
       return -1;
     }
 
@@ -2557,7 +2557,7 @@ dp_do_ins_gtp(void *md,
 
     gedh = (void *)(geh + 1);
     if (gedh + 1 > dend) {
-      LLBS_PPLN_DROP(xf);
+      LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLERR);
       return -1;
     }
 
@@ -2613,7 +2613,7 @@ xdp2tc_has_xmd(void *md, struct xfi *xf)
   if (meta + 1 <= data) {
     if (meta->pi.skip != 0) {
       xf->pm.tc = 0;
-      LLBS_PPLN_PASS(xf);
+      LLBS_PPLN_PASSC(xf, 0);
       return 1;
     }
 

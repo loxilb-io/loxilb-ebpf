@@ -70,7 +70,6 @@ int  xdp_packet_func(struct xdp_md *ctx)
 
   xf = bpf_map_lookup_elem(&xfis, &z);
   if (!xf) {
-    xf->pm.rcode |= LLB_PIPE_RC_UNX_DRP;
     return DP_DROP;
   }
   memset(xf, 0, sizeof *xf);
@@ -117,7 +116,6 @@ tc_packet_func__(struct __sk_buff *md)
 
   xf = bpf_map_lookup_elem(&xfis, &val);
   if (!xf) {
-    xf->pm.rcode |= LLB_PIPE_RC_UNX_DRP;
     return DP_DROP;
   }
 
@@ -169,7 +167,6 @@ int tc_packet_func_slow(struct __sk_buff *md)
 
   xf = bpf_map_lookup_elem(&xfis, &val);
   if (!xf) {
-    xf->pm.rcode |= LLB_PIPE_RC_UNX_DRP;
     return DP_DROP;
   }
 
@@ -184,7 +181,6 @@ int tc_packet_func_fw(struct __sk_buff *md)
 
   xf = bpf_map_lookup_elem(&xfis, &val);
   if (!xf) {
-    xf->pm.rcode |= LLB_PIPE_RC_UNX_DRP;
     return DP_DROP;
   }
 
@@ -199,7 +195,6 @@ int tc_csum_func1(struct __sk_buff *md)
 
   xf = bpf_map_lookup_elem(&xfis, &val);
   if (!xf) {
-    xf->pm.rcode |= LLB_PIPE_RC_UNX_DRP;
     return DP_DROP;
   }
 
@@ -214,11 +209,10 @@ int tc_csum_func2(struct __sk_buff *md)
 
   xf = bpf_map_lookup_elem(&xfis, &val);
   if (!xf) {
-    xf->pm.rcode |= LLB_PIPE_RC_UNX_DRP;
     return DP_DROP;
   }
 
-  val =  dp_sctp_csum(md, xf);
+  val = dp_sctp_csum(md, xf);
   if (val == DP_DROP) {
     xf->pm.rcode |= LLB_PIPE_RC_CSUM_DRP;
   }
@@ -233,7 +227,6 @@ int tc_slow_unp_func(struct __sk_buff *md)
 
   xf = bpf_map_lookup_elem(&xfis, &val);
   if (!xf) {
-    xf->pm.rcode |= LLB_PIPE_RC_UNX_DRP;
     return DP_DROP;
   }
 
