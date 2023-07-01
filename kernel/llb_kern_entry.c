@@ -215,6 +215,7 @@ int tc_csum_func2(struct __sk_buff *md)
   val = dp_sctp_csum(md, xf);
   if (val == DP_DROP) {
     xf->pm.rcode |= LLB_PIPE_RC_CSUM_DRP;
+    TRACER_CALL(md, xf);
   }
   return val;
 }
@@ -233,6 +234,7 @@ int tc_slow_unp_func(struct __sk_buff *md)
   val = dp_unparse_packet_always_slow(md, xf);
   if (val == DP_DROP) {
     xf->pm.rcode |= LLB_PIPE_RC_UNPS_DRP;
+    TRACER_CALL(md, xf);
   }
   return val;
 }

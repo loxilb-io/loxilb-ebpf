@@ -105,7 +105,7 @@ dp_do_rtops(void *ctx, struct xfi *xf, void *fa_, struct dp_rt_tact *act)
   if (act->ca.act_type == DP_SET_DROP) {
     LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_ACT_DROP);
   } else if (act->ca.act_type == DP_SET_TOCP) {
-    LLBS_PPLN_TRAPC(xf, LLB_PIPE_RC_ACT_TRAP);
+    LLBS_PPLN_TRAPC(xf, LLB_PIPE_RC_RT_TRAP);
   } else if (act->ca.act_type == DP_SET_RDR_PORT) {
     struct dp_rdr_act *ra = &act->port_act;
     LLBS_PPLN_RDR(xf);
@@ -298,7 +298,7 @@ dp_do_ctops(void *ctx, struct xfi *xf, void *fa_,
 
   } else if (act->ca.act_type == DP_SET_TOCP) {
     /*LLBS_PPLN_TRAP(xf);*/
-    LLBS_PPLN_TRAPC(xf, LLB_PIPE_RC_ACL_MISS);
+    LLBS_PPLN_TRAPC(xf, LLB_PIPE_RC_ACL_TRAP);
   } else if (act->ca.act_type == DP_SET_SESS_FWD_ACT) {
     struct dp_sess_act *pa = &act->pdr_sess_act; 
     xf->pm.sess_id = pa->sess_id;

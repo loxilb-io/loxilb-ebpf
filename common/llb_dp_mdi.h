@@ -64,7 +64,8 @@ do {                                  \
 #define LL_FC_PRINTK(fmt, ...)  do { } while (0) 
 #endif
 
-#define LLB_PIPE_RDR_MASK     (LLB_PIPE_RDR | LLB_PIPE_RDR_PRIO)
+#define LLB_PIPE_RDR_MASK     (LLB_PIPE_RDR | LLB_PIPE_RDR_PRIO | LLB_PIPE_TRAP)
+#define LLB_PIPE_EXCP_MASK    (LLB_PIPE_TRAP | LLB_PIPE_PASS | LLB_PIPE_DROP)
 
 struct dp_pi_mdi {
     /* Pipeline Metadata */
@@ -100,7 +101,7 @@ struct dp_pi_mdi {
     __u16            nh_num;
     __u16            qos_id;
 #define LLB_PIPE_RC_PARSER    0x1
-#define LLB_PIPE_RC_ACL_MISS  0x2
+#define LLB_PIPE_RC_ACL_TRAP  0x2
 #define LLB_PIPE_RC_TUN_DECAP 0x4
 #define LLB_PIPE_RC_FW_RDR    0x8
 #define LLB_PIPE_RC_FW_DRP    0x10
@@ -123,6 +124,7 @@ struct dp_pi_mdi {
 #define LLB_PIPE_RC_POL_DRP   0x100000
 #define LLB_PIPE_RC_NOSMAC    0x200000
 #define LLB_PIPE_RC_NODMAC    0x400000
+#define LLB_PIPE_RC_RT_TRAP   0x800000
     __u32            rcode;
 
     __u8             tc;
@@ -157,7 +159,8 @@ struct dp_pi_mdi {
     __u8             itcp_flags;
     __u8             l4fin:2;
     __u8             goct:2;
-    __u8             il4fin:4;
+    __u8             pten:2;
+    __u8             il4fin:2;
     __u16            l3_len;
     __u16            l3_plen;
     __u16            il3_len;

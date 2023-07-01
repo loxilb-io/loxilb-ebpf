@@ -51,6 +51,7 @@ dp_do_if_lkup(void *ctx, struct xfi *xf)
     xf->pm.zone  = l2a->set_ifi.zone;
     xf->pm.bd    = l2a->set_ifi.bd;
     xf->pm.mirr  = l2a->set_ifi.mirr;
+    xf->pm.pten  = l2a->set_ifi.pten;
     xf->pm.pprop = l2a->set_ifi.pprop;
     xf->qm.ipolid = l2a->set_ifi.polid;
   } else {
@@ -127,9 +128,8 @@ dp_do_mirr_lkup(void *ctx, struct xfi *xf)
 }
 #endif
 
-#ifdef LLB_TRAP_PERF_RING
 static int __always_inline
-dp_trap_packet(void *ctx,  struct xfi *xf)
+dp_trace_packet(void *ctx,  struct xfi *xf)
 {
   struct ll_dp_pmdi *pmd;
   int z = 0;
@@ -141,10 +141,11 @@ dp_trap_packet(void *ctx,  struct xfi *xf)
 
   LL_DBG_PRINTK("[TRAP] START--\n");
 
-  pmd->ifindex = ctx->ingress_ifindex;
-  pmd->xdp_inport = xf->pm.iport;
-  pmd->xdp_oport = xf->pm.oport;
-  pmd->pm.table_id = xf->table_id;
+  pmd->ifindex = DP_IFI(ctx);
+  pmd->phit = xf->pm.phit;
+  pmd->dp_inport = xf->pm.iport;
+  pmd->dp_oport = xf->pm.oport;
+  pmd->table_id = xf->pm.table_id;
   pmd->rcode = xf->pm.rcode;
   pmd->pkt_len = xf->pm.py_bytes;
 
@@ -156,7 +157,7 @@ dp_trap_packet(void *ctx,  struct xfi *xf)
   }
   return DP_DROP;
 }
-#else
+
 static int __always_inline
 dp_trap_packet(void *ctx,  struct xfi *xf, void *fa_)
 {
@@ -224,7 +225,6 @@ dp_trap_packet(void *ctx,  struct xfi *xf, void *fa_)
   /* TODO - Apply stats */
   return DP_REDIRECT;
 }
-#endif
 
 static int __always_inline
 dp_redir_packet(void *ctx,  struct xfi *xf)
@@ -268,6 +268,8 @@ dp_pipe_check_res(void *ctx, struct xfi *xf, void *fa)
 #ifdef HAVE_DP_EGR_HOOK
   DP_LLB_MRK_INGP(ctx);
 #endif
+
+  TRACER_CALL(ctx, xf);
 
   if (xf->pm.pipe_act) {
 
@@ -352,6 +354,7 @@ dp_insert_fcv4(void *ctx, struct xfi *xf, struct dp_fc_tacts *acts)
     return 1;
   }
   
+  acts->pten = xf->pm.pten;
   bpf_map_update_elem(&fc_v4_map, key, acts, BPF_ANY);
   return 0;
 }

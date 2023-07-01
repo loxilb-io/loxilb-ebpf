@@ -119,6 +119,7 @@ dp_do_fcv4_lkup(void *ctx, struct xfi *xf)
 
   xf->pm.phit |= LLB_DP_FC_HIT;
   xf->pm.zone = acts->zone;
+  xf->pm.pten = acts->pten;
 
 #ifdef HAVE_DP_EXTFC
   if (acts->fcta[DP_SET_RM_VXLAN].ca.act_type == DP_SET_RM_VXLAN) {
@@ -233,6 +234,7 @@ dp_ing_fc_main(void *ctx, struct xfi *xf)
 #ifdef HAVE_DP_EGR_HOOK
         DP_LLB_MRK_INGP(ctx);
 #endif
+        TRACER_CALL(ctx, xf);
         return bpf_redirect(oif, 0);         
       }
     }

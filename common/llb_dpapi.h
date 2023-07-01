@@ -337,7 +337,8 @@ struct dp_fc_tacts {
   struct dp_cmn_act ca;
   __u64 its;
   __u32 zone;
-  __u32 pad;
+  __u16 pad;
+  __u16 pten;
   struct dp_fc_tact fcta[LLB_FCV4_MAP_ACTS];
 };
 
@@ -402,7 +403,11 @@ struct dp_intf_tact_set_ifi {
   __u16 mirr;
   __u16 polid;
   __u8  pprop;
-  __u8  r[5];
+#define DP_PTEN_ALL   2
+#define DP_PTEN_TRAP  1
+#define DP_PTEN_DIS   0
+  __u8  pten;
+  __u8  r[4];
 };
 
 struct dp_intf_tact {
@@ -749,12 +754,13 @@ struct dp_ct_ctrtact {
 
 struct ll_dp_pmdi {
   __u32 ifindex;
-  __u16 xdp_inport;
-  __u8  table_id;
-  __u8  rcode;
-  __u16 pkt_len;
-  __u16 xdp_oport;
-  __u8  pad[4];   /* Align to 64-bit boundary */
+  __u16 dp_inport;
+  __u16 dp_oport;
+  __u32 rcode;
+  __u16 table_id;
+  __u16 phit ;
+  __u32 pkt_len;
+  __u32 pad;
   uint8_t data[];
 }; 
 

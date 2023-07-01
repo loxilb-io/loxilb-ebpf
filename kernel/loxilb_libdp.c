@@ -26,6 +26,7 @@
 
 #include <net/if.h>
 #include <arpa/inet.h>
+#include <linux/unistd.h>
 #include <linux/if_ether.h>
 #include <linux/if_link.h>
 #include <linux/if_tun.h>
@@ -86,6 +87,8 @@ typedef struct llb_dp_struct
   pthread_t mon_thr;
   int mgmt_ch_fd;
   int have_mtrace;
+  int have_ptrace;
+  int have_loader;
   int nodenum;
   llb_dp_map_t maps[LL_DP_MAX_MAP];
   llb_dp_link_t links[LLB_INTERFACES];
@@ -148,29 +151,171 @@ libbpf_print_fn(enum libbpf_print_level level,
 }
 
 static void
-llb_handle_pkt_event(void *ctx,
-                    int cpu,
-                    void *data,
-                    unsigned int data_sz)
+llb_decode_pmdata(char *buf, struct ll_dp_pmdi *pmd)
+{
+  int n = 0;
+  if (pmd->phit) {
+    n += sprintf(buf + n, "phit:");
+    if (pmd->phit &  LLB_DP_FC_HIT) {
+      n += sprintf(buf + n, "fc,");
+    }
+    if (pmd->phit &  LLB_DP_IF_HIT) {
+      n += sprintf(buf + n, "if,");
+    }
+    if (pmd->phit &  LLB_DP_TMAC_HIT) {
+      n += sprintf(buf + n, "tmac,");
+    }
+    if (pmd->phit &  LLB_DP_CTM_HIT) {
+      n += sprintf(buf + n, "ctm,");
+    }
+    if (pmd->phit &  LLB_DP_RT_HIT) {
+      n += sprintf(buf + n, "rt,");
+    }
+    if (pmd->phit &  LLB_DP_SESS_HIT) {
+      n += sprintf(buf + n, "ses,");
+    }
+        if (pmd->phit &  LLB_DP_FW_HIT) {
+      n += sprintf(buf + n, "fw,");
+    }
+    if (pmd->phit &  LLB_DP_CTSI_HIT) {
+      n += sprintf(buf + n, "cti,");
+    }
+    if (pmd->phit &  LLB_DP_CTSO_HIT) {
+      n += sprintf(buf + n, "cto,");
+    }
+    if (pmd->phit &  LLB_DP_NAT_HIT) {
+      n += sprintf(buf + n, "nat,");
+    }
+    if (pmd->phit &  LLB_DP_CSUM_HIT) {
+      n += sprintf(buf + n, "csum,");
+    }
+    if (pmd->phit &  LLB_DP_UNPS_HIT) {
+      n += sprintf(buf + n, "unps,");
+    }
+    if (pmd->phit &  LLB_DP_NEIGH_HIT) {
+      n += sprintf(buf + n, "neigh,");
+    }
+    if (pmd->phit &  LLB_DP_DMAC_HIT) {
+      n += sprintf(buf + n, "dmh,");
+    }
+    if (pmd->phit &  LLB_DP_SMAC_HIT) {
+      n += sprintf(buf + n, "smh,");
+    }
+    if (pmd->phit &  LLB_DP_RES_HIT) {
+      n += sprintf(buf + n, "res,");
+    }
+    n += sprintf(buf + n, "** ");
+  }
+
+  if (pmd->rcode) {
+     n += sprintf(buf + n, "rcode:");
+    if (pmd->rcode & LLB_PIPE_RC_PARSER) {
+      n += sprintf(buf + n, "parser,");
+    }
+    if (pmd->rcode & LLB_PIPE_RC_ACL_TRAP) {
+      n += sprintf(buf + n, "acl-trap,");
+    }
+    if (pmd->rcode & LLB_PIPE_RC_RT_TRAP) {
+      n += sprintf(buf + n, "rt-trap,");
+    }
+    if (pmd->rcode & LLB_PIPE_RC_TUN_DECAP) {
+      n += sprintf(buf + n, "tun-decap,");
+    }
+    if (pmd->rcode & LLB_PIPE_RC_TUN_DECAP) {
+      n += sprintf(buf + n, "tun-decap,");
+    }
+    if (pmd->rcode & LLB_PIPE_RC_FW_RDR) {
+      n += sprintf(buf + n, "fw-rdr,");
+    }
+    if (pmd->rcode & LLB_PIPE_RC_FW_DRP) {
+      n += sprintf(buf + n, "fw-drp,");
+    }
+    if (pmd->rcode & LLB_PIPE_RC_UNPS_DRP) {
+      n += sprintf(buf + n, "unps-drp,");
+    }
+    if (pmd->rcode & LLB_PIPE_RC_CSUM_DRP) {
+      n += sprintf(buf + n, "csum-drp,");
+    }
+    if (pmd->rcode & LLB_PIPE_RC_UNX_DRP) {
+      n += sprintf(buf + n, "unx-drp,");
+    }
+    if (pmd->rcode & LLB_PIPE_RC_FCTO) {
+      n += sprintf(buf + n, "fc-to,");
+    }
+    if (pmd->rcode & LLB_PIPE_RC_FCBP) {
+      n += sprintf(buf + n, "fc-break,");
+    }
+    if (pmd->rcode & LLB_PIPE_RC_PLERR) {
+      n += sprintf(buf + n, "plen-err,");
+    }
+    if (pmd->rcode & LLB_PIPE_RC_PROTO_ERR) {
+      n += sprintf(buf + n, "proto-err,");
+    }
+    if (pmd->rcode & LLB_PIPE_RC_PLCT_ERR) {
+      n += sprintf(buf + n, "ct-plen-err,");
+    }
+    if (pmd->rcode & LLB_PIPE_RC_ACT_DROP) {
+      n += sprintf(buf + n, "adrop,");
+    }
+    if (pmd->rcode & LLB_PIPE_RC_ACT_UNK) {
+      n += sprintf(buf + n, "aunk,");
+    }
+    if (pmd->rcode & LLB_PIPE_RC_TCALL_ERR) {
+      n += sprintf(buf + n, "tcall-err,");
+    }
+    if (pmd->rcode & LLB_PIPE_RC_ACT_TRAP) {
+      n += sprintf(buf + n, "atrap,");
+    }
+    if (pmd->rcode & LLB_PIPE_RC_PLRT_ERR) {
+      n += sprintf(buf + n, "rt-plen-err,");
+    }
+    if (pmd->rcode & LLB_PIPE_RC_PLCS_ERR) {
+      n += sprintf(buf + n, "csum-plen-err,");
+    }
+    if (pmd->rcode & LLB_PIPE_RC_BCMC) {
+      n += sprintf(buf + n, "bcmc,");
+    }
+    if (pmd->rcode & LLB_PIPE_RC_POL_DRP) {
+      n += sprintf(buf + n, "policer-drop,");
+    }
+    if (pmd->rcode & LLB_PIPE_RC_NOSMAC) {
+      n += sprintf(buf + n, "smac-excp,");
+    }
+    if (pmd->rcode & LLB_PIPE_RC_NODMAC) {
+      n += sprintf(buf + n, "dmac-excp,");
+    }
+  }
+}
+
+static void
+llb_handle_pkt_tracer_event(void *ctx,
+             int cpu,
+             void *data,
+             unsigned int data_sz)
 {
   struct ll_dp_pmdi *pmd = data;
   struct tm *tm;
   char ts[32];
+  char ifname[IFNAMSIZ];
+  char *pif;
+  char pmdecode[1024];
   time_t t;
 
   time(&t);
   tm = localtime(&t);
   strftime(ts, sizeof(ts), "%H:%M:%S", tm);
+  llb_decode_pmdata(pmdecode, pmd);
 
-  printf("%-8s %-5s %-7d %-16d %-3d %-16d %-8d\n", ts, "PKT", 
-         pmd->ifindex, pmd->xdp_inport, pmd->table_id,
-         pmd->rcode, pmd->pkt_len);
+  pif = if_indextoname(pmd->ifindex, ifname);
 
-  ll_pretty_hex(pmd->data, pmd->pkt_len);
+  printf("%-8s %-4s ifi:%-4d(%s) iport:%-3d oport:%-3d tbl:%-2d %s\n", ts, "PKT", 
+       pmd->ifindex, pif?:"", pmd->dp_inport, pmd->dp_oport, pmd->table_id, pmdecode);
+
+  ll_pretty_hex(pmd->data, pmd->pkt_len > 64 ? 64: pmd->pkt_len);
 }
 
 static void *
-llb_pkt_proc_main(void *arg)
+llb_trace_proc_main(void *arg)
 {
   struct perf_buffer *pb = arg;
 
@@ -182,8 +327,46 @@ llb_pkt_proc_main(void *arg)
   return NULL;
 }
 
-static int
-llb_setup_pkt_ring(struct bpf_object *bpf_obj __attribute__((unused)))
+int
+llb_packet_trace_en(int en)
+{
+  void *key = NULL;
+  int ifm_fd = xh->maps[LL_DP_INTF_MAP].map_fd;
+  struct intf_key nkey;
+  struct dp_intf_tact l2a;
+  void *next_key = &nkey;
+
+  if (en < 0 || en > 2) {
+    return -1;
+  }
+
+  while (bpf_map_get_next_key(ifm_fd, &key, &next_key) == 0) {
+
+    if (bpf_map_lookup_elem(ifm_fd, &next_key, &l2a) != 0) {
+      goto next;
+    }
+
+    switch (en) {
+    case 2:
+      l2a.set_ifi.pten = 2;
+      break;
+    case 1:
+      l2a.set_ifi.pten = 1;
+      break;
+    case 0:
+      l2a.set_ifi.pten = 0;
+      break;
+    }
+
+    bpf_map_update_elem(ifm_fd, &next_key, &l2a, BPF_ANY);
+next:
+    key = next_key;
+  }
+  return 0;
+}
+
+int
+llb_setup_pkt_ring(void)
 {
   struct perf_buffer *pb = NULL;
   struct perf_buffer_opts pb_opts = { 0 };
@@ -192,7 +375,7 @@ llb_setup_pkt_ring(struct bpf_object *bpf_obj __attribute__((unused)))
   if (pkt_fd < 0) return -1;
 
   /* Set up ring buffer polling */
-  pb_opts.sample_cb = llb_handle_pkt_event;
+  pb_opts.sample_cb = llb_handle_pkt_tracer_event;
 
   pb = perf_buffer__new(pkt_fd, 8 /* 32KB per CPU */, &pb_opts);
   if (libbpf_get_error(pb)) {
@@ -200,7 +383,7 @@ llb_setup_pkt_ring(struct bpf_object *bpf_obj __attribute__((unused)))
     goto cleanup;
   }
 
-  pthread_create(&xh->pkt_thr, NULL, llb_pkt_proc_main, pb);
+  pthread_create(&xh->pkt_thr, NULL, llb_trace_proc_main, pb);
 
   return 0;
 
@@ -389,13 +572,24 @@ llb_objmap2fd(struct bpf_object *bpf_obj,
 {
   struct bpf_map *map;
   int map_fd = -1;
+  char path[512];
 
-  map = bpf_object__find_map_by_name(bpf_obj, mapname);
-  if (!map) {
-    goto out;
+  if (bpf_obj == NULL) {
+    union bpf_attr attr;
+
+    snprintf(path, 512, "%s/%s", xh->ll_dp_pdir, mapname);
+    memset(&attr, 0, sizeof(attr));
+    attr.pathname = (__u64) (unsigned long)&path[0];
+    map_fd = syscall(__NR_bpf, BPF_OBJ_GET, &attr, sizeof(attr));
+
+  } else {
+    map = bpf_object__find_map_by_name(bpf_obj, mapname);
+    if (!map) {
+      goto out;
+    }
+
+    map_fd = bpf_map__fd(map);
   }
-
-  map_fd = bpf_map__fd(map);
   log_trace("%s: %d\n", mapname, map_fd);
 out:
   return map_fd;
@@ -482,6 +676,9 @@ llb_dflt_sec_map2fd_all(struct bpf_object *bpf_obj)
       continue;
     }
     xh->maps[i].map_fd = fd;
+
+    if (!xh->have_loader) continue;
+
     if (i == LL_DP_PGM_MAP) {
       bpf_object__for_each_program(prog, bpf_obj) {
         bfd = bpf_program__fd(prog);
@@ -525,6 +722,10 @@ llb_dflt_sec_map2fd_all(struct bpf_object *bpf_obj)
     }
   }
 
+  if (!xh->have_loader) {
+    return 0;
+  }
+
   /* Clean previous pins */
   if (bpf_object__unpin_maps(bpf_obj, xh->ll_dp_pdir) != 0) {
     log_error("%s: Unpin maps failed", xh->ll_dp_pdir);
@@ -537,9 +738,13 @@ llb_dflt_sec_map2fd_all(struct bpf_object *bpf_obj)
     //assert(0);
   }
 
-  llb_setup_pkt_ring(bpf_obj);
-
   return 0;
+}
+
+int
+llb_dp_maps_attach(llb_dp_struct_t *xh)
+{
+  return llb_dflt_sec_map2fd_all(NULL);
 }
 
 static int
@@ -579,7 +784,7 @@ llb_set_dev_up(char *ifname, bool up)
 }
 
 static int
-llb_lower_init(llb_dp_struct_t *xh)
+llb_loader_init(llb_dp_struct_t *xh)
 {
   int fd;
   int ret;
@@ -637,7 +842,7 @@ llb_lower_init(llb_dp_struct_t *xh)
 static void
 llb_xh_init(llb_dp_struct_t *xh)
 {
-  xh->ll_dp_fname = LLB_FP_IMG_DEFAULT;
+ xh->ll_dp_fname = LLB_FP_IMG_DEFAULT;
   xh->ll_tc_fname = LLB_FP_IMG_BPF;
   xh->ll_dp_dfl_sec = XDP_LL_SEC_DEFAULT;
   xh->ll_dp_pdir  = LLB_DB_MAP_PDIR;
@@ -820,8 +1025,12 @@ llb_xh_init(llb_dp_struct_t *xh)
   xh->ufw6 = pdi_map_alloc("ufw6", NULL, NULL);
   assert(xh->ufw6);
 
-  if (llb_lower_init(xh) != 0) {
-    assert(0);
+  if (xh->have_loader) {
+    if (llb_loader_init(xh) != 0) {
+      assert(0);
+    }
+  } else {
+    llb_dp_maps_attach(xh);
   }
 
   if (xh->have_mtrace) {
@@ -1030,7 +1239,6 @@ llb_map_loop_and_delete(int tid, dp_map_walker_t cb, dp_map_ita_t *it)
   if (tid < 0 || tid >= LL_DP_MAX_MAP)
     return;
 
-
   t = &xh->maps[tid];
 
   while (bpf_map_get_next_key(t->map_fd, key, it->next_key) == 0) {
@@ -1082,7 +1290,7 @@ llb_clear_map_stats(int tid, __u32 idx)
     }
 
     if (idx >= 0) {
-        llb_clear_stats_pcpu_arr(t->map_fd, idx);
+      llb_clear_stats_pcpu_arr(t->map_fd, idx);
     }
   }
 }
@@ -2228,7 +2436,9 @@ loxilb_main(struct ebpfcfg *cfg)
     }
     log_add_fp(fp, cfg->loglevel);
 
+    xh->have_loader = !cfg->no_loader;
     xh->have_mtrace = cfg->have_mtrace;
+    xh->have_ptrace = cfg->have_ptrace;
     xh->nodenum = cfg->nodenum;
     xh->logfp = fp;
   }

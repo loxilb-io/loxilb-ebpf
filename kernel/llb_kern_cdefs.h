@@ -696,6 +696,14 @@ dp_ipv4_new_csum(struct iphdr *iph)
 
 #endif
 
+#define TRACER_CALL(ctx, xf)             \
+  if (xf->pm.pten) {                     \
+    if (xf->pm.pten == DP_PTEN_ALL ||    \
+       ((xf->pm.pten == DP_PTEN_TRAP) && \
+        (xf->pm.pipe_act & LLB_PIPE_EXCP_MASK))) { \
+      dp_trace_packet(ctx, xf);          \
+    }                                    \
+  }
 
 #define RETURN_TO_MP_OUT()                       \
 do {                                             \
@@ -1776,6 +1784,7 @@ dp_pktbuf_expand_tail(void *md, __u32 len)
 #define TCALL_CRC1()
 #define TCALL_CRC2()
 #define RETURN_TO_MP_OUT()
+#define TRACER_CALL(ctx, xf)
 
 static int __always_inline
 dp_pkt_is_l2mcbc(struct xfi *xf, void *md)
