@@ -279,7 +279,7 @@ dp_ct_tcp_sm(void *ctx, struct xfi *xf,
   uint32_t nstate = 0;
 
   if (t + 1 > dend) {
-    LLBS_PPLN_DROP(xf);
+    LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLCT_ERR);
     return -1;
   }
 
@@ -574,7 +574,7 @@ dp_ct_icmp6_sm(void *ctx, struct xfi *xf,
   uint16_t seq;
 
   if (i + 1 > dend) {
-    LLBS_PPLN_DROP(xf);
+    LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLCT_ERR);
     return -1;
   }
 
@@ -671,7 +671,7 @@ dp_ct_icmp_sm(void *ctx, struct xfi *xf,
   uint16_t seq;
 
   if (i + 1 > dend) {
-    LLBS_PPLN_DROP(xf);
+    LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLCT_ERR);
     return -1;
   }
 
@@ -780,14 +780,14 @@ dp_ct_sctp_sm(void *ctx, struct xfi *xf,
   int i = 0;
 
   if (s + 1 > dend) {
-    LLBS_PPLN_DROP(xf);
+    LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLCT_ERR);
     return -1;
   }
 
   c = DP_TC_PTR(DP_ADD_PTR(s, sizeof(*s)));
   
   if (c + 1 > dend) {
-    LLBS_PPLN_DROP(xf);
+    LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLCT_ERR);
     return -1;
   }
 
@@ -893,7 +893,7 @@ add_nph0:
 
       bpf_spin_unlock(&atdat->lock);
       if (dp_pktbuf_expand_tail(ctx, grow+sz) < 0) {
-        LLBS_PPLN_DROP(xf);
+        LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLCT_ERR);
         bpf_spin_lock(&atdat->lock);
         break;
       }
@@ -1044,7 +1044,7 @@ add_nph1:
 
       bpf_spin_unlock(&atdat->lock);
       if (dp_pktbuf_expand_tail(ctx, grow+sz) < 0) {
-        LLBS_PPLN_DROP(xf);
+        LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLCT_ERR);
         bpf_spin_lock(&atdat->lock);
         break;
       }
@@ -1481,9 +1481,11 @@ dp_ct_in(void *ctx, struct xfi *xf)
     axtdat->lts = atdat->lts;
     if (atdat->ctd.dir == CT_DIR_IN) {
       LL_DBG_PRINTK("[CTRK] in-dir");
+      xf->pm.phit |= LLB_DP_CTSI_HIT;
       smr = dp_ct_sm(ctx, xf, atdat, axtdat, CT_DIR_IN);
     } else {
       LL_DBG_PRINTK("[CTRK] out-dir");
+      xf->pm.phit |= LLB_DP_CTSO_HIT;
       smr = dp_ct_sm(ctx, xf, axtdat, atdat, CT_DIR_OUT);
     }
 

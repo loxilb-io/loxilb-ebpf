@@ -132,7 +132,7 @@ out:
   if (pla->pol.drop_prio < xf->qm.ocol) { 
     ret = 1;
     pla->pol.ps.drop_packets += 1;
-    LLBS_PPLN_DROP(xf);
+    LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_POL_DRP);
   } else {
     pla->pol.ps.pass_packets += 1;
   }

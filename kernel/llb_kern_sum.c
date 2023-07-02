@@ -5,7 +5,7 @@
  * SPDX-License-Identifier: (GPL-2.0 OR BSD-2-Clause)
  */
 
-#define DP_MAX_LOOPS_PER_TCALL (2000)
+#define DP_MAX_LOOPS_PER_TCALL (2200)
 
 static __u32 __always_inline
 get_crc32c_map(__u32 off)
@@ -33,6 +33,8 @@ dp_sctp_csum(void *ctx, struct xfi *xf)
   int loop = 0;
   __u32 crc = 0xffffffff;
 
+  xf->pm.phit |= LLB_DP_CSUM_HIT;
+
   tcall = ~xf->km.skey[0]; // Next tail-call
   off = *(__u16 *)&xf->km.skey[2];
   rlen = *(__u16 *)&xf->km.skey[4];
@@ -45,6 +47,7 @@ dp_sctp_csum(void *ctx, struct xfi *xf)
       if (rlen > 0) {
         ret = dp_pktbuf_read(ctx, off, &pb, sizeof(pb));
         if (ret < 0) {
+          xf->pm.rcode |= LLB_PIPE_RC_PLCS_ERR;
           goto drop;
         }
         idx =(crc ^ pb) & 0xff;
@@ -66,7 +69,7 @@ dp_sctp_csum(void *ctx, struct xfi *xf)
         __be32 csum;
 
         if (sctp + 1 > dend) {
-          LLBS_PPLN_DROP(xf);
+          LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLCS_ERR);
           return DP_DROP;
         }
         //csum = bpf_htonl(crc ^ 0xffffffff);
@@ -92,6 +95,7 @@ dp_sctp_csum(void *ctx, struct xfi *xf)
   }
 
   bpf_printk("Too many tcalls");
+  xf->pm.rcode |= LLB_PIPE_RC_TCALL_ERR;
  
 drop:
   /* Something went wrong here */

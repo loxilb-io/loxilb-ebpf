@@ -715,7 +715,7 @@ dp_parse_udp(struct parser *p,
   xf->l34m.dest = udp->dest;
 
   if (dp_pkt_is_l2mcbc(xf, md) == 1) {
-    LLBS_PPLN_TRAP(xf);
+    LLBS_PPLN_TRAPC(xf, LLB_PIPE_RC_BCMC);
   }
 
   return dp_parse_outer_udp(p, md, udp + 1, xf);
@@ -909,7 +909,7 @@ dp_parse_d0(void *md,
   }
 
   if (dp_pkt_is_l2mcbc(xf, md) == 1) {
-    LLBS_PPLN_PASS(xf);
+    LLBS_PPLN_PASSC(xf, LLB_PIPE_RC_BCMC);
   }
 
   return 0;
@@ -917,12 +917,12 @@ dp_parse_d0(void *md,
 handle_excp:
   if (ret > DP_PRET_OK) {
     if (ret == DP_PRET_PASS) {
-      LLBS_PPLN_PASS(xf);
+      LLBS_PPLN_PASSC(xf, LLB_PIPE_RC_PARSER);
     } else {
       LLBS_PPLN_TRAPC(xf, LLB_PIPE_RC_PARSER);
     }
   } else if (ret < DP_PRET_OK) {
-    LLBS_PPLN_DROP(xf);
+    LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PARSER);
   }
   return ret;
 }
@@ -930,6 +930,8 @@ handle_excp:
 static int __always_inline
 dp_unparse_packet_always_slow(void *ctx,  struct xfi *xf)
 {
+  xf->pm.phit |= LLB_DP_UNPS_HIT;
+
   if (xf->pm.nf & LLB_NAT_SRC) {
     LL_DBG_PRINTK("[DEPR] LL_SNAT 0x%lx:%x\n", xf->nm.nxip4, xf->nm.nxport);
     /* If packet is v6 */

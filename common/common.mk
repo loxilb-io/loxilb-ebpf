@@ -94,6 +94,8 @@ clean:
 	$(MAKE) -C $(LIBBPF_DIR) clean
 	$(MAKE) -C $(COMMON_DIR) clean
 	rm -f $(USER_TARGETS) $(XDP_OBJ) $(USER_OBJ)
+	rm -f loxilb_dp_debug 
+	rm -f $@
 	rm -f *.ll
 	rm -f *~
 
@@ -129,7 +131,7 @@ $(COMMON_OBJS): %.o: %.h
 	make -C $(COMMON_DIR)
 
 $(USER_TARGETS): %: %.c  $(OBJECT_LIBBPF) Makefile $(COMMON_MK) $(COMMON_OBJS) $(KERN_USER_H) $(EXTRA_DEPS) %.skel.h
-	$(CC) -Wall $(CFLAGS) $(LDFLAGS) -o $@ loxilb_libdp_main.c $(COMMON_OBJS) \
+	$(CC) -Wall $(CFLAGS) $(LDFLAGS) -o loxilb_dp_debug loxilb_dp_debug.c $(COMMON_OBJS) \
 	 $< $(LIBS)
 
 $(USER_TARGETS_LIB): %: $(USER_OBJ) $(COMMON_OBJS)

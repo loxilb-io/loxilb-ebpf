@@ -34,27 +34,28 @@ dp_do_if_lkup(void *ctx, struct xfi *xf)
 
   l2a = bpf_map_lookup_elem(&intf_map, &key);
   if (!l2a) {
-    //LLBS_PPLN_DROP(xf);
     LL_DBG_PRINTK("[INTF] not found");
-    LLBS_PPLN_PASS(xf);
+    LLBS_PPLN_PASSC(xf, LLB_PIPE_RC_UNX_DRP);
     return -1;
   }
 
+  xf->pm.phit |= LLB_DP_IF_HIT;
   LL_DBG_PRINTK("[INTF] L2 action %d\n", l2a->ca.act_type);
 
   if (l2a->ca.act_type == DP_SET_DROP) {
-    LLBS_PPLN_DROP(xf);
+    LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_ACT_DROP);
   } else if (l2a->ca.act_type == DP_SET_TOCP) {
-    LLBS_PPLN_TRAP(xf);
+    LLBS_PPLN_TRAPC(xf, LLB_PIPE_RC_ACT_TRAP);
   } else if (l2a->ca.act_type == DP_SET_IFI) {
     xf->pm.iport = l2a->set_ifi.xdp_ifidx;
     xf->pm.zone  = l2a->set_ifi.zone;
     xf->pm.bd    = l2a->set_ifi.bd;
     xf->pm.mirr  = l2a->set_ifi.mirr;
+    xf->pm.pten  = l2a->set_ifi.pten;
     xf->pm.pprop = l2a->set_ifi.pprop;
     xf->qm.ipolid = l2a->set_ifi.polid;
   } else {
-    LLBS_PPLN_DROP(xf);
+    LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_ACT_UNK);
   }
 
   return 0;
@@ -92,7 +93,7 @@ dp_do_mirr_lkup(void *ctx, struct xfi *xf)
 
   ma = bpf_map_lookup_elem(&mirr_map, &mkey);
   if (!ma) {
-    LLBS_PPLN_DROP(xf);
+    LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_UNX_DRP);
     return -1;
   }
 
@@ -107,7 +108,7 @@ dp_do_mirr_lkup(void *ctx, struct xfi *xf)
   }
   /* VXLAN to be done */
 
-  LLBS_PPLN_DROP(xf);
+  LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_ACT_UNK);
   return -1;
 }
 
@@ -127,9 +128,8 @@ dp_do_mirr_lkup(void *ctx, struct xfi *xf)
 }
 #endif
 
-#ifdef LLB_TRAP_PERF_RING
 static int __always_inline
-dp_trap_packet(void *ctx,  struct xfi *xf)
+dp_trace_packet(void *ctx,  struct xfi *xf)
 {
   struct ll_dp_pmdi *pmd;
   int z = 0;
@@ -141,12 +141,13 @@ dp_trap_packet(void *ctx,  struct xfi *xf)
 
   LL_DBG_PRINTK("[TRAP] START--\n");
 
-  pmd->ifindex = ctx->ingress_ifindex;
-  pmd->xdp_inport = xf->pm.iport;
-  pmd->xdp_oport = xf->pm.oport;
-  pmd->pm.table_id = xf->table_id;
+  pmd->ifindex = DP_IFI(ctx);
+  pmd->phit = xf->pm.phit;
+  pmd->dp_inport = xf->pm.iport;
+  pmd->dp_oport = xf->pm.oport;
+  pmd->table_id = xf->pm.table_id;
   pmd->rcode = xf->pm.rcode;
-  pmd->pkt_len = xf->pm.py_bytes;
+  pmd->pkt_len = DP_GET_LEN(ctx);
 
   flags |= (__u64)pmd->pkt_len << 32;
   
@@ -156,7 +157,7 @@ dp_trap_packet(void *ctx,  struct xfi *xf)
   }
   return DP_DROP;
 }
-#else
+
 static int __always_inline
 dp_trap_packet(void *ctx,  struct xfi *xf, void *fa_)
 {
@@ -224,7 +225,6 @@ dp_trap_packet(void *ctx,  struct xfi *xf, void *fa_)
   /* TODO - Apply stats */
   return DP_REDIRECT;
 }
-#endif
 
 static int __always_inline
 dp_redir_packet(void *ctx,  struct xfi *xf)
@@ -268,6 +268,8 @@ dp_pipe_check_res(void *ctx, struct xfi *xf, void *fa)
 #ifdef HAVE_DP_EGR_HOOK
   DP_LLB_MRK_INGP(ctx);
 #endif
+
+  TRACER_CALL(ctx, xf);
 
   if (xf->pm.pipe_act) {
 
@@ -352,6 +354,7 @@ dp_insert_fcv4(void *ctx, struct xfi *xf, struct dp_fc_tacts *acts)
     return 1;
   }
   
+  acts->pten = xf->pm.pten;
   bpf_map_update_elem(&fc_v4_map, key, acts, BPF_ANY);
   return 0;
 }
@@ -436,7 +439,7 @@ dp_ing_ct_main(void *ctx,  struct xfi *xf)
    * it only means that we need CT processing.
    * In such a case, we skip nat lookup
    */
-  if ((xf->pm.phit & LLB_DP_ACL_HIT) == 0) {
+  if ((xf->pm.phit & LLB_DP_CTM_HIT) == 0) {
 
     if (xf->pm.fw_lid < LLB_FW4_MAP_ENTRIES) {
       bpf_tail_call(ctx, &pgm_tbl, LLB_DP_FW_PGM_ID);
@@ -450,7 +453,7 @@ dp_ing_ct_main(void *ctx,  struct xfi *xf)
     dp_do_nat(ctx, xf);
   }
 
-  LL_DBG_PRINTK("[CTRK] start\n");
+  LL_DBG_PRINTK("[CTRK] start");
 
   val = dp_ct_in(ctx, xf);
   if (val < 0) {

@@ -16,13 +16,22 @@
 
 #define LLB_INGP_MARK         0xf01dab1e
 
-#define LLBS_PPLN_DROP(F)     (F->pm.pipe_act |= LLB_PIPE_DROP);
-#define LLBS_PPLN_TRAP(F)     (F->pm.pipe_act |= LLB_PIPE_TRAP);
 #define LLBS_PPLN_RDR(F)      (F->pm.pipe_act |= LLB_PIPE_RDR);
 #define LLBS_PPLN_RDR_PRIO(F) (F->pm.pipe_act |= LLB_PIPE_RDR_PRIO);
 #define LLBS_PPLN_REWIRE(F)   (F->pm.pipe_act |= LLB_PIPE_REWIRE);
-#define LLBS_PPLN_PASS(F)     (F->pm.pipe_act |= LLB_PIPE_PASS);
 #define LLBS_PPLN_SETCT(F)    (F->pm.pipe_act |= LLB_PIPE_SET_CT);
+
+#define LLBS_PPLN_PASSC(F, C)         \
+do {                                  \
+  F->pm.pipe_act |= LLB_PIPE_PASS;    \
+  F->pm.rcode |= C;                   \
+} while (0)
+
+#define LLBS_PPLN_DROPC(F, C)         \
+do {                                  \
+  F->pm.pipe_act |= LLB_PIPE_DROP;    \
+  F->pm.rcode |= C;                   \
+} while (0)
 
 #define LLBS_PPLN_TRAPC(F,C)          \
 do {                                  \
@@ -32,7 +41,7 @@ do {                                  \
 
 #define LL_PIPE_FC_CAP(x)                     \
   ((x)->pm.pipe_act == LLB_PIPE_RDR &&        \
-  (x)->pm.phit & LLB_DP_ACL_HIT &&            \
+  (x)->pm.phit & LLB_DP_CTM_HIT &&            \
   !((x)->pm.phit & LLB_DP_SESS_HIT) &&        \
   ((x)->tm.tun_type == 0) &&                  \
   (x)->l2m.dl_type == bpf_htons(ETH_P_IP) &&  \
@@ -55,7 +64,8 @@ do {                                  \
 #define LL_FC_PRINTK(fmt, ...)  do { } while (0) 
 #endif
 
-#define LLB_PIPE_RDR_MASK     (LLB_PIPE_RDR | LLB_PIPE_RDR_PRIO)
+#define LLB_PIPE_RDR_MASK     (LLB_PIPE_RDR | LLB_PIPE_RDR_PRIO | LLB_PIPE_TRAP)
+#define LLB_PIPE_EXCP_MASK    (LLB_PIPE_TRAP | LLB_PIPE_PASS | LLB_PIPE_DROP)
 
 struct dp_pi_mdi {
     /* Pipeline Metadata */
@@ -69,24 +79,55 @@ struct dp_pi_mdi {
 #define LLB_PIPE_RDR_PRIO     0x20
 #define LLB_PIPE_SET_CT       0x40      
     __u8             pipe_act;
-#define LLB_PIPE_RC_PARSER    0x1
-#define LLB_PIPE_RC_ACL_MISS  0x2
-#define LLB_PIPE_RC_TUN_DECAP 0x4 
-#define LLB_PIPE_RC_FW_RDR    0x8 
-    __u8             rcode;
-    __u8             tc;
     __u8             l3_off;
-    __u16            nh_num;
-    __u16            qos_id;
 #define LLB_DP_TMAC_HIT       0x1
-#define LLB_DP_ACL_HIT        0x2
-#define LLB_XDP_PDR_HIT       0x4
-#define LLB_XDP_RT_HIT        0x8
+#define LLB_DP_CTM_HIT        0x2
+#define LLB_DP_IF_HIT         0x4
+#define LLB_DP_RT_HIT         0x8
 #define LLB_DP_FC_HIT         0x10
 #define LLB_DP_SESS_HIT       0x20
 #define LLB_DP_RES_HIT        0x40
 #define LLB_DP_FW_HIT         0x80
-    __u8             phit;
+#define LLB_DP_CTSI_HIT       0x100
+#define LLB_DP_CTSO_HIT       0x200
+#define LLB_DP_NAT_HIT        0x400
+#define LLB_DP_CSUM_HIT       0x800
+#define LLB_DP_UNPS_HIT       0x1000
+#define LLB_DP_NEIGH_HIT      0x2000
+#define LLB_DP_SMAC_HIT       0x4000
+#define LLB_DP_DMAC_HIT       0x8000
+    __u16            phit;
+
+    __u16            nh_num;
+    __u16            qos_id;
+#define LLB_PIPE_RC_PARSER    0x1
+#define LLB_PIPE_RC_ACL_TRAP  0x2
+#define LLB_PIPE_RC_TUN_DECAP 0x4
+#define LLB_PIPE_RC_FW_RDR    0x8
+#define LLB_PIPE_RC_FW_DRP    0x10
+#define LLB_PIPE_RC_UNPS_DRP  0x20
+#define LLB_PIPE_RC_UNX_DRP   0x40
+#define LLB_PIPE_RC_MPT_PASS  0x80
+#define LLB_PIPE_RC_FCTO      0x100
+#define LLB_PIPE_RC_FCBP      0x200
+#define LLB_PIPE_RC_PLERR     0x400
+#define LLB_PIPE_RC_PROTO_ERR 0x800
+#define LLB_PIPE_RC_PLCT_ERR  0x1000
+#define LLB_PIPE_RC_ACT_DROP  0x2000
+#define LLB_PIPE_RC_ACT_UNK   0x4000
+#define LLB_PIPE_RC_TCALL_ERR 0x8000
+#define LLB_PIPE_RC_ACT_TRAP  0x10000
+#define LLB_PIPE_RC_PLRT_ERR  0x20000
+#define LLB_PIPE_RC_PLCS_ERR  0x40000
+#define LLB_PIPE_RC_BCMC      0x80000
+#define LLB_PIPE_RC_POL_DRP   0x100000
+#define LLB_PIPE_RC_NOSMAC    0x200000
+#define LLB_PIPE_RC_NODMAC    0x400000
+#define LLB_PIPE_RC_RT_TRAP   0x800000
+#define LLB_PIPE_RC_CSUM_DRP  0x1000000
+    __u32            rcode;
+
+    __u8             tc;
 #define LLB_DP_PORT_UPP       0x1
     __u8             pprop;
     __u8             lkup_dmac[6];
@@ -118,7 +159,8 @@ struct dp_pi_mdi {
     __u8             itcp_flags;
     __u8             l4fin:2;
     __u8             goct:2;
-    __u8             il4fin:4;
+    __u8             pten:2;
+    __u8             il4fin:2;
     __u16            l3_len;
     __u16            l3_plen;
     __u16            il3_len;

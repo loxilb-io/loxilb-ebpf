@@ -55,6 +55,8 @@ unsigned long long get_os_nsecs(void);
 
 struct ebpfcfg {
   int have_mtrace;
+  int have_ptrace;
+  int no_loader;
   int nodenum;
   int loglevel;
 };

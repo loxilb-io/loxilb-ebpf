@@ -52,6 +52,7 @@ dp_ing_pkt_main(void *md, struct xfi *xf)
 
   if (xf->pm.pipe_act & LLB_PIPE_PASS ||
       xf->pm.pipe_act & LLB_PIPE_TRAP) {
+    xf->pm.rcode |= LLB_PIPE_RC_MPT_PASS;
     return DP_PASS;
   }
 
@@ -197,7 +198,12 @@ int tc_csum_func1(struct __sk_buff *md)
     return DP_DROP;
   }
 
-  return dp_sctp_csum(md, xf);
+  val = dp_sctp_csum(md, xf);
+  if (val == DP_DROP || val == DP_PASS) {
+    xf->pm.rcode |= LLB_PIPE_RC_CSUM_DRP;
+    TRACER_CALL(md, xf);
+  }
+  return val;
 }
 
 SEC("tc_packet_hook5")
@@ -211,7 +217,12 @@ int tc_csum_func2(struct __sk_buff *md)
     return DP_DROP;
   }
 
-  return dp_sctp_csum(md, xf);
+  val = dp_sctp_csum(md, xf);
+  if (val == DP_DROP || val == DP_PASS) {
+    xf->pm.rcode |= LLB_PIPE_RC_CSUM_DRP;
+    TRACER_CALL(md, xf);
+  }
+  return val;
 }
 
 SEC("tc_packet_hook6")
@@ -225,7 +236,12 @@ int tc_slow_unp_func(struct __sk_buff *md)
     return DP_DROP;
   }
 
-  return dp_unparse_packet_always_slow(md, xf);
+  val = dp_unparse_packet_always_slow(md, xf);
+  if (val == DP_DROP) {
+    xf->pm.rcode |= LLB_PIPE_RC_UNPS_DRP;
+    TRACER_CALL(md, xf);
+  }
+  return val;
 }
 
 #endif

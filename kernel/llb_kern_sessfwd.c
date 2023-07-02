@@ -72,6 +72,7 @@ dp_do_sess4_lkup(void *ctx, struct xfi *xf)
   dp_do_map_stats(ctx, xf, LL_DP_SESS4_STATS_MAP, act->ca.cidx);
 
   if (act->ca.act_type == DP_SET_DROP) {
+    xf->pm.rcode |= LLB_PIPE_RC_ACT_DROP;
     goto drop;
   } else if (act->ca.act_type == DP_SET_RM_GTP) {
     dp_pipe_set_rm_gtp_tun(ctx, xf);
@@ -91,6 +92,6 @@ dp_do_sess4_lkup(void *ctx, struct xfi *xf)
   return 0;
 
 drop:
-  LLBS_PPLN_DROP(xf);
+  LLBS_PPLN_DROPC(xf, 0);
   return 0;
 }

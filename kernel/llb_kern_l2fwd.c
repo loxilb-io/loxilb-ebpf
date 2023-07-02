@@ -29,21 +29,22 @@ dp_do_smac_lkup(void *ctx, struct xfi *xf, void *fc)
   sma = bpf_map_lookup_elem(&smac_map, &key);
   if (!sma) {
     /* Default action */
-    LLBS_PPLN_PASS(xf);
+    LLBS_PPLN_PASSC(xf, LLB_PIPE_RC_NOSMAC);
     return 0;
   }
 
+  xf->pm.phit |= LLB_DP_SMAC_HIT;
   LL_DBG_PRINTK("[SMAC] action %d\n", sma->ca.act_type);
 
   if (sma->ca.act_type == DP_SET_DROP) {
-    LLBS_PPLN_DROP(xf);
+    LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_ACT_DROP);
   } else if (sma->ca.act_type == DP_SET_TOCP) {
-    LLBS_PPLN_TRAP(xf);
+    LLBS_PPLN_TRAPC(xf, LLB_PIPE_RC_ACT_TRAP);
   } else if (sma->ca.act_type == DP_SET_NOP) {
     /* Nothing to do */
     return 0;
   } else {
-    LLBS_PPLN_DROP(xf);
+    LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_ACT_UNK);
   }
 
   return 0;
@@ -109,15 +110,17 @@ __dp_do_tmac_lkup(void *ctx, struct xfi *xf,
     return 0;
   }
 
+  xf->pm.phit |= LLB_DP_TMAC_HIT;
   LL_DBG_PRINTK("[TMAC] action %d %d\n", tma->ca.act_type, tma->ca.cidx);
+
   if (tma->ca.cidx != 0) {
     dp_do_map_stats(ctx, xf, LL_DP_TMAC_STATS_MAP, tma->ca.cidx);
   }
 
   if (tma->ca.act_type == DP_SET_DROP) {
-    LLBS_PPLN_DROP(xf);
+    LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_ACT_DROP);
   } else if (tma->ca.act_type == DP_SET_TOCP) {
-    LLBS_PPLN_TRAP(xf);
+    LLBS_PPLN_TRAPC(xf, LLB_PIPE_RC_ACT_TRAP);
   } else if (tma->ca.act_type == DP_SET_RT_TUN_NH) {
 #ifdef HAVE_DP_EXTFC
     struct dp_fc_tact *ta = &fa->fcta[DP_SET_RT_TUN_NH];
@@ -189,17 +192,18 @@ dp_do_dmac_lkup(void *ctx, struct xfi *xf, void *fa_)
   if (!dma) {
     /* No DMAC lookup */
     LL_DBG_PRINTK("[DMAC] not found\n");
-    LLBS_PPLN_PASS(xf);
+    LLBS_PPLN_PASSC(xf, LLB_PIPE_RC_NODMAC);
     return 0;
   }
 
+  xf->pm.phit |= LLB_DP_DMAC_HIT;
   LL_DBG_PRINTK("[DMAC] action %d pipe %d\n",
                  dma->ca.act_type, xf->pm.pipe_act);
 
   if (dma->ca.act_type == DP_SET_DROP) {
-    LLBS_PPLN_DROP(xf);
+    LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_ACT_DROP);
   } else if (dma->ca.act_type == DP_SET_TOCP) {
-    LLBS_PPLN_TRAP(xf);
+    LLBS_PPLN_TRAPC(xf, LLB_PIPE_RC_ACT_TRAP);
   } else if (dma->ca.act_type == DP_SET_RDR_PORT) {
     struct dp_rdr_act *ra = &dma->port_act;
 
@@ -279,18 +283,19 @@ dp_do_nh_lkup(void *ctx, struct xfi *xf, void *fa_)
 
   nha = bpf_map_lookup_elem(&nh_map, &key);
   if (!nha) {
-    /* No NH - Drop */
-    LLBS_PPLN_TRAP(xf)
+    /* No NH - Trap */
+    LLBS_PPLN_TRAPC(xf, LLB_PIPE_RC_ACT_UNK);
     return 0;
   }
 
+  xf->pm.phit |= LLB_DP_NEIGH_HIT;
   LL_DBG_PRINTK("[NHFW] action %d pipe %x\n",
                 nha->ca.act_type, xf->pm.pipe_act);
 
   if (nha->ca.act_type == DP_SET_DROP) {
-    LLBS_PPLN_DROP(xf);
+    LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_ACT_DROP);
   } else if (nha->ca.act_type == DP_SET_TOCP) {
-    LLBS_PPLN_TRAP(xf);
+    LLBS_PPLN_TRAPC(xf, LLB_PIPE_RC_ACT_TRAP);
   } else if (nha->ca.act_type == DP_SET_NEIGH_L2) {
 #ifdef HAVE_DP_FC
     struct dp_fc_tact *ta = &fa->fcta[DP_SET_NEIGH_L2];
@@ -304,8 +309,7 @@ dp_do_nh_lkup(void *ctx, struct xfi *xf, void *fa_)
       nha = bpf_map_lookup_elem(&nh_map, &key);
       if (!nha) {
         /* No NH - Trap */
-        // LLBS_PPLN_DROP(xf); //
-        LLBS_PPLN_TRAP(xf)
+        LLBS_PPLN_TRAPC(xf, LLB_PIPE_RC_ACT_UNK);
         return 0;
       }
     }
