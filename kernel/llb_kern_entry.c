@@ -81,8 +81,10 @@ int  xdp_packet_func(struct xdp_md *ctx)
       xf->l34m.nw_proto == IPPROTO_SCTP) {
       __u32 dcpu;
       __u32 *mcpu;
+      __u32 seed = bpf_get_prandom_u32();
       __u32 hash = (__u32)(xf->l34m.saddr[0]) ^
-                   ((__u32)(xf->l34m.source));
+                   ((__u32)(xf->l34m.source)) ^
+                   seed;
       dcpu = hash % MAX_REAL_CPUS;
       mcpu = bpf_map_lookup_elem(&live_cpu_map, &z);
       if (mcpu == NULL) {
