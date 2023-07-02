@@ -166,7 +166,7 @@ llb_decode_pmdata(char *buf, struct ll_dp_pmdi *pmd)
       n += sprintf(buf + n, "tmac,");
     }
     if (pmd->phit &  LLB_DP_CTM_HIT) {
-      n += sprintf(buf + n, "ctm,");
+      n += sprintf(buf + n, "ct,");
     }
     if (pmd->phit &  LLB_DP_RT_HIT) {
       n += sprintf(buf + n, "rt,");
@@ -193,13 +193,13 @@ llb_decode_pmdata(char *buf, struct ll_dp_pmdi *pmd)
       n += sprintf(buf + n, "unps,");
     }
     if (pmd->phit &  LLB_DP_NEIGH_HIT) {
-      n += sprintf(buf + n, "neigh,");
+      n += sprintf(buf + n, "nh,");
     }
     if (pmd->phit &  LLB_DP_DMAC_HIT) {
-      n += sprintf(buf + n, "dmh,");
+      n += sprintf(buf + n, "dm,");
     }
     if (pmd->phit &  LLB_DP_SMAC_HIT) {
-      n += sprintf(buf + n, "smh,");
+      n += sprintf(buf + n, "sm,");
     }
     if (pmd->phit &  LLB_DP_RES_HIT) {
       n += sprintf(buf + n, "res,");
@@ -295,11 +295,11 @@ llb_handle_pkt_tracer_event(void *ctx,
 {
   struct ll_dp_pmdi *pmd = data;
   struct tm *tm;
+  char *pif;
+  time_t t;
   char ts[32];
   char ifname[IFNAMSIZ];
-  char *pif;
   char pmdecode[1024];
-  time_t t;
 
   time(&t);
   tm = localtime(&t);
