@@ -677,6 +677,7 @@ dp_ipv4_new_csum(struct iphdr *iph)
 #define DP_PDATA(md) (((struct __sk_buff *)md)->data)
 #define DP_PDATA_END(md) (((struct __sk_buff *)md)->data_end)
 #define DP_MDATA(md) (((struct __sk_buff *)md)->data_meta)
+#define DP_GET_LEN(md) (((struct __sk_buff *)md)->len)
 
 #ifdef HAVE_CLANG13
 #define DP_NEW_FCXF(xf)                  \
@@ -1854,6 +1855,8 @@ dp_record_it(void *ctx, struct xfi *xf)
 #define DP_PDATA(md) (((struct xdp_md *)md)->data)
 #define DP_PDATA_END(md) (((struct xdp_md *)md)->data_end)
 #define DP_MDATA(md) (((struct xdp_md *)md)->data_meta)
+#define DP_GET_LEN(md)  ((((struct xdp_md *)md)->data_end) - \
+                         (((struct xdp_md *)md)->data)) \
 
 static int __always_inline
 dp_remove_vlan_tag(void *ctx, struct xfi *xf)

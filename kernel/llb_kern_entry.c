@@ -198,7 +198,12 @@ int tc_csum_func1(struct __sk_buff *md)
     return DP_DROP;
   }
 
-  return dp_sctp_csum(md, xf);
+  val = dp_sctp_csum(md, xf);
+  if (val == DP_DROP || val == DP_PASS) {
+    xf->pm.rcode |= LLB_PIPE_RC_CSUM_DRP;
+    TRACER_CALL(md, xf);
+  }
+  return val;
 }
 
 SEC("tc_packet_hook5")
@@ -213,7 +218,7 @@ int tc_csum_func2(struct __sk_buff *md)
   }
 
   val = dp_sctp_csum(md, xf);
-  if (val == DP_DROP) {
+  if (val == DP_DROP || val == DP_PASS) {
     xf->pm.rcode |= LLB_PIPE_RC_CSUM_DRP;
     TRACER_CALL(md, xf);
   }

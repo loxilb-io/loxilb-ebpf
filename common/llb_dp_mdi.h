@@ -106,7 +106,6 @@ struct dp_pi_mdi {
 #define LLB_PIPE_RC_FW_RDR    0x8
 #define LLB_PIPE_RC_FW_DRP    0x10
 #define LLB_PIPE_RC_UNPS_DRP  0x20
-#define LLB_PIPE_RC_CSUM_DRP  0x20
 #define LLB_PIPE_RC_UNX_DRP   0x40
 #define LLB_PIPE_RC_MPT_PASS  0x80
 #define LLB_PIPE_RC_FCTO      0x100
@@ -125,6 +124,7 @@ struct dp_pi_mdi {
 #define LLB_PIPE_RC_NOSMAC    0x200000
 #define LLB_PIPE_RC_NODMAC    0x400000
 #define LLB_PIPE_RC_RT_TRAP   0x800000
+#define LLB_PIPE_RC_CSUM_DRP  0x1000000
     __u32            rcode;
 
     __u8             tc;

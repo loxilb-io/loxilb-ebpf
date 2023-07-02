@@ -308,8 +308,8 @@ llb_handle_pkt_tracer_event(void *ctx,
 
   pif = if_indextoname(pmd->ifindex, ifname);
 
-  printf("%-8s %-4s ifi:%-4d(%s) iport:%-3d oport:%-3d tbl:%-2d %s\n", ts, "PKT", 
-       pmd->ifindex, pif?:"", pmd->dp_inport, pmd->dp_oport, pmd->table_id, pmdecode);
+  printf("%-8s %-4s:%-4d ifi:%-4d(%s) iport:%-3d oport:%-3d tbl:%-2d %s\n", ts, "PKT", 
+       pmd->pkt_len, pmd->ifindex, pif?:"", pmd->dp_inport, pmd->dp_oport, pmd->table_id, pmdecode);
 
   ll_pretty_hex(pmd->data, pmd->pkt_len > 64 ? 64: pmd->pkt_len);
 }

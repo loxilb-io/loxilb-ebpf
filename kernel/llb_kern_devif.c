@@ -147,7 +147,7 @@ dp_trace_packet(void *ctx,  struct xfi *xf)
   pmd->dp_oport = xf->pm.oport;
   pmd->table_id = xf->pm.table_id;
   pmd->rcode = xf->pm.rcode;
-  pmd->pkt_len = xf->pm.py_bytes;
+  pmd->pkt_len = DP_GET_LEN(ctx);
 
   flags |= (__u64)pmd->pkt_len << 32;
   
