@@ -327,6 +327,32 @@ llb_trace_proc_main(void *arg)
   return NULL;
 }
 
+static int
+ll_fcmap_ent_set_flush(int tid, void *k, void *ita)
+{
+  return 1;
+}
+
+static void
+ll_flush_fcmap(void)
+{
+  dp_map_ita_t it;
+  struct dp_fcv4_key next_key;
+  struct dp_fc_tacts *fc_val;
+  uint64_t ns = get_os_nsecs();
+
+  fc_val = calloc(1, sizeof(*fc_val));
+  if (!fc_val) return;
+
+  memset(&it, 0, sizeof(it));
+  it.next_key = &next_key;
+  it.val = fc_val;
+  it.uarg = &ns;
+
+  llb_map_loop_and_delete(LL_DP_FCV4_MAP, ll_fcmap_ent_set_flush, &it);
+  if (fc_val) free(fc_val);
+}
+
 int
 llb_packet_trace_en(int en)
 {
@@ -362,6 +388,9 @@ llb_packet_trace_en(int en)
 next:
     key = next_key;
   }
+
+  ll_flush_fcmap();
+
   return 0;
 }
 
@@ -590,7 +619,7 @@ llb_objmap2fd(struct bpf_object *bpf_obj,
 
     map_fd = bpf_map__fd(map);
   }
-  log_trace("%s: %d\n", mapname, map_fd);
+  log_trace("%s: %d", mapname, map_fd);
 out:
   return map_fd;
 }

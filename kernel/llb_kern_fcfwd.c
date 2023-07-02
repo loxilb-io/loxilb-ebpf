@@ -242,5 +242,7 @@ dp_ing_fc_main(void *ctx, struct xfi *xf)
 
   bpf_map_update_elem(&xfis, &z, xf, BPF_ANY);
   bpf_tail_call(ctx, &pgm_tbl, idx);
-  return DP_PASS;
+
+  TRACER_CALL(ctx, xf);
+  return DP_DROP;
 }

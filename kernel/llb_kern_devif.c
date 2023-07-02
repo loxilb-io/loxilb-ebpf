@@ -139,7 +139,7 @@ dp_trace_packet(void *ctx,  struct xfi *xf)
   pmd = bpf_map_lookup_elem(&pkts, &z);
   if (!pmd) return 0;
 
-  LL_DBG_PRINTK("[TRAP] START--\n");
+  LL_DBG_PRINTK("[TRACE] START--");
 
   pmd->ifindex = DP_IFI(ctx);
   pmd->phit = xf->pm.phit;
@@ -153,7 +153,7 @@ dp_trace_packet(void *ctx,  struct xfi *xf)
   
   if (bpf_perf_event_output(ctx, &pkt_ring, flags,
                             pmd, sizeof(*pmd))) {
-    LL_DBG_PRINTK("[TRAP] FAIL--\n");
+    LL_DBG_PRINTK("[TRACE] FAIL--");
   }
   return DP_DROP;
 }
@@ -167,7 +167,7 @@ dp_trap_packet(void *ctx,  struct xfi *xf, void *fa_)
   struct llb_ethhdr *llb;
   void *dend = DP_TC_PTR(DP_PDATA_END(ctx));
 
-  LL_DBG_PRINTK("[TRAP] START--\n");
+  LL_DBG_PRINTK("[TRAP] START--");
 
   /* FIXME - There is a problem right now if we send decapped
    * packet up the stack. So, this is a safety check for now
@@ -218,7 +218,7 @@ dp_trap_packet(void *ctx,  struct xfi *xf, void *fa_)
 
   xf->pm.oport = LLB_PORT_NO;
   if (dp_redirect_port(&tx_intf_map, xf) != DP_REDIRECT) {
-    LL_DBG_PRINTK("[TRAP] FAIL--\n");
+    LL_DBG_PRINTK("[TRAP] FAIL--");
     return DP_DROP;
   }
 
@@ -343,7 +343,7 @@ dp_insert_fcv4(void *ctx, struct xfi *xf, struct dp_fc_tacts *acts)
     acts->ca.oaux = *oif;
   } 
 
-  LL_DBG_PRINTK("[FCH4] INS--\n");
+  LL_DBG_PRINTK("[FCH4] INS--");
 
   key = bpf_map_lookup_elem(&xfck, &z);
   if (key == NULL) {
