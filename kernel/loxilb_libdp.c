@@ -31,6 +31,12 @@
 #include <linux/if_link.h>
 #include <linux/if_tun.h>
 #include <netinet/in.h>
+#include <netinet/ip.h>
+#include <netinet/ip6.h>
+#include <netinet/ip_icmp.h>
+#include <netinet/icmp6.h>
+#include <linux/tcp.h>
+#include <linux/udp.h>
 
 #include "loxilb_libdp.h"
 #include "llb_kern_mon.h"
@@ -38,9 +44,45 @@
 #include "../common/pdi.h"
 #include "../common/common_frame.h"
 
+
 #ifndef PATH_MAX
 #define PATH_MAX  4096
 #endif
+
+/* SCTP Common Header Format */
+struct sctphdr {
+  __be16 source;
+  __be16 dest;
+  __be32 vtag;
+  __le32 checksum;
+};
+
+/* Chunk Field Descriptions. */
+struct sctp_chunkhdr {
+  __u8 type;
+  __u8 flags;
+  __be16 length;
+};
+
+/* Chunk Type Values.
+ */
+enum sctp_cid {
+	SCTP_CID_DATA			= 0,
+        SCTP_CID_INIT			= 1,
+        SCTP_CID_INIT_ACK		= 2,
+        SCTP_CID_SACK			= 3,
+        SCTP_CID_HEARTBEAT		= 4,
+        SCTP_CID_HEARTBEAT_ACK		= 5,
+        SCTP_CID_ABORT			= 6,
+        SCTP_CID_SHUTDOWN		= 7,
+        SCTP_CID_SHUTDOWN_ACK		= 8,
+        SCTP_CID_ERROR			= 9,
+        SCTP_CID_COOKIE_ECHO		= 10,
+        SCTP_CID_COOKIE_ACK	        = 11,
+        SCTP_CID_ECN_ECNE		= 12,
+        SCTP_CID_ECN_CWR		= 13,
+        SCTP_CID_SHUTDOWN_COMPLETE	= 14,
+}; /* enum */
 
 typedef struct llb_dp_sect {
 #define SECNAMSIZ 64
@@ -113,6 +155,380 @@ bpf_num_possible_cpus(void)
     return 0;
   }
   return possible_cpus;
+}
+
+static void
+print_ethhdr(struct ethhdr *eth, int len)
+{  
+  if (len < sizeof(struct ethhdr)) {
+    return;
+  }
+
+  printf("Ethernet Header\r\n");
+  printf("-| Src MAC : %.2X-%.2X-%.2X-%.2X-%.2X-%.2X \n", eth->h_source[0] , eth->h_source[1] , eth->h_source[2] , eth->h_source[3] , eth->h_source[4] , eth->h_source[5]);
+  printf("-| Dst MAC : %.2X-%.2X-%.2X-%.2X-%.2X-%.2X \n", eth->h_dest[0] , eth->h_dest[1] , eth->h_dest[2] , eth->h_dest[3] , eth->h_dest[4] , eth->h_dest[5]);
+  printf("-| Type    : %s\r\n", ntohs(eth->h_proto) == ETH_P_IP?"IP":"IPv6" );
+}
+
+static void
+print_icmp(void *ptr, int len)
+{
+  struct icmphdr *icmp = NULL;
+  struct iphdr *iphdr = NULL;
+  char typestr[32];
+
+  iphdr = (struct iphdr*)(ptr + sizeof(struct ethhdr));
+
+  icmp = (struct icmphdr *)(ptr + sizeof(struct ethhdr) + iphdr->ihl*4);
+  if (icmp->type == ICMP_ECHO) {
+    sprintf(typestr, "ECHO REQ");
+  } else if (icmp->type == ICMP_ECHOREPLY) {
+    sprintf(typestr, "ECHO REPLY");
+  } else if (icmp->type == ICMP_REDIRECT) {
+    sprintf(typestr, "ICMP REDIRECT");
+  } else if (icmp->type == ICMP_TIME_EXCEEDED) {
+    sprintf(typestr, "ICMP_TIME_EXCEEDED");
+  } else {
+    sprintf(typestr, "OTHER(%d)",icmp->type);
+  }
+  printf("ICMP Header\n");
+  printf(" -|TYPE          : %s\n",typestr);
+  printf(" -|CODE          : %d\n",icmp->code);
+  printf(" -|CHECKSUM      : 0x%x\n",icmp->checksum);
+  if (icmp->type == ICMP_ECHO || icmp->type == ICMP_ECHOREPLY) {
+    printf(" -|ECHO.ID     : %u\n", ntohs(icmp->un.echo.id));
+    printf(" -|SEQ         : %u\n", ntohs(icmp->un.echo.sequence));
+  }
+}
+
+static void
+print_icmp6(void *ptr, int len)
+{
+  struct icmp6_hdr *icmp6 = NULL;
+  char typestr[32];
+
+  if (len < sizeof(struct ethhdr) + sizeof(struct ip6_hdr) + sizeof(struct icmp6_hdr)) {
+    return;
+  }
+
+  icmp6 = (struct icmp6_hdr *)(ptr + sizeof(struct ethhdr) + sizeof(struct ip6_hdr));
+
+  if (icmp6->icmp6_type == ICMP6_ECHO_REQUEST) {
+    sprintf(typestr, "ECHO REQ");
+  } else if (icmp6->icmp6_type == ICMP6_ECHO_REPLY) {
+    sprintf(typestr, "ECHO REPLY");
+  } else {
+    sprintf(typestr, "OTHER(%d)",icmp6->icmp6_type);
+  }
+  printf("ICMP6 Header\n");
+  printf(" -|TYPE          : %s\n",typestr);
+  printf(" -|CODE          : %d\n",icmp6->icmp6_code);
+  printf(" -|CHECKSUM      : 0x%x\n",icmp6->icmp6_cksum);
+  if (icmp6->icmp6_type == ICMP6_ECHO_REQUEST || icmp6->icmp6_type == ICMP6_ECHO_REPLY) {
+    printf(" -|ECHO.ID       : %u\n", ntohs(icmp6->icmp6_id));
+    printf(" -|SEQ           : %u\n", ntohs(icmp6->icmp6_seq));
+  }
+}
+
+static void
+print_tcp_cmn(void *ptr)
+{
+  struct tcphdr *tcp = ptr;
+ 
+  printf("TCP Header\n");
+  printf(" -|Source          : %u\n",ntohs(tcp->source));
+  printf(" -|Destination     : %u\n",ntohs(tcp->dest));
+  printf(" -|Sequence        : %u\n",ntohs(tcp->seq));
+  printf(" -|ACK Sequence    : %u\n",ntohl(tcp->ack_seq));
+  printf(" -|Data Offset     : %u\n",tcp->doff);
+  printf(" -|URG|ACK|PSH|RST|SYN|FIN\n");
+  printf("   %2u  %2u  %2u  %2u  %2u  %2u\n",tcp->urg,tcp->ack,tcp->psh,tcp->rst,tcp->syn,tcp->fin);
+  printf(" -|Window          : %u\n", ntohs(tcp->window));
+  printf(" -|Checksum        : 0x%x\n", tcp->check);
+}
+
+static void
+print_tcp(void *ptr, int len)
+{
+  struct tcphdr *tcp = NULL;
+  struct iphdr *iphdr = NULL;
+
+  iphdr = (struct iphdr*)(ptr + sizeof(struct ethhdr));
+
+  if (len < sizeof(struct ethhdr) + iphdr->ihl*4 + sizeof(struct tcphdr)) {
+    return;
+  }
+
+  tcp = (struct tcphdr *)( ptr + sizeof(struct ethhdr) + iphdr->ihl*4);
+  print_tcp_cmn(tcp);
+}
+
+static void
+print_tcp6(void *ptr, int len)
+{
+  struct tcphdr *tcp = NULL;
+
+  if (len < sizeof(struct ethhdr) + sizeof(struct ip6_hdr) + sizeof(struct tcphdr)) {
+    return;
+  }
+
+  tcp = (struct tcphdr *)(ptr + sizeof(struct ethhdr) + sizeof(struct ip6_hdr));
+  print_tcp_cmn(tcp);
+}
+
+static void
+print_udp_cmn(void *ptr)
+{
+  struct udphdr *udp = ptr;
+ 
+  printf("UDP Header\n");
+  printf(" -|Source          : %u\n",ntohs(udp->source));
+  printf(" -|Destination     : %u\n",ntohs(udp->dest));
+  printf(" -|Length          : %u\n",ntohs(udp->len));
+  printf(" -|Checksum        : %u\n",udp->check);
+}
+
+static void
+print_udp(void *ptr, int len)
+{
+  struct udphdr *udp = NULL;
+  struct iphdr *iphdr = NULL;
+
+  iphdr = (struct iphdr*)(ptr + sizeof(struct ethhdr));
+
+  if (len < sizeof(struct ethhdr) + iphdr->ihl*4 + sizeof(struct udphdr)) {
+    return;
+  }
+
+  udp = (struct udphdr *)(ptr + sizeof(struct ethhdr) + iphdr->ihl*4);
+  print_udp_cmn(udp);
+}
+
+static void
+print_udp6(void *ptr, int len)
+{
+  struct udphdr *udp = ptr;
+
+  if (len < sizeof(struct ethhdr) + sizeof(struct ip6_hdr) + sizeof(struct udphdr)) {
+    return;
+  }
+
+  udp = (struct udphdr *)(ptr + sizeof(struct ethhdr) + sizeof(struct ip6_hdr));
+  print_udp_cmn(udp);
+}
+
+static void
+print_sctp_cmn(void *ptr)
+{
+  struct sctphdr *sctp = ptr;
+  struct sctp_chunkhdr *c = NULL;
+ 
+  printf("SCTP Header\n");
+  printf(" -|Source          : %u\n",ntohs(sctp->source));
+  printf(" -|Destination     : %u\n",ntohs(sctp->dest));
+  printf(" -|Verfication tag : %u\n",ntohl(sctp->vtag));
+  printf(" -|Checksum        : %u\n",ntohl(sctp->checksum));
+  
+  c = (struct sctp_chunkhdr *)(ptr + sizeof(*sctp));
+  if (c->type == SCTP_CID_INIT) {
+    printf(" -|TYPE            : INIT\n");
+  } else if (c->type == SCTP_CID_INIT_ACK) {
+    printf(" -|TYPE            : INIT ACK\n");
+  } else if (c->type == SCTP_CID_HEARTBEAT) {
+    printf(" -|TYPE            : HB\n");
+  } else if (c->type == SCTP_CID_HEARTBEAT_ACK) {
+    printf(" -|TYPE            : HB ACK\n");
+  } else if (c->type == SCTP_CID_COOKIE_ECHO) {
+    printf(" -|TYPE            : COOKIE ECHO \n");
+  } else if (c->type == SCTP_CID_COOKIE_ACK) {
+    printf(" -|TYPE            : COOKIE ACK \n");
+  } else if (c->type == SCTP_CID_ABORT) {
+    printf(" -|TYPE            : ABORT\n");
+  } else if (c->type == SCTP_CID_ERROR) {
+    printf(" -|TYPE            : ERROR\n");
+  } else if (c->type == SCTP_CID_SHUTDOWN) {
+    printf(" -|TYPE            : SHUTDOWN\n");
+  } else if (c->type == SCTP_CID_SHUTDOWN_ACK) {
+    printf(" -|TYPE            : SHUTDOWN ACK\n");
+  } else if (c->type == SCTP_CID_SHUTDOWN_COMPLETE) {
+    printf(" -|TYPE            : SHUTDOWN COMPLETE\n");
+  } else if (c->type == SCTP_CID_DATA) {
+    printf(" -|TYPE            : DATA \n");
+  } else if (c->type == SCTP_CID_SACK) {
+    printf(" -|TYPE            : SACK \n");
+  } else {
+    printf(" -|TYPE            : UNKNOWN(%u)\n", c->type);
+  }
+}
+
+static void
+print_sctp(void *ptr, int len)
+{
+  struct sctphdr *sctp = NULL;
+  struct iphdr *iphdr = NULL;
+
+  iphdr = (struct iphdr*)(ptr + sizeof(struct ethhdr));
+
+  if (len < sizeof(struct ethhdr) + iphdr->ihl*4 + sizeof(struct sctphdr)) {
+    return;
+  }
+
+  sctp = (struct sctphdr *)(ptr + sizeof(struct ethhdr) + iphdr->ihl*4);
+  print_sctp_cmn(sctp);
+}
+
+static void
+print_sctp6(void *ptr, int len)
+{
+  struct sctphdr *sctp = NULL;
+
+  if (len < sizeof(struct ethhdr) + sizeof(struct ip6_hdr) + sizeof(struct sctphdr)) {
+    return;
+  }
+
+  sctp = (struct sctphdr *)(ptr + sizeof(struct ethhdr) + sizeof(struct ip6_hdr));
+  print_sctp_cmn(sctp);
+}
+
+
+static void
+print_ipv4(void *ptr, int len)
+{
+  struct iphdr *iphdr = NULL;
+  uint16_t frag_flags;
+  char  sipstr[INET_ADDRSTRLEN];
+  char  dipstr[INET_ADDRSTRLEN];
+  char  fragstr[32]="";
+  char  l4pstr[32];
+
+  if (len < sizeof(struct ethhdr) + sizeof(struct iphdr)) {
+    return;
+  }
+
+  iphdr = (struct iphdr*)(ptr + sizeof(struct ethhdr));
+
+  frag_flags = ntohs(iphdr->frag_off);
+
+  if (frag_flags & IP_RF) {
+    sprintf(fragstr,"(RF) ");
+  }
+  if (frag_flags & IP_DF) {
+    sprintf(fragstr + strlen(fragstr), "DF ");
+  }
+  if (frag_flags & IP_MF) {
+    sprintf(fragstr + strlen(fragstr), "MF ");
+  }
+  
+  inet_ntop(AF_INET, &iphdr->saddr, sipstr, sizeof(sipstr));
+  inet_ntop(AF_INET, &iphdr->daddr, dipstr, sizeof(dipstr));
+
+  printf("IP Header\n");
+  printf(" -|Version          : %d\n",iphdr->version);
+  printf(" -|Hdr Len          : %d\n",iphdr->ihl*4);
+  printf(" -|TOS              : %d\n",iphdr->tos);
+  printf(" -|Total Length     : %d\n",ntohs(iphdr->tot_len));
+  printf(" -|Id               : %d\n",ntohs(iphdr->id));
+  printf(" -|Frag             : %s\n",fragstr);
+  printf(" -|TTL              : %d\n",(unsigned int)iphdr->ttl);
+  printf(" -|Checksum         : 0x%x\n",ntohs(iphdr->check));
+  printf(" -|Source IP        : %s\n",sipstr);
+  printf(" -|Destination IP   : %s\n",dipstr);
+
+  if ((unsigned int)iphdr->protocol == 1) {
+    sprintf(l4pstr,"ICMP(%d)",(unsigned int)iphdr->protocol);
+    printf(" -|Protocol         : %s\n",l4pstr);
+    print_icmp(ptr, len);
+  } else if ((unsigned int)iphdr->protocol == 6) {
+    sprintf(l4pstr,"TCP(%d)",(unsigned int)iphdr->protocol);
+    printf(" -|Protocol         : %s\n",l4pstr);
+    print_tcp(ptr, len);
+  } else if ((unsigned int)iphdr->protocol == 17) {
+    sprintf(l4pstr,"UDP(%d)",(unsigned int)iphdr->protocol);
+    printf(" -|Protocol         : %s\n",l4pstr);
+    print_udp(ptr, len);
+  } else if ((unsigned int)iphdr->protocol == 132) {
+    sprintf(l4pstr,"SCTP(%d)",(unsigned int)iphdr->protocol);
+    printf(" -|Protocol         : %s\n",l4pstr);
+    print_sctp(ptr, len);
+  } else {
+    sprintf(l4pstr,"Unknown(%d)",(unsigned int)iphdr->protocol);
+    printf(" -|Protocol         : %s\n",l4pstr);
+  }
+}
+
+static void
+print_ipv6(void *ptr, int len)
+{
+  struct ip6_hdr *ip6hdr = NULL;
+  char  sipstr[INET6_ADDRSTRLEN];
+  char  dipstr[INET6_ADDRSTRLEN];
+  char  l4pstr[32];
+
+  if (len < sizeof(struct ethhdr) + sizeof(struct ip6_hdr)) {
+    return;
+  }
+
+  ip6hdr = ptr + sizeof(struct ethhdr);
+
+  inet_ntop(AF_INET6, &ip6hdr->ip6_src, sipstr, sizeof(sipstr));
+  inet_ntop(AF_INET6, &ip6hdr->ip6_dst, dipstr, sizeof(dipstr));
+
+  printf("IPv6 Header\n");
+  printf(" -|Version          : %d\n",ip6hdr->ip6_vfc >> 4);
+  printf(" -|Traffic Class    : %d\n",ip6hdr->ip6_flow >> 20);
+  printf(" -|Flow Label       : %d\n",ntohl(ip6hdr->ip6_flow & 0x000fffff));
+  printf(" -|Payload len      : %d\n",ntohs(ip6hdr->ip6_plen));
+  printf(" -|Hop Limit        : %d\n",ip6hdr->ip6_hlim);
+  printf(" -|Source IP        : %s\n",sipstr);
+  printf(" -|Destination IP   : %s\n",dipstr);
+  
+  if ((unsigned int)ip6hdr->ip6_nxt == 58) {
+    sprintf(l4pstr,"ICMP(%d)",(unsigned int)(ip6hdr->ip6_nxt));
+    printf(" -|Next Hdr         : %s\n",l4pstr);
+    print_icmp6(ptr, len);
+  } else if ((unsigned int)ip6hdr->ip6_nxt == 6) {
+    sprintf(l4pstr,"TCP(%d)",(unsigned int)ip6hdr->ip6_nxt);
+    printf(" -|Next Hdr         : %s\n",l4pstr);
+    print_tcp6(ptr, len);
+  } else if ((unsigned int)ip6hdr->ip6_nxt == 17) {
+    sprintf(l4pstr,"UDP(%d)",(unsigned int)ip6hdr->ip6_nxt);
+    printf(" -|Next Hdr         : %s\n",l4pstr);
+    print_udp6(ptr, len);
+  } else if ((unsigned int)ip6hdr->ip6_nxt == 132) {
+    sprintf(l4pstr,"SCTP(%d)",(unsigned int)ip6hdr->ip6_nxt);
+    printf(" -|Next Hdr         : %s\n",l4pstr);
+    print_sctp6(ptr, len);
+  } else {
+    sprintf(l4pstr,"Unknown(%d)",(unsigned int)ip6hdr->ip6_nxt);
+    printf(" -|Next Hdr         : %s\n",l4pstr);
+  }
+}
+
+static void
+print_iphdr(void *ptr, int len)
+{
+  struct ethhdr *eth = ptr;
+
+  if (ntohs(eth->h_proto) == ETH_P_IP) {
+    print_ipv4(ptr, len);
+  } else {
+    print_ipv6(ptr, len);
+  }
+}
+
+
+static void
+ll_pretty_dump(void *ptr, int len)
+{
+  struct ethhdr *eth = NULL;
+
+  eth = (struct ethhdr *) ptr;
+  if((ntohs(eth->h_proto) != ETH_P_IP) && (ntohs(eth->h_proto) != ETH_P_IPV6)) {
+    printf("Not an IP Packet, eth_type=%d\r\n",ntohs(eth->h_proto));
+    return;
+  }
+  print_ethhdr(eth, len);
+  print_iphdr(ptr, len);
 }
 
 static void
@@ -311,6 +727,7 @@ llb_handle_pkt_tracer_event(void *ctx,
   printf("%-8s %-4s:%-4d ifi:%-4d(%s) iport:%-3d oport:%-3d tbl:%-2d %s\n", ts, "PKT", 
        pmd->pkt_len, pmd->ifindex, pif?:"", pmd->dp_inport, pmd->dp_oport, pmd->table_id, pmdecode);
 
+  ll_pretty_dump(pmd->data, pmd->pkt_len);
   ll_pretty_hex(pmd->data, pmd->pkt_len > 64 ? 64: pmd->pkt_len);
 }
 
