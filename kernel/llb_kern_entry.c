@@ -141,11 +141,9 @@ int tc_packet_func_fast(struct __sk_buff *md)
 
   DP_NEW_FCXF(xf);
 
-#ifdef HAVE_DP_EGR_HOOK
   if (DP_LLB_INGP(md)) {
     return DP_PASS;
   }
-#endif
 
   dp_parse_d0(md, xf, 1);
 

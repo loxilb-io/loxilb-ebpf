@@ -231,9 +231,7 @@ dp_ing_fc_main(void *ctx, struct xfi *xf)
     if (dp_do_fcv4_lkup(ctx, xf) == 1) {
       if (xf->pm.pipe_act == LLB_PIPE_RDR) {
         int oif = xf->pm.oport;
-#ifdef HAVE_DP_EGR_HOOK
         DP_LLB_MRK_INGP(ctx);
-#endif
         TRACER_CALL(ctx, xf);
         return bpf_redirect(oif, 0);         
       }
