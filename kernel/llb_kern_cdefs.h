@@ -668,6 +668,7 @@ dp_ipv4_new_csum(struct iphdr *iph)
 #define DP_PASS     TC_ACT_OK
 
 #define DP_LLB_MRK_INGP(md) (((struct __sk_buff *)md)->cb[0] = LLB_INGP_MARK)
+#define DP_LLB_RST_INGP(md) (((struct __sk_buff *)md)->cb[0] = 0)
 #define DP_LLB_INGP(md) (((struct __sk_buff *)md)->cb[0] == LLB_INGP_MARK)
 #define DP_NEED_MIRR(md) (((struct __sk_buff *)md)->cb[0] == LLB_MIRR_MARK)
 #define DP_GET_MIRR(md) (((struct __sk_buff *)md)->cb[1])
@@ -1774,6 +1775,7 @@ dp_pktbuf_expand_tail(void *md, __u32 len)
 #else /* XDP utilities */
 
 #define DP_LLB_MRK_INGP(md)
+#define DP_LLB_RST_INGP(md)
 #define DP_LLB_INGP(md) (0)
 #define DP_NEED_MIRR(md) (0)
 #define DP_GET_MIRR(md)  (0)

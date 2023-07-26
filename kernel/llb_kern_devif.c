@@ -229,6 +229,7 @@ dp_redir_packet(void *ctx,  struct xfi *xf)
 {
   LL_DBG_PRINTK("[REDI]");
 
+  DP_LLB_RST_INGP(ctx);
   if (dp_redirect_port(&tx_intf_map, xf) != DP_REDIRECT) {
     LL_DBG_PRINTK("[REDI] FAIL");
     return DP_DROP;
@@ -246,6 +247,7 @@ dp_rewire_packet(void *ctx,  struct xfi *xf)
 {
   LL_DBG_PRINTK("[REWR]");
 
+  DP_LLB_RST_INGP(ctx);
   if (dp_rewire_port(&tx_intf_map, xf) != DP_REDIRECT) {
     LL_DBG_PRINTK("[REWR] FAIL");
     return DP_DROP;
@@ -262,8 +264,6 @@ static int __always_inline
 dp_pipe_check_res(void *ctx, struct xfi *xf, void *fa)
 {
   LL_DBG_PRINTK("[PIPE] act 0x%x", xf->pm.pipe_act);
-
-  DP_LLB_MRK_INGP(ctx);
 
   TRACER_CALL(ctx, xf);
 

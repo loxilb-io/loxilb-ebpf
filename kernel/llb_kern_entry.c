@@ -145,6 +145,8 @@ int tc_packet_func_fast(struct __sk_buff *md)
     return DP_PASS;
   }
 
+  DP_LLB_MRK_INGP(md);
+
   dp_parse_d0(md, xf, 1);
 
   return dp_ing_fc_main(md, xf);
