@@ -18,7 +18,8 @@ struct config {
 	__u16   xsk_bind_flags;
 	int     xsk_if_queue;
 	bool    xsk_poll_mode;
-  int     tc_bpf;
+	int     tc_bpf;
+	int     tc_egr_bpf;
 };
 
 /* Defined in common_params.o */

@@ -59,6 +59,7 @@ struct ebpfcfg {
   int no_loader;
   int nodenum;
   int loglevel;
+  int egr_hooks;
 };
 
 void loxilb_set_loglevel(struct ebpfcfg *cfg);

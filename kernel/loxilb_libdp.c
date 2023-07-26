@@ -89,6 +89,7 @@ typedef struct llb_dp_struct
   int have_mtrace;
   int have_ptrace;
   int have_loader;
+  int egr_hooks;
   int nodenum;
   llb_dp_map_t maps[LL_DP_MAX_MAP];
   llb_dp_link_t links[LLB_INTERFACES];
@@ -2319,12 +2320,12 @@ llb_ebpf_link_attach(struct config *cfg)
     llb_sys_exec(cmd);
     log_debug("%s", cmd);
 
-#ifdef HAVE_DP_EGR_HOOK
-    sprintf(cmd, "ntc filter add dev %s egress bpf da obj %s sec %s 2>&1",
+    if (cfg->tc_egr_bpf) {
+      sprintf(cmd, "ntc filter add dev %s egress bpf da obj %s sec %s 2>&1",
             cfg->ifname, cfg->filename, cfg->progsec);
-    llb_sys_exec(cmd);
-    log_debug("%s", cmd);
-#endif
+      llb_sys_exec(cmd);
+      log_debug("%s", cmd);
+    }
 
     return 0;
   } else {
@@ -2339,11 +2340,11 @@ llb_ebpf_link_detach(struct config *cfg)
 
   if (cfg->tc_bpf) {
     /* ntc is netlox's modified tc tool */
-#ifdef HAVE_DP_EGR_HOOK
-    sprintf(cmd, "ntc filter del dev %s egress 2>&1", cfg->ifname);
-    log_debug("%s\n", cmd);
-    llb_sys_exec(cmd);
-#endif
+    if (cfg->tc_egr_bpf) {
+      sprintf(cmd, "ntc filter del dev %s egress 2>&1", cfg->ifname);
+      log_debug("%s\n", cmd);
+      llb_sys_exec(cmd);
+    }
 
     sprintf(cmd, "ntc filter del dev %s ingress 2>&1", cfg->ifname);
     log_debug("%s", cmd);
@@ -2375,6 +2376,9 @@ llb_dp_link_attach(const char *ifname,
   if (mp_type == LL_BPF_MOUNT_TC) {
     strncpy(cfg.filename, xh->ll_tc_fname, sizeof(cfg.filename));
     cfg.tc_bpf = 1;
+    if (xh->egr_hooks) {
+      cfg.tc_egr_bpf = 1;
+    }
   } else {
     strncpy(cfg.filename, xh->ll_dp_fname, sizeof(cfg.filename));
   }
@@ -2469,6 +2473,7 @@ loxilb_main(struct ebpfcfg *cfg)
     xh->have_mtrace = cfg->have_mtrace;
     xh->have_ptrace = cfg->have_ptrace;
     xh->nodenum = cfg->nodenum;
+    xh->egr_hooks = cfg->egr_hooks;
     xh->logfp = fp;
   }
 
