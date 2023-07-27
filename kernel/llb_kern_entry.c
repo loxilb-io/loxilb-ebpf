@@ -141,11 +141,12 @@ int tc_packet_func_fast(struct __sk_buff *md)
 
   DP_NEW_FCXF(xf);
 
-  if (DP_LLB_INGP(md)) {
+  if (DP_LLB_STAMPED(md)) {
+    DP_LLB_RST_STAMP(md);
     return DP_PASS;
+  } else {
+    DP_LLB_STAMP(md);
   }
-
-  DP_LLB_MRK_INGP(md);
 
   dp_parse_d0(md, xf, 1);
 

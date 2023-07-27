@@ -14,7 +14,7 @@
 #define MAX_STACKED_VLANS     2
 #endif
 
-#define LLB_INGP_MARK         0xf01dab1e
+#define LLB_PIPE_STAMP_FLAG         0xf01dab1e
 
 #define LLBS_PPLN_RDR(F)      (F->pm.pipe_act |= LLB_PIPE_RDR);
 #define LLBS_PPLN_RDR_PRIO(F) (F->pm.pipe_act |= LLB_PIPE_RDR_PRIO);

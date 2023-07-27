@@ -229,7 +229,6 @@ dp_redir_packet(void *ctx,  struct xfi *xf)
 {
   LL_DBG_PRINTK("[REDI]");
 
-  DP_LLB_RST_INGP(ctx);
   if (dp_redirect_port(&tx_intf_map, xf) != DP_REDIRECT) {
     LL_DBG_PRINTK("[REDI] FAIL");
     return DP_DROP;
@@ -247,7 +246,6 @@ dp_rewire_packet(void *ctx,  struct xfi *xf)
 {
   LL_DBG_PRINTK("[REWR]");
 
-  DP_LLB_RST_INGP(ctx);
   if (dp_rewire_port(&tx_intf_map, xf) != DP_REDIRECT) {
     LL_DBG_PRINTK("[REWR] FAIL");
     return DP_DROP;
