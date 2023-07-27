@@ -231,7 +231,6 @@ dp_ing_fc_main(void *ctx, struct xfi *xf)
     if (dp_do_fcv4_lkup(ctx, xf) == 1) {
       if (xf->pm.pipe_act == LLB_PIPE_RDR) {
         int oif = xf->pm.oport;
-        DP_LLB_RST_INGP(ctx);
         TRACER_CALL(ctx, xf);
         return bpf_redirect(oif, 0);         
       }
