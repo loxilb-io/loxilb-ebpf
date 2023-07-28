@@ -137,7 +137,7 @@ SEC("tc_packet_hook0")
 int tc_packet_func_fast(struct __sk_buff *md)
 {
 #ifdef LL_TC_EBPF_EHOOK
-  if (DP_LLB_STAMPED(md)) {
+  if (DP_LLB_STAMPED(md) || (md->ingress_ifindex == md->ifindex)) {
     DP_LLB_RST_STAMP(md);
     return DP_PASS;
   } else {
