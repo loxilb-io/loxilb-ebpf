@@ -2322,7 +2322,7 @@ llb_ebpf_link_attach(struct config *cfg)
 
     if (cfg->tc_egr_bpf) {
       sprintf(cmd, "ntc filter add dev %s egress bpf da obj %s sec %s 2>&1",
-            cfg->ifname, cfg->filename, cfg->progsec);
+            cfg->ifname, LLB_FP_IMG_BPF_EGR, cfg->progsec);
       llb_sys_exec(cmd);
       log_debug("%s", cmd);
     }

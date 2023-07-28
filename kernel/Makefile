@@ -12,6 +12,7 @@ XDP_DEPS := llb_kern_devif.c      \
 
 XDP_TARGETS  := llb_xdp_main
 TC_TARGETS   := llb_ebpf_main
+TC_ETARGETS  := llb_ebpf_emain
 MON_TARGETS  := llb_kern_mon
 USER_TARGETS := loxilb_libdp
 
