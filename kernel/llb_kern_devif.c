@@ -267,6 +267,12 @@ dp_pipe_check_res(void *ctx, struct xfi *xf, void *fa)
 
   if (xf->pm.pipe_act) {
 
+    if (DP_LLB_IS_EGR(ctx)) {
+      if (xf->pm.nf == 0) {
+        return DP_PASS;
+      }
+    }
+
     if (xf->pm.pipe_act & LLB_PIPE_DROP) {
       return DP_DROP;
     } 
