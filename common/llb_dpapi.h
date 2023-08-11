@@ -815,5 +815,7 @@ int llb_add_map_elem(int tbl, void *k, void *v);
 int llb_del_map_elem(int tbl, void *k);
 void llb_map_loop_and_delete(int tbl, dp_map_walker_t cb, dp_map_ita_t *it);
 int llb_dp_link_attach(const char *ifname, const char *psec, int mp_type, int unload);
+void llb_xh_lock(void);
+void llb_xh_unlock(void);
 
 #endif /* __LLB_DPAPI_H__ */

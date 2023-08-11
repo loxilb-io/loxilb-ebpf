@@ -1993,9 +1993,23 @@ ll_age_ctmap(void)
   it.val = adat;
   it.uarg = as;
 
+  XH_LOCK();
   llb_map_loop_and_delete(LL_DP_CT_MAP, ll_ct_map_ent_has_aged, &it);
+  XH_UNLOCK();
   if (adat) free(adat);
   if (as) free(as);
+}
+
+void
+llb_xh_lock(void)
+{
+  XH_LOCK();
+}
+
+void
+llb_xh_unlock(void)
+{
+  XH_UNLOCK();
 }
 
 void
