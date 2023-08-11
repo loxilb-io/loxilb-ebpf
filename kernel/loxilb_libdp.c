@@ -79,6 +79,7 @@ typedef struct llb_dp_map {
 typedef struct llb_dp_struct
 {
   pthread_rwlock_t lock;
+  pthread_rwlock_t mplock;
   const char *ll_dp_fname;
   const char *ll_tc_fname;
   const char *ll_dp_dfl_sec;
@@ -100,8 +101,10 @@ typedef struct llb_dp_struct
 } llb_dp_struct_t;
 
 #define XH_LOCK()    pthread_rwlock_wrlock(&xh->lock)
+#define XH_MPLOCK()  pthread_rwlock_wrlock(&xh->mplock)
 #define XH_RD_LOCK() pthread_rwlock_rdlock(&xh->lock)
 #define XH_UNLOCK()  pthread_rwlock_unlock(&xh->lock)
+#define XH_MPUNLOCK() pthread_rwlock_unlock(&xh->mplock)
 #define XH_BPF_OBJ() xh->links[0].obj
 
 llb_dp_struct_t *xh;
@@ -1993,9 +1996,9 @@ ll_age_ctmap(void)
   it.val = adat;
   it.uarg = as;
 
-  XH_LOCK();
+  XH_MPLOCK();
   llb_map_loop_and_delete(LL_DP_CT_MAP, ll_ct_map_ent_has_aged, &it);
-  XH_UNLOCK();
+  XH_MPUNLOCK();
   if (adat) free(adat);
   if (as) free(as);
 }
@@ -2003,13 +2006,13 @@ ll_age_ctmap(void)
 void
 llb_xh_lock(void)
 {
-  XH_LOCK();
+  XH_MPLOCK();
 }
 
 void
 llb_xh_unlock(void)
 {
-  XH_UNLOCK();
+  XH_MPUNLOCK();
 }
 
 void
