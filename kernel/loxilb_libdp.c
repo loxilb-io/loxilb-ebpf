@@ -1274,6 +1274,7 @@ llb_map_loop_and_delete(int tid, dp_map_walker_t cb, dp_map_ita_t *it)
 
   t = &xh->maps[tid];
 
+  XH_LOCK();
   while (bpf_map_get_next_key(t->map_fd, key, it->next_key) == 0) {
     if (n >= t->max_entries) break;
 
@@ -1290,6 +1291,7 @@ next:
     key = it->next_key;
     n++;
   }
+  XH_UNLOCK();
 
   return;
 }
