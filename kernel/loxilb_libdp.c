@@ -101,10 +101,12 @@ typedef struct llb_dp_struct
 } llb_dp_struct_t;
 
 #define XH_LOCK()    pthread_rwlock_wrlock(&xh->lock)
-#define XH_MPLOCK()  pthread_rwlock_wrlock(&xh->mplock)
 #define XH_RD_LOCK() pthread_rwlock_rdlock(&xh->lock)
 #define XH_UNLOCK()  pthread_rwlock_unlock(&xh->lock)
+
+#define XH_MPLOCK()  pthread_rwlock_wrlock(&xh->mplock)
 #define XH_MPUNLOCK() pthread_rwlock_unlock(&xh->mplock)
+
 #define XH_BPF_OBJ() xh->links[0].obj
 
 llb_dp_struct_t *xh;
@@ -353,7 +355,9 @@ ll_flush_fcmap(void)
   it.val = fc_val;
   it.uarg = &ns;
 
+  XH_LOCK();
   llb_map_loop_and_delete(LL_DP_FCV4_MAP, ll_fcmap_ent_set_flush, &it);
+  XH_UNLOCK();
   if (fc_val) free(fc_val);
 }
 
@@ -1274,7 +1278,6 @@ llb_map_loop_and_delete(int tid, dp_map_walker_t cb, dp_map_ita_t *it)
 
   t = &xh->maps[tid];
 
-  XH_LOCK();
   while (bpf_map_get_next_key(t->map_fd, key, it->next_key) == 0) {
     if (n >= t->max_entries) break;
 
@@ -1291,7 +1294,6 @@ next:
     key = it->next_key;
     n++;
   }
-  XH_UNLOCK();
 
   return;
 }
@@ -1722,7 +1724,9 @@ ll_age_fcmap(void)
   it.val = fc_val;
   it.uarg = &ns;
 
+  XH_LOCK();
   llb_map_loop_and_delete(LL_DP_FCV4_MAP, ll_fcmap_ent_has_aged, &it);
+  XH_UNLOCK();
   if (fc_val) free(fc_val);
 }
 
@@ -1998,9 +2002,9 @@ ll_age_ctmap(void)
   it.val = adat;
   it.uarg = as;
 
-  XH_MPLOCK();
+  XH_LOCK();
   llb_map_loop_and_delete(LL_DP_CT_MAP, ll_ct_map_ent_has_aged, &it);
-  XH_MPUNLOCK();
+  XH_UNLOCK();
   if (adat) free(adat);
   if (as) free(as);
 }
@@ -2020,6 +2024,7 @@ llb_xh_unlock(void)
 void
 llb_age_map_entries(int tbl)
 {
+  XH_MPLOCK();
   switch (tbl) {
   case LL_DP_FCV4_MAP:
     ll_age_fcmap();
@@ -2030,6 +2035,7 @@ llb_age_map_entries(int tbl)
   default:
     break;
   }
+  XH_MPUNLOCK();
 
   return;
 }
