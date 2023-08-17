@@ -1292,8 +1292,8 @@ dp_ct_est(struct xfi *xf,
           key->daddr[0] = tdat->pi.pmhh[j];
           xkey->daddr[0] = tdat->pi.pmhh[j];
 
-          adat->ctd.xi.nat_rip[0] = tdat->pi.pmhh[j];
-          axdat->ctd.xi.nat_xip[0] = tdat->pi.pmhh[j];
+          //adat->ctd.xi.nat_rip[0] = tdat->pi.pmhh[j];
+          //axdat->ctd.xi.nat_xip[0] = tdat->pi.pmhh[j];
 
           adat->nat_act.rip[0] = tdat->pi.pmhh[j];
           axdat->nat_act.xip[0] = tdat->pi.pmhh[j];
