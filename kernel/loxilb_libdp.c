@@ -569,7 +569,7 @@ llb_setup_kern_mon(void)
   struct perf_buffer_opts pb_opts = { 0 } ;
   struct perf_buffer *pb;
   pb_opts.sample_cb = llb_maptrace_output;
-  pb = perf_buffer__new(bpf_map__fd(prog->maps.map_events), 8, &pb_opts);
+  pb = perf_buffer__new(bpf_map__fd(prog->maps.map_events), 128, &pb_opts);
   err = libbpf_get_error(pb);
   if (err) {
     log_error("failed to setup perf_buffer: %d", err);
@@ -1858,6 +1858,8 @@ ll_ct_map_ent_has_aged(int tid, void *k, void *ita)
 
   if (!it|| !it->uarg || !it->val) return 0;
 
+  return 0;
+
   as = it->uarg;
   curr_ns = as->curr_ns;
   adat = it->val;
@@ -1885,6 +1887,10 @@ ll_ct_map_ent_has_aged(int tid, void *k, void *ita)
     } else {
       inet_ntop(AF_INET6, xkey.saddr, sstr, INET6_ADDRSTRLEN);
       inet_ntop(AF_INET6, xkey.daddr, dstr, INET6_ADDRSTRLEN);
+    }
+
+    if (curr_ns - adat->lts < CT_GEN_FN_CPTO) {
+      return 0;
     }
 
     log_trace("ct: rdir not found #%s:%d -> %s:%d (%d)#",
