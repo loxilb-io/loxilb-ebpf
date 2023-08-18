@@ -620,8 +620,9 @@ struct mf_xfrm_inf
 typedef struct mf_xfrm_inf nxfrm_inf_t;
 
 struct dp_ct_dat {
-  __u32 rid;
-  __u32 aid;
+  __u16 rid;
+  __u16 aid;
+  __u32 nid;
   ct_pinf_t pi;
   ct_dir_t dir;
   ct_smr_t smr;

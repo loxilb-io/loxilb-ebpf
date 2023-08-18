@@ -89,7 +89,7 @@ do {                                       \
 #endif
 
 static __u32 __always_inline
-dp_ct_get_newctr(void)
+dp_ct_get_newctr(__u32 *nid)
 {
   __u32 k = 0;
   __u32 v = 0;
@@ -101,6 +101,7 @@ dp_ct_get_newctr(void)
     return 0;
   }
 
+  *nid = ctr->start;
   /* FIXME - We can potentially do a percpu array and do away
    *         with the locking here
    */ 
@@ -1407,7 +1408,7 @@ dp_ct_in(void *ctx, struct xfi *xf)
     LL_DBG_PRINTK("[CTRK] new-ct4");
     adat->ca.ftrap = 0;
     adat->ca.oaux = 0;
-    adat->ca.cidx = dp_ct_get_newctr();
+    adat->ca.cidx = dp_ct_get_newctr(&adat->ctd.nid);
     adat->ca.fwrid = xf->pm.fw_rid;
     adat->ca.record = xf->pm.dp_rec;
     memset(&adat->ctd.pi, 0, sizeof(ct_pinf_t));
@@ -1467,6 +1468,7 @@ dp_ct_in(void *ctx, struct xfi *xf)
     axdat->ctd.smr = CT_SMR_INIT;
     axdat->ctd.rid = adat->ctd.rid;
     axdat->ctd.aid = adat->ctd.aid;
+    axdat->ctd.nid = adat->ctd.nid;
     axdat->ctd.pi.npmhh = xf->nm.npmhh;
     axdat->ctd.pi.pmhh[0] = xf->nm.pmhh[0];
     axdat->ctd.pi.pmhh[1] = xf->nm.pmhh[1];

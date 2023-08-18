@@ -1889,9 +1889,9 @@ ll_ct_map_ent_has_aged(int tid, void *k, void *ita)
       inet_ntop(AF_INET6, xkey.daddr, dstr, INET6_ADDRSTRLEN);
     }
 
-    //if (curr_ns - adat->lts < CT_GEN_FN_CPTO) {
-    //  return 0;
-    //}
+    if (curr_ns - adat->lts < CT_GEN_FN_CPTO) {
+      return 0;
+    }
 
     log_trace("ct: rdir not found #%s:%d -> %s:%d (%d)#",
          sstr, ntohs(xkey.sport),
