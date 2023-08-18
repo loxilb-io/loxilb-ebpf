@@ -1858,8 +1858,6 @@ ll_ct_map_ent_has_aged(int tid, void *k, void *ita)
 
   if (!it|| !it->uarg || !it->val) return 0;
 
-  return 0;
-
   as = it->uarg;
   curr_ns = as->curr_ns;
   adat = it->val;
