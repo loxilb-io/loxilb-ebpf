@@ -1887,7 +1887,7 @@ ll_ct_map_ent_has_aged(int tid, void *k, void *ita)
       inet_ntop(AF_INET6, xkey.daddr, dstr, INET6_ADDRSTRLEN);
     }
 
-    if (curr_ns - adat->lts < CT_GEN_FN_CPTO) {
+    if (curr_ns - adat->lts < CT_MISMATCH_FN_CPTO) {
       return 0;
     }
 
@@ -1973,7 +1973,10 @@ ll_ct_map_ent_has_aged(int tid, void *k, void *ita)
          used1, used2);
     ll_send_ctep_reset(key, adat);
     ll_send_ctep_reset(&xkey, &axdat);
+    llb_maptrace_uhook(LL_DP_CT_MAP, 0, &xkey, sizeof(xkey), NULL, 0);
+    bpf_map_delete_elem(t->map_fd, &xkey);
     llb_clear_map_stats(LL_DP_CT_STATS_MAP, adat->ca.cidx);
+    llb_clear_map_stats(LL_DP_CT_STATS_MAP, axdat.ca.cidx);
     return 1;
   }
 
