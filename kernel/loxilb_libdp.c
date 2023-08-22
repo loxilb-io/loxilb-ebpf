@@ -2021,7 +2021,7 @@ ll_age_ctmap(void)
 
   XH_LOCK();
   if (lost > 0) {
-    log_error("Lost count %lu", lost);
+    log_error("PerfBuf Lost count %lu", lost);
     lost = 0;
   }
 
