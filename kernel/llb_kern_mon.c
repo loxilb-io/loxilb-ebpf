@@ -95,8 +95,12 @@ int bpf_prog_kern_hmapdelete(struct pt_regs *ctx)
   char *pKey = (char*)PT_REGS_PARM2(ctx);
   char *pValue = NULL;
 
+#ifndef HAVE_DP_DEL_MON
+  return 0;
+#else
   log_map_update(ctx, updated_map, pKey, pValue, DELETE_KERNEL);
   return 0;
+#endif
 }
 
 SEC("kprobe/htab_map_lookup_and_delete_elem")
@@ -105,10 +109,15 @@ int bpf_prog_kern_hmaplkdelete(struct pt_regs *ctx)
   // Parse functions params
   struct bpf_map* updated_map = (struct bpf_map* ) PT_REGS_PARM1(ctx);
   char *pKey = (char*)PT_REGS_PARM2(ctx);
-  char *pValue = (char*)PT_REGS_PARM3(ctx);
+  //char *pValue = (char*)PT_REGS_PARM3(ctx);
+  char *pValue = NULL;
 
+#ifndef HAVE_DP_DEL_MON
+  return 0;
+#else
   log_map_update(ctx, updated_map, pKey, pValue, DELETE_KERNEL);
   return 0;
+#endif
 }
 
 #ifdef HAVE_DP_EXT_MON 

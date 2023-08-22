@@ -110,6 +110,7 @@ typedef struct llb_dp_struct
 #define XH_BPF_OBJ() xh->links[0].obj
 
 llb_dp_struct_t *xh;
+static uint64_t lost;
 
 static inline unsigned int
 bpf_num_possible_cpus(void)
@@ -438,6 +439,14 @@ goMapNotiHandler(struct ll_dp_map_notif *mn)
 }
 
 static void
+llb_maptrace_lost(void *ctx, int cpu, __u64 cnt)
+{
+  XH_LOCK();
+  lost += cnt;
+  XH_UNLOCK();
+}
+
+static void
 llb_maptrace_output(void *ctx, int cpu, void *data, __u32 size)
 {
   struct map_update_data *map_data = (struct map_update_data*)data;
@@ -569,7 +578,8 @@ llb_setup_kern_mon(void)
   struct perf_buffer_opts pb_opts = { 0 } ;
   struct perf_buffer *pb;
   pb_opts.sample_cb = llb_maptrace_output;
-  pb = perf_buffer__new(bpf_map__fd(prog->maps.map_events), 128, &pb_opts);
+  pb_opts.lost_cb = llb_maptrace_lost;
+  pb = perf_buffer__new(bpf_map__fd(prog->maps.map_events), 16384, &pb_opts);
   err = libbpf_get_error(pb);
   if (err) {
     log_error("failed to setup perf_buffer: %d", err);
@@ -2010,6 +2020,11 @@ ll_age_ctmap(void)
   it.uarg = as;
 
   XH_LOCK();
+  if (lost > 0) {
+    log_error("Lost count %lu", lost);
+    lost = 0;
+  }
+
   llb_map_loop_and_delete(LL_DP_CT_MAP, ll_ct_map_ent_has_aged, &it);
   XH_UNLOCK();
   if (adat) free(adat);
