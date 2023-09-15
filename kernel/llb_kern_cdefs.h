@@ -960,6 +960,8 @@ dp_set_tcp_sport(void *md, struct xfi *xf, __be16 xport)
   int tcp_sport_off = xf->pm.l4_off + offsetof(struct tcphdr, source);
   __be32 old_sport = xf->l34m.source;
 
+  if (xf->l34m.frg) return 0;
+
   bpf_l4_csum_replace(md, tcp_csum_off, old_sport, xport, sizeof(xport));
   bpf_skb_store_bytes(md, tcp_sport_off, &xport, sizeof(xport), 0);
   xf->l34m.source = xport;
@@ -973,6 +975,8 @@ dp_set_tcp_dport(void *md, struct xfi *xf, __be16 xport)
   int tcp_csum_off = xf->pm.l4_off + offsetof(struct tcphdr, check);
   int tcp_dport_off = xf->pm.l4_off + offsetof(struct tcphdr, dest);
   __be32 old_dport = xf->l34m.dest;
+
+  if (xf->l34m.frg) return 0;
 
   bpf_l4_csum_replace(md, tcp_csum_off, old_dport, xport, sizeof(xport));
   bpf_skb_store_bytes(md, tcp_dport_off, &xport, sizeof(xport), 0);
@@ -1068,6 +1072,8 @@ dp_set_udp_sport(void *md, struct xfi *xf, __be16 xport)
   __be32 old_sport = xf->l34m.source;
   //__be16 csum = 0;
 
+  if (xf->l34m.frg) return 0;
+
   /* UDP checksum = 0 is valid */
   //bpf_skb_store_bytes(md, udp_csum_off, &csum, sizeof(csum), 0);
   bpf_l4_csum_replace(md, udp_csum_off, old_sport, xport, sizeof(xport));
@@ -1084,6 +1090,8 @@ dp_set_udp_dport(void *md, struct xfi *xf, __be16 xport)
   int udp_dport_off = xf->pm.l4_off + offsetof(struct udphdr, dest);
   __be32 old_dport = xf->l34m.dest;
   //__be16 csum = 0;
+
+  if (xf->l34m.frg) return 0;
 
   /* UDP checksum = 0 is valid */
   //bpf_skb_store_bytes(md, udp_csum_off, &csum, sizeof(csum), 0);
@@ -1222,6 +1230,8 @@ dp_set_sctp_sport(void *md, struct xfi *xf, __be16 xport)
   int sctp_csum_off = xf->pm.l4_off + offsetof(struct sctphdr, checksum);
   int sctp_sport_off = xf->pm.l4_off + offsetof(struct sctphdr, source);
 
+  if (xf->l34m.frg) return 0;
+
   bpf_skb_store_bytes(md, sctp_csum_off, &csum , sizeof(csum), 0);
   bpf_skb_store_bytes(md, sctp_sport_off, &xport, sizeof(xport), 0);
   xf->l34m.source = xport;
@@ -1235,6 +1245,8 @@ dp_set_sctp_dport(void *md, struct xfi *xf, __be16 xport)
   uint32_t csum = 0;
   int sctp_csum_off = xf->pm.l4_off + offsetof(struct sctphdr, checksum); 
   int sctp_dport_off = xf->pm.l4_off + offsetof(struct sctphdr, dest);
+
+  if (xf->l34m.frg) return 0;
 
   bpf_skb_store_bytes(md, sctp_csum_off, &csum , sizeof(csum), 0);
   bpf_skb_store_bytes(md, sctp_dport_off, &xport, sizeof(xport), 0);

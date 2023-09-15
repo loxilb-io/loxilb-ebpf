@@ -522,7 +522,7 @@ dp_ct_udp_sm(void *ctx, struct xfi *xf,
   switch (us->state) {
   case CT_UDP_CNI:
 
-    if (xf->nm.dsr) {
+    if (xf->nm.dsr || xf->l2m.ssnid) {
       nstate = CT_UDP_EST;
       break;
     }
@@ -1207,13 +1207,6 @@ dp_ct_sm(void *ctx, struct xfi *xf,
 {
   int sm_ret = 0;
 
-  if (xf->pm.l4_off == 0) {
-    atdat->ctd.pi.frag = 1;
-    return CT_SMR_UNT;
-  }
-
-  atdat->ctd.pi.frag = 0;
-
   switch (xf->l34m.nw_proto) {
   case IPPROTO_TCP:
     sm_ret = dp_ct_tcp_sm(ctx, xf, atdat, axtdat, dir);
@@ -1282,52 +1275,79 @@ dp_ct_est(struct xfi *xf,
 
   ss = &adat->ctd.pi.s;
 
-  if (xf->l34m.nw_proto == IPPROTO_SCTP && tdat->xi.mhon) {
-    ct_sctp_pinfd_t *pss = &ss->sctp_cts[CT_DIR_IN];
-    //ct_sctp_pinfd_t *pxss = &ss->sctp_cts[CT_DIR_OUT];
+  switch (xf->l34m.nw_proto) {
+  case IPPROTO_UDP:
+    if (xf->l2m.ssnid) {
 
-    for (i = 0; i < pss->nh && i < LLB_MAX_MHOSTS; i++) {
-      key->saddr[0] = pss->mh_host[i];
-      for (j = 0; j < LLB_MAX_MHOSTS; j++) {
-        if (tdat->pi.pmhh[j]) {
-          key->daddr[0] = tdat->pi.pmhh[j];
-          xkey->daddr[0] = tdat->pi.pmhh[j];
+      adat->ctd.xi.osp = key->sport;
+      adat->ctd.xi.odp = key->dport;
+      key->sport = xf->l2m.ssnid;
+      key->dport = xf->l2m.ssnid;
+      adat->ctd.pi.frag = 1;
+      bpf_map_update_elem(&ct_map, key, adat, BPF_ANY);
 
-          //adat->ctd.xi.nat_rip[0] = tdat->pi.pmhh[j];
-          //axdat->ctd.xi.nat_xip[0] = tdat->pi.pmhh[j];
+#if 0
+      axdat->nat_act.asport = xkey->sport;
+      axdat->nat_act.adport = xkey->dport;
+      xkey->sport = xf->l2m.ssnid;
+      xkey->dport = xf->l2m.ssnid;
+      axdat->ctd.pi.frag = 1;
+      bpf_map_update_elem(&ct_map, xkey, axdat, BPF_ANY);
+#endif
 
-          adat->nat_act.rip[0] = tdat->pi.pmhh[j];
-          axdat->nat_act.xip[0] = tdat->pi.pmhh[j];
+    }
+    break;
+  case IPPROTO_SCTP:
+    if (tdat->xi.mhon) {
+      ct_sctp_pinfd_t *pss = &ss->sctp_cts[CT_DIR_IN];
+      //ct_sctp_pinfd_t *pxss = &ss->sctp_cts[CT_DIR_OUT];
 
-          LL_DBG_PRINTK("[CTRK] ASSOC 0x%x->0x%x",key->saddr[0], key->daddr[0]);
-          bpf_map_update_elem(&ct_map, key, adat, BPF_ANY);
-          if (i == 0) {
+      for (i = 0; i < pss->nh && i < LLB_MAX_MHOSTS; i++) {
+        key->saddr[0] = pss->mh_host[i];
+        for (j = 0; j < LLB_MAX_MHOSTS; j++) {
+          if (tdat->pi.pmhh[j]) {
+            key->daddr[0] = tdat->pi.pmhh[j];
+            xkey->daddr[0] = tdat->pi.pmhh[j];
+
+            //adat->ctd.xi.nat_rip[0] = tdat->pi.pmhh[j];
+            //axdat->ctd.xi.nat_xip[0] = tdat->pi.pmhh[j];
+
+            adat->nat_act.rip[0] = tdat->pi.pmhh[j];
+            axdat->nat_act.xip[0] = tdat->pi.pmhh[j];
+
+            LL_DBG_PRINTK("[CTRK] ASSOC 0x%x->0x%x",key->saddr[0], key->daddr[0]);
+            bpf_map_update_elem(&ct_map, key, adat, BPF_ANY);
+            if (i == 0) {
+              bpf_map_update_elem(&ct_map, xkey, axdat, BPF_ANY);
+            }
+          }
+        }
+      }
+
+#if 0
+      for (i = 0; i < pxss->nh && i < LLB_MAX_MHOSTS; i++) {
+        xkey->saddr[0] = pxss->mh_host[i];
+        xkey->saddr[1] = 0;
+        xkey->saddr[2] = 0;
+        xkey->saddr[3] = 0;
+        for (j = 1; j < LLB_MAX_MHOSTS; j++) {
+          if (xtdat->pi.pmhh[j]) {
+            xkey->daddr[0] = xtdat->pi.pmhh[j];
+            xkey->daddr[1] = 0;
+            xkey->daddr[2] = 0;
+            xkey->daddr[3] = 0;
+
+            axdat->nat_act.xip[0] = xtdat->pi.pmhh[j];
+            bpf_printk("%x->%x", xkey->saddr[0], xkey->daddr[0]);
             bpf_map_update_elem(&ct_map, xkey, axdat, BPF_ANY);
           }
         }
       }
-    }
-
-#if 0
-    for (i = 0; i < pxss->nh && i < LLB_MAX_MHOSTS; i++) {
-      xkey->saddr[0] = pxss->mh_host[i];
-      xkey->saddr[1] = 0;
-      xkey->saddr[2] = 0;
-      xkey->saddr[3] = 0;
-      for (j = 1; j < LLB_MAX_MHOSTS; j++) {
-        if (xtdat->pi.pmhh[j]) {
-          xkey->daddr[0] = xtdat->pi.pmhh[j];
-          xkey->daddr[1] = 0;
-          xkey->daddr[2] = 0;
-          xkey->daddr[3] = 0;
-
-          axdat->nat_act.xip[0] = xtdat->pi.pmhh[j];
-          bpf_printk("%x->%x", xkey->saddr[0], xkey->daddr[0]);
-          bpf_map_update_elem(&ct_map, xkey, axdat, BPF_ANY);
-        }
-      }
-    }
 #endif
+    }
+    break;
+  default:
+    break;
   }
   return 0;
 }
@@ -1501,15 +1521,11 @@ dp_ct_in(void *ctx, struct xfi *xf)
         atdat->nat_act.doct = 0;
         axtdat->nat_act.doct = 0;
         if (atdat->ctd.dir == CT_DIR_IN) {
-          if (atdat->ctd.xi.mhon) {
-            dp_ct_est(xf, &key, &xkey, atdat, axtdat);
-            atdat->ctd.xi.mhon = 0;
-          }
+          dp_ct_est(xf, &key, &xkey, atdat, axtdat);
+          atdat->ctd.xi.mhon = 0;
         } else {
-          if (axtdat->ctd.xi.mhon) {
-            dp_ct_est(xf, &xkey, &key, axtdat, atdat);
-            atdat->ctd.xi.mhon = 0;
-          }
+          dp_ct_est(xf, &xkey, &key, axtdat, atdat);
+          atdat->ctd.xi.mhon = 0;
         }
       } else {
         atdat->ca.act_type = DP_SET_NOP;

@@ -1751,9 +1751,12 @@ typedef struct ct_arg_struct
 
 static int
 ctm_proto_xfk_init(struct dp_ct_key *key,
-                   nxfrm_inf_t *xi,
-                   struct dp_ct_key *xkey)
+                   struct dp_ct_tact *adat,
+                   struct dp_ct_key *xkey,
+                   struct dp_ct_key *okey)
 {
+  nxfrm_inf_t *xi;
+
   DP_XADDR_CP(xkey->daddr, key->saddr);
   DP_XADDR_CP(xkey->saddr, key->daddr);
   xkey->sport = key->dport;
@@ -1762,7 +1765,9 @@ ctm_proto_xfk_init(struct dp_ct_key *key,
   xkey->zone = key->zone;
   xkey->v6 = key->v6;
 
-  if (xi->dsr) {
+  xi = &adat->ctd.xi;
+
+  if (xi->dsr || adat->ctd.pi.frag) {
     return 0;
   }
 
@@ -1850,6 +1855,7 @@ ll_ct_map_ent_has_aged(int tid, void *k, void *ita)
   dp_map_ita_t *it = ita;
   struct dp_ct_key *key = k;
   struct dp_ct_key xkey;
+  struct dp_ct_key okey;
   struct dp_ct_dat *dat;
   struct dp_ct_tact *adat;
   struct dp_ct_tact axdat;
@@ -1885,10 +1891,13 @@ ll_ct_map_ent_has_aged(int tid, void *k, void *ita)
     has_nat = true;
   }
 
-  ctm_proto_xfk_init(key, &adat->ctd.xi, &xkey);
+  ctm_proto_xfk_init(key, adat, &xkey, &okey);
 
   t = &xh->maps[LL_DP_CT_MAP];
-  if (bpf_map_lookup_elem(t->map_fd, &xkey, &axdat) != 0) {
+
+  if (adat->ctd.pi.frag) {
+    memset(&axdat, 0, sizeof(axdat));
+  } else if (bpf_map_lookup_elem(t->map_fd, &xkey, &axdat) != 0) {
     if (key->v6 == 0) {
       inet_ntop(AF_INET, xkey.saddr, sstr, INET_ADDRSTRLEN);
       inet_ntop(AF_INET, xkey.daddr, dstr, INET_ADDRSTRLEN);
@@ -1915,7 +1924,7 @@ ll_ct_map_ent_has_aged(int tid, void *k, void *ita)
     latest_ns = axdat.lts;
   }
 
-  if (dat->dir == CT_DIR_OUT) {
+  if (!adat->ctd.pi.frag && dat->dir == CT_DIR_OUT) {
     return 0;
   } 
 
@@ -1936,7 +1945,9 @@ ll_ct_map_ent_has_aged(int tid, void *k, void *ita)
   } else if (key->l4proto == IPPROTO_UDP) {
     ct_udp_pinf_t *us = &dat->pi.u;
  
-    if (us->state & (CT_UDP_UEST|CT_UDP_EST)) {
+    if (adat->ctd.pi.frag) {
+      to = CT_UDP_FN_CPTO;
+    } else if (us->state & (CT_UDP_UEST|CT_UDP_EST)) {
       to = CT_UDP_EST_CPTO;
       est = true;
     } else {
@@ -1982,11 +1993,14 @@ ll_ct_map_ent_has_aged(int tid, void *k, void *ita)
          est, has_nat, curr_ns - latest_ns,
          used1, used2);
     ll_send_ctep_reset(key, adat);
-    ll_send_ctep_reset(&xkey, &axdat);
-    llb_maptrace_uhook(LL_DP_CT_MAP, 0, &xkey, sizeof(xkey), NULL, 0);
-    bpf_map_delete_elem(t->map_fd, &xkey);
     llb_clear_map_stats(LL_DP_CT_STATS_MAP, adat->ca.cidx);
-    llb_clear_map_stats(LL_DP_CT_STATS_MAP, axdat.ca.cidx);
+
+    if (!adat->ctd.pi.frag) {
+      ll_send_ctep_reset(&xkey, &axdat);
+      llb_maptrace_uhook(LL_DP_CT_MAP, 0, &xkey, sizeof(xkey), NULL, 0);
+      bpf_map_delete_elem(t->map_fd, &xkey);
+      llb_clear_map_stats(LL_DP_CT_STATS_MAP, axdat.ca.cidx);
+    }
     return 1;
   }
 
