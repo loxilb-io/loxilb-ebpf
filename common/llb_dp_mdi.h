@@ -161,7 +161,8 @@ struct dp_pi_mdi {
     __u8             l4fin:2;
     __u8             goct:2;
     __u8             pten:2;
-    __u8             il4fin:2;
+    __u8             il4fin:1;
+    __u8             dir:1;
     __u16            l3_len;
     __u16            l3_plen;
     __u16            il3_len;

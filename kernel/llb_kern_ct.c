@@ -1278,23 +1278,21 @@ dp_ct_est(struct xfi *xf,
   switch (xf->l34m.nw_proto) {
   case IPPROTO_UDP:
     if (xf->l2m.ssnid) {
-
-      adat->ctd.xi.osp = key->sport;
-      adat->ctd.xi.odp = key->dport;
-      key->sport = xf->l2m.ssnid;
-      key->dport = xf->l2m.ssnid;
-      adat->ctd.pi.frag = 1;
-      bpf_map_update_elem(&ct_map, key, adat, BPF_ANY);
-
-#if 0
-      axdat->nat_act.asport = xkey->sport;
-      axdat->nat_act.adport = xkey->dport;
-      xkey->sport = xf->l2m.ssnid;
-      xkey->dport = xf->l2m.ssnid;
-      axdat->ctd.pi.frag = 1;
-      bpf_map_update_elem(&ct_map, xkey, axdat, BPF_ANY);
-#endif
-
+      if (xf->pm.dir == CT_DIR_IN) {
+        adat->ctd.xi.osp = key->sport;
+        adat->ctd.xi.odp = key->dport;
+        key->sport = xf->l2m.ssnid;
+        key->dport = xf->l2m.ssnid;
+        adat->ctd.pi.frag = 1;
+        bpf_map_update_elem(&ct_map, key, adat, BPF_ANY);
+      } else {
+        axdat->ctd.xi.osp = xkey->sport;
+        axdat->ctd.xi.odp = xkey->dport;
+        xkey->sport = xf->l2m.ssnid;
+        xkey->dport = xf->l2m.ssnid;
+        axdat->ctd.pi.frag = 1;
+        bpf_map_update_elem(&ct_map, xkey, axdat, BPF_ANY);
+      }
     }
     break;
   case IPPROTO_SCTP:
@@ -1505,11 +1503,13 @@ dp_ct_in(void *ctx, struct xfi *xf)
     atdat->lts = bpf_ktime_get_ns();
     axtdat->lts = atdat->lts;
     if (atdat->ctd.dir == CT_DIR_IN) {
+      xf->pm.dir = CT_DIR_IN;
       LL_DBG_PRINTK("[CTRK] in-dir");
       xf->pm.phit |= LLB_DP_CTSI_HIT;
       smr = dp_ct_sm(ctx, xf, atdat, axtdat, CT_DIR_IN);
     } else {
       LL_DBG_PRINTK("[CTRK] out-dir");
+      xf->pm.dir = CT_DIR_OUT;
       xf->pm.phit |= LLB_DP_CTSO_HIT;
       smr = dp_ct_sm(ctx, xf, axtdat, atdat, CT_DIR_OUT);
     }
