@@ -48,6 +48,7 @@ do {                                  \
   (x)->qm.ipolid == 0 &&                      \
   (x)->nm.xlate_proto == 0 &&                 \
   (x)->pm.dp_rec == 0 &&                      \
+  (x)->l2m.ssnid == 0 &&                      \
   (x)->pm.mirr == 0)
 
 #define LL_PIPELINE_CONT(F) (!F->pm.pipe_act)
@@ -160,7 +161,8 @@ struct dp_pi_mdi {
     __u8             l4fin:2;
     __u8             goct:2;
     __u8             pten:2;
-    __u8             il4fin:2;
+    __u8             il4fin:1;
+    __u8             dir:1;
     __u16            l3_len;
     __u16            l3_plen;
     __u16            il3_len;
@@ -185,7 +187,7 @@ struct dp_l2_mdi {
     __u8             dl_src[6];
     __u8             vlan_pcp;
     __u8             valid;
-    __u16            res;
+    __u16            ssnid;
 };
 
 #define saddr4 saddr[0]
@@ -196,7 +198,7 @@ struct dp_l34_mdi {
     __u8             nw_proto;
 
     __u8             valid;
-    __u8             r;
+    __u8             frg;
 
     __u16            source;
     __u16            dest;

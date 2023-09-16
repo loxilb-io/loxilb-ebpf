@@ -616,6 +616,8 @@ struct mf_xfrm_inf
   uint16_t nat_xport;
   uint32_t nat_xip[4];
   uint32_t nat_rip[4];
+  uint16_t osp;
+  uint16_t odp;
 };
 typedef struct mf_xfrm_inf nxfrm_inf_t;
 

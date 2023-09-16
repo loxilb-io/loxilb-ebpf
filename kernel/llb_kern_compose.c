@@ -317,31 +317,29 @@ dp_parse_ipv4_d1(struct parser *p,
   xf->il34m.saddr4 = iph->saddr;
   xf->il34m.daddr4 = iph->daddr;
 
-  /* Earlier we used to have the following check here :
-   * !ip_is_fragment(iph) || ip_is_first_fragment(iph))
-   * But it seems to be unncessary as proper bound checking
-   * is already taken care by eBPF verifier
-   */
-  xf->pm.il4_off = DP_DIFF_PTR(DP_ADD_PTR(iph, iphl), p->start);
-  p->dbegin = DP_ADD_PTR(iph, iphl);
+  if (ip_is_first_fragment(iph)) {
+    xf->pm.il4_off = DP_DIFF_PTR(DP_ADD_PTR(iph, iphl), p->start);
+    p->dbegin = DP_ADD_PTR(iph, iphl);
 
-  if (xf->il34m.nw_proto == IPPROTO_TCP) {
-    return dp_parse_tcp(p, md, xf);
-  } else if (xf->il34m.nw_proto == IPPROTO_UDP) {
-    return dp_parse_iudp(p, md, xf);
-  } else if (xf->il34m.nw_proto == IPPROTO_SCTP) {
-    return dp_parse_sctp(p, md, xf);
-  } else if (xf->il34m.nw_proto == IPPROTO_ICMP) {
-    return dp_parse_icmp(p, md, xf);
-  } else if (xf->il34m.nw_proto == IPPROTO_ESP ||
+    if (xf->il34m.nw_proto == IPPROTO_TCP) {
+      return dp_parse_tcp(p, md, xf);
+    } else if (xf->il34m.nw_proto == IPPROTO_UDP) {
+      return dp_parse_iudp(p, md, xf);
+    } else if (xf->il34m.nw_proto == IPPROTO_SCTP) {
+      return dp_parse_sctp(p, md, xf);
+    } else if (xf->il34m.nw_proto == IPPROTO_ICMP) {
+      return dp_parse_icmp(p, md, xf);
+    } else if (xf->il34m.nw_proto == IPPROTO_ESP ||
              xf->il34m.nw_proto == IPPROTO_AH) {
-    /* Let xfrm handle it */
-    return DP_PRET_PASS;
-  }
-
-  if (ip_is_fragment(iph)) {
-    xf->il34m.source = 0;
-    xf->il34m.dest = 0;
+      /* Let xfrm handle it */
+      return DP_PRET_PASS;
+    }
+  } else {
+    if (ip_is_fragment(iph)) {
+      xf->il34m.source = iph->id;
+      xf->il34m.dest = iph->id;
+      xf->il34m.frg = 1;
+    }
   }
   
   return DP_PRET_OK;
@@ -777,33 +775,37 @@ dp_parse_ipv4(struct parser *p,
   xf->l34m.saddr4 = iph->saddr;
   xf->l34m.daddr4 = iph->daddr;
 
-  /* Earlier we used to have the following check here :
-   * !ip_is_fragment(iph) || ip_is_first_fragment(iph))
-   * But it seems to be unncessary as proper bound checking
-   * is already taken care by eBPF verifier
-   */
-  xf->pm.l4_off = DP_DIFF_PTR(DP_ADD_PTR(iph, iphl), p->start);
-  p->dbegin = DP_ADD_PTR(iph, iphl);
+  if (ip_is_first_fragment(iph)) {
+    xf->pm.l4_off = DP_DIFF_PTR(DP_ADD_PTR(iph, iphl), p->start);
+    p->dbegin = DP_ADD_PTR(iph, iphl);
 
-  if (xf->l34m.nw_proto == IPPROTO_TCP) {
-    return dp_parse_tcp(p, md, xf);
-  } else if (xf->l34m.nw_proto == IPPROTO_UDP) {
-    return dp_parse_udp(p, md, xf);
-  } else if (xf->l34m.nw_proto == IPPROTO_SCTP) {
-    return dp_parse_sctp(p, md, xf);
-  } else if (xf->l34m.nw_proto == IPPROTO_ICMP) {
-    return dp_parse_icmp(p, md, xf);
-  } else if (xf->l34m.nw_proto == IPPROTO_IPIP) {
-    return dp_parse_ipip(p, md, xf);
-  } else if (xf->l34m.nw_proto == IPPROTO_ESP ||
+    if (ip_is_fragment(iph)) {
+      xf->l2m.ssnid = iph->id;
+      xf->pm.goct = 1;
+    }
+
+    if (xf->l34m.nw_proto == IPPROTO_TCP) {
+      return dp_parse_tcp(p, md, xf);
+    } else if (xf->l34m.nw_proto == IPPROTO_UDP) {
+      return dp_parse_udp(p, md, xf);
+    } else if (xf->l34m.nw_proto == IPPROTO_SCTP) {
+      return dp_parse_sctp(p, md, xf);
+    } else if (xf->l34m.nw_proto == IPPROTO_ICMP) {
+      return dp_parse_icmp(p, md, xf);
+    } else if (xf->l34m.nw_proto == IPPROTO_IPIP) {
+      return dp_parse_ipip(p, md, xf);
+    } else if (xf->l34m.nw_proto == IPPROTO_ESP ||
              xf->l34m.nw_proto == IPPROTO_AH) {
     /* Let xfrm handle it */
-    return DP_PRET_PASS;
-  }
-
-  if (ip_is_fragment(iph)) {
-    xf->l34m.source = 0;
-    xf->l34m.dest = 0;
+      return DP_PRET_PASS;
+    }
+  } else {
+    if (ip_is_fragment(iph)) {
+      xf->l34m.source = iph->id;
+      xf->l34m.dest = iph->id;
+      xf->l2m.ssnid = iph->id;
+      xf->l34m.frg = 1;
+    }
   }
   
   return DP_PRET_OK;
