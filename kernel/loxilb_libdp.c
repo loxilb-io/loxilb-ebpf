@@ -1513,7 +1513,6 @@ llb_add_map_elem(int tbl, void *k, void *v)
   /* Any table which has stats pb needs to get stats cleared before use */
   if (tbl == LL_DP_NAT_MAP ||
       tbl == LL_DP_TMAC_MAP ||
-      tbl == LL_DP_TMAC_MAP ||
       tbl == LL_DP_FW4_MAP  ||
       tbl == LL_DP_RTV4_MAP) {
     __u32 cidx = 0;
