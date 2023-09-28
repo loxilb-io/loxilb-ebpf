@@ -1308,8 +1308,8 @@ next:
   return;
 }
 
-void 
-llb_clear_map_stats(int tid, __u32 idx)
+static void
+llb_clear_map_stats_internal(int tid, __u32 idx, bool wipe)
 {
   int e = 0;
   llb_dp_map_t *t;
@@ -1318,28 +1318,29 @@ llb_clear_map_stats(int tid, __u32 idx)
     return;
 
   t = &xh->maps[tid];
-  if (t->has_pb && t->pb_xtid <= 0) {
-    /* FIXME : Handle non-pcpu */
-    if (idx >= 0) {
+  if (t->has_pb) {
+    if (t->pb_xtid > 0) {
+      if (t->pb_xtid >= LL_DP_MAX_MAP)
+        return;
+      t = &xh->maps[t->pb_xtid];
+      if (!t->has_pb || t->pb_xtid > 0) {
+        return;
+      }
+    }
+    if (!wipe) {
         llb_clear_stats_pcpu_arr(t->map_fd, idx);
     } else {
       for (e = 0; e < t->max_entries; e++) {
         llb_clear_stats_pcpu_arr(t->map_fd, e);
       }
     }
-  } else if (t->has_pb && t->pb_xtid > 0) {
-    if (t->pb_xtid < 0 || t->pb_xtid >= LL_DP_MAX_MAP)
-      return;
-
-    t = &xh->maps[t->pb_xtid];
-    if (!t->has_pb || t->pb_xtid > 0) {
-      return;
-    }
-
-    if (idx >= 0) {
-      llb_clear_stats_pcpu_arr(t->map_fd, idx);
-    }
   }
+}
+
+void
+llb_clear_map_stats(int tid, __u32 idx)
+{
+  return llb_clear_map_stats_internal(tid, idx, false);
 }
 
 int
@@ -1365,6 +1366,33 @@ llb_add_map_elem_nat_post_proc(void *k, void *v)
     ep_arm = &na->nxfrms[i];
 
     if (ep_arm->inactive) {
+      inact_aids[j++] = i;
+    }
+  }
+
+  if (j > 0) {
+    ll_map_ct_rm_related(na->ca.cidx, inact_aids, j);
+  }
+
+  return 0;
+
+}
+
+static int
+llb_del_map_elem_nat_post_proc(void *k, void *v)
+{
+  struct dp_nat_tacts *na = v;
+  struct mf_xfrm_inf *ep_arm;
+  uint32_t inact_aids[LLB_MAX_NXFRMS];
+  int i = 0;
+  int j = 0;
+
+  memset(inact_aids, 0, sizeof(inact_aids));
+
+  for (i = 0; i < na->nxfrm && i < LLB_MAX_NXFRMS; i++) {
+    ep_arm = &na->nxfrms[i];
+
+    if (ep_arm->inactive == 0) {
       inact_aids[j++] = i;
     }
   }
@@ -1558,6 +1586,7 @@ ll_map_elem_cmp_cidx(int tid, void *k, void *ita)
 
   if (tid == LL_DP_CT_MAP || 
       tid == LL_DP_TMAC_MAP ||
+      tid == LL_DP_FCV4_MAP ||
       tid == LL_DP_RTV4_MAP) {
     struct dp_cmn_act *ca = it->val;
     if (ca->cidx == cidx) return 1;
@@ -1640,7 +1669,8 @@ int
 llb_del_map_elem(int tbl, void *k)
 {
   int ret = -EINVAL;
-  uint32_t cidx = 0;
+  struct dp_nat_tacts t = { 0 };
+
   if (tbl < 0 || tbl >= LL_DP_MAX_MAP) {
     return ret;
   }
@@ -1649,15 +1679,13 @@ llb_del_map_elem(int tbl, void *k)
 
   /* Need some pre-processing for certain maps */
   if (tbl == LL_DP_NAT_MAP) {
-    struct dp_nat_tacts t = { 0 };
     ret = bpf_map_lookup_elem(llb_map2fd(tbl), k, &t);
     if (ret != 0) {
       XH_UNLOCK();
       return -EINVAL;
     }
-    cidx = t.ca.cidx;
   }
-  
+
   if (tbl == LL_DP_FW4_MAP) {
     ret = llb_del_mf_map_elem__(tbl, k);
   } else {
@@ -1669,10 +1697,7 @@ llb_del_map_elem(int tbl, void *k)
 
   /* Need some post-processing for certain maps */
   if (tbl == LL_DP_NAT_MAP) {
-    if (cidx > 0) {
-      llb_del_map_elem_with_cidx(LL_DP_CT_MAP, cidx);
-      llb_clear_map_stats(LL_DP_CT_STATS_MAP, cidx);
-    }
+    llb_del_map_elem_nat_post_proc(k, &t);
   }
 
   XH_UNLOCK();
@@ -2003,6 +2028,18 @@ ll_ct_map_ent_has_aged(int tid, void *k, void *ita)
     return 1;
   }
 
+#ifdef LLB_DP_CT_DEBUG
+  log_trace("ct f(%d) alive: #%s:%d -> %s:%d (%d)# "
+         "rid:%u est:%d nat:%d (Diff:%llus:TO:%llus,%d:%d)",
+         adat->ctd.pi.frag,
+         sstr, ntohs(key->sport),
+         dstr, ntohs(key->dport),
+         key->l4proto, dat->rid,
+         est, has_nat, (curr_ns - latest_ns)/1000000000,
+         to/1000000000,
+         used1, used2);
+#endif
+
   return 0;
 }
 
@@ -2104,11 +2141,15 @@ ll_ct_map_ent_rm_related(int tid, void *k, void *ita)
         inet_ntop(AF_INET6, &key->saddr[0], sstr, INET6_ADDRSTRLEN);
         inet_ntop(AF_INET6, &key->daddr[0], dstr, INET6_ADDRSTRLEN);
       }
+
       log_debug("related ct rm %s:%d -> %s:%d (%d)",
          sstr, ntohs(key->sport),
          dstr, ntohs(key->dport),
          key->l4proto);
 
+      if (!key->v6) {
+        llb_del_map_elem_with_cidx(LL_DP_FCV4_MAP, adat->ca.cidx);
+      }
       llb_clear_map_stats(LL_DP_CT_STATS_MAP, adat->ca.cidx);
 
       return 1;
