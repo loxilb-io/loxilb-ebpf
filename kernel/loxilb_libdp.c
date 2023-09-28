@@ -1320,7 +1320,7 @@ llb_clear_map_stats(int tid, __u32 idx)
   t = &xh->maps[tid];
   if (t->has_pb && t->pb_xtid <= 0) {
     /* FIXME : Handle non-pcpu */
-    if (idx >= 0) {
+    if ((__s32)idx >= 0) {
         llb_clear_stats_pcpu_arr(t->map_fd, idx);
     } else {
       for (e = 0; e < t->max_entries; e++) {
@@ -1336,7 +1336,7 @@ llb_clear_map_stats(int tid, __u32 idx)
       return;
     }
 
-    if (idx >= 0) {
+    if ((__s32)idx >= 0) {
       llb_clear_stats_pcpu_arr(t->map_fd, idx);
     }
   }

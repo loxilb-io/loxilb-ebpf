@@ -58,7 +58,7 @@ dp_do_nat(void *ctx, struct xfi *xf)
   struct dp_nat_key key;
   struct mf_xfrm_inf *nxfrm_act;
   struct dp_nat_tacts *act;
-  __u32 sel;
+  int sel;
 
   memset(&key, 0, sizeof(key));
   DP_XADDR_CP(key.daddr, xf->l34m.daddr);
