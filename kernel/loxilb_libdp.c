@@ -1327,6 +1327,7 @@ llb_clear_map_stats_internal(int tid, __u32 idx, bool wipe)
         return;
       }
     }
+    /* FIXME : Handle non-pcpu */
     if (!wipe) {
         llb_clear_stats_pcpu_arr(t->map_fd, idx);
     } else {
