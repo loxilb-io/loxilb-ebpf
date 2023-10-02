@@ -1005,10 +1005,6 @@ llb_xh_init(llb_dp_struct_t *xh)
   xh->maps[LL_DP_POL_MAP].has_pol  = 1;
   xh->maps[LL_DP_POL_MAP].max_entries = LLB_POL_MAP_ENTRIES;
 
-  xh->maps[LL_DP_FCV4_MAP].map_name = "fc_v4_map";
-  xh->maps[LL_DP_FCV4_MAP].has_pb   = 0;
-  xh->maps[LL_DP_FCV4_MAP].max_entries = LLB_FCV4_MAP_ENTRIES;
-
   xh->maps[LL_DP_NAT_MAP].map_name = "nat_map";
   xh->maps[LL_DP_NAT_MAP].has_pb   = 1;
   xh->maps[LL_DP_NAT_MAP].pb_xtid  = LL_DP_NAT_STATS_MAP;
