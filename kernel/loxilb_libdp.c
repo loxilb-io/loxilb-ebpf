@@ -122,6 +122,16 @@ bpf_num_possible_cpus(void)
   return possible_cpus;
 }
 
+static inline unsigned int
+bpf_num_online_cpus(void)
+{
+  int online_cpus = libbpf_num_online_cpus();
+  if (online_cpus < 0) {
+    return 0;
+  }
+  return online_cpus;
+}
+
 static void
 ll_pretty_hex(void *ptr, int len)
 {
@@ -694,7 +704,7 @@ llb_setup_cpu_map(int mapfd)
 static void
 llb_setup_lcpu_map(int mapfd)
 {
-  unsigned int live_cpus = bpf_num_possible_cpus();
+  unsigned int live_cpus = bpf_num_online_cpus();
   int ret, i;
 
   i = 0;
