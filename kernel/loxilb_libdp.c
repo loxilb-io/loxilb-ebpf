@@ -889,7 +889,7 @@ llb_loader_init(llb_dp_struct_t *xh)
 static void
 llb_xh_init(llb_dp_struct_t *xh)
 {
- xh->ll_dp_fname = LLB_FP_IMG_DEFAULT;
+  xh->ll_dp_fname = LLB_FP_IMG_DEFAULT;
   xh->ll_tc_fname = LLB_FP_IMG_BPF;
   xh->ll_dp_dfl_sec = XDP_LL_SEC_DEFAULT;
   xh->ll_dp_pdir  = LLB_DB_MAP_PDIR;
