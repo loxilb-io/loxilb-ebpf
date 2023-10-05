@@ -775,6 +775,12 @@ llb_dflt_sec_map2fd_all(struct bpf_object *bpf_obj)
       }
       llb_setup_cpu_map(fd);
     } else if (i == LL_DP_LCPU_MAP) {
+      struct bpf_map *cpu_map = bpf_object__find_map_by_name(bpf_obj,
+                                                  xh->maps[i].map_name);
+      if (bpf_map__set_max_entries(cpu_map, libbpf_num_online_cpus()) < 0) {
+        log_error("Failed to set max entries for live_cpu_map map: %s", strerror(errno));
+        //assert(0);
+      }
       llb_setup_lcpu_map(fd);
     }
   }
