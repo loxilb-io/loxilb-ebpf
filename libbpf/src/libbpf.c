@@ -11377,6 +11377,32 @@ int libbpf_num_possible_cpus(void)
 	return tmp_cpus;
 }
 
+int libbpf_num_online_cpus(void)
+{
+	static const char *fcpu = "/sys/devices/system/cpu/online";
+	static int cpus;
+	int err, n, i, tmp_cpus;
+	bool *mask;
+
+	tmp_cpus = READ_ONCE(cpus);
+	if (tmp_cpus > 0)
+		return tmp_cpus;
+
+	err = parse_cpu_mask_file(fcpu, &mask, &n);
+	if (err)
+		return err;
+
+	tmp_cpus = 0;
+	for (i = 0; i < n; i++) {
+		if (mask[i])
+			tmp_cpus++;
+	}
+	free(mask);
+
+	WRITE_ONCE(cpus, tmp_cpus);
+	return tmp_cpus;
+}
+
 int bpf_object__open_skeleton(struct bpf_object_skeleton *s,
 			      const struct bpf_object_open_opts *opts)
 {

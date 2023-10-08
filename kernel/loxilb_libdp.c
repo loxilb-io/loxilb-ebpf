@@ -122,6 +122,16 @@ bpf_num_possible_cpus(void)
   return possible_cpus;
 }
 
+static inline unsigned int
+bpf_num_online_cpus(void)
+{
+  int online_cpus = libbpf_num_online_cpus();
+  if (online_cpus < 0) {
+    return 0;
+  }
+  return online_cpus;
+}
+
 static void
 ll_pretty_hex(void *ptr, int len)
 {
@@ -694,7 +704,7 @@ llb_setup_cpu_map(int mapfd)
 static void
 llb_setup_lcpu_map(int mapfd)
 {
-  unsigned int live_cpus = bpf_num_possible_cpus();
+  unsigned int live_cpus = bpf_num_online_cpus();
   int ret, i;
 
   i = 0;
@@ -765,6 +775,12 @@ llb_dflt_sec_map2fd_all(struct bpf_object *bpf_obj)
       }
       llb_setup_cpu_map(fd);
     } else if (i == LL_DP_LCPU_MAP) {
+      struct bpf_map *cpu_map = bpf_object__find_map_by_name(bpf_obj,
+                                                  xh->maps[i].map_name);
+      if (bpf_map__set_max_entries(cpu_map, libbpf_num_online_cpus()) < 0) {
+        log_error("Failed to set max entries for live_cpu_map map: %s", strerror(errno));
+        //assert(0);
+      }
       llb_setup_lcpu_map(fd);
     }
   }
@@ -889,7 +905,7 @@ llb_loader_init(llb_dp_struct_t *xh)
 static void
 llb_xh_init(llb_dp_struct_t *xh)
 {
- xh->ll_dp_fname = LLB_FP_IMG_DEFAULT;
+  xh->ll_dp_fname = LLB_FP_IMG_DEFAULT;
   xh->ll_tc_fname = LLB_FP_IMG_BPF;
   xh->ll_dp_dfl_sec = XDP_LL_SEC_DEFAULT;
   xh->ll_dp_pdir  = LLB_DB_MAP_PDIR;
