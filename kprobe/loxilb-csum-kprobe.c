@@ -8,6 +8,7 @@
 #include <linux/module.h>
 #include <linux/kprobes.h>
 #include <linux/skbuff.h>
+#include <linux/netdevice.h>
 
 /* For each probe you need to allocate a kprobe structure */
 static struct kprobe kp = {
@@ -18,10 +19,10 @@ static int dev_hard_start_xmit_pre(struct kprobe *p, struct pt_regs *regs)
 {
   struct sk_buff *skb = (struct sk_buff *)regs->di;
 
-  if (*(__u32 *)&skb->cb[32] == 0xf01dab1f) {
-    printk(KERN_INFO "SCTP csum fixup");
-    skb->ip_summed = CHECKSUM_NONE;
+  if (skb->mark & 0x00000300) {
+    skb->ip_summed = CHECKSUM_UNNECESSARY;
   }
+
   return 0;
 }
 
