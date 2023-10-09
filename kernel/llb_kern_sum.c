@@ -65,7 +65,7 @@ dp_sctp_csum(void *ctx, struct xfi *xf)
       if (xf->l34m.nw_proto == IPPROTO_SCTP)  {
         void *dend = DP_TC_PTR(DP_PDATA_END(ctx));
         struct sctphdr *sctp = DP_ADD_PTR(DP_PDATA(ctx), xf->pm.l4_off);
-        int sctp_csum_off = xf->pm.l4_off + offsetof(struct sctphdr, checksum);
+        __u16 sctp_csum_off = xf->pm.l4_off + offsetof(struct sctphdr, checksum);
         __be32 csum;
 
         if (sctp + 1 > dend) {
@@ -76,8 +76,12 @@ dp_sctp_csum(void *ctx, struct xfi *xf)
         csum = (crc ^ 0xffffffff);
         dp_pktbuf_write(ctx, sctp_csum_off, &csum , sizeof(csum), 0); 
         xf->pm.nf = 0;
+        xf->pm.nfc = 1;
 
-        DP_LLB_CRC_DONE(ctx);
+        if (DP_LLB_IS_EGR(ctx)) {
+          DP_LLB_CRC_STAMP(ctx, csum);
+          DP_LLB_CRC_DONE(ctx, (sctp_csum_off<<16));
+        }
       }
         
       RETURN_TO_MP_OUT();

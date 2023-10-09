@@ -20,6 +20,11 @@ static int dev_hard_start_xmit_pre(struct kprobe *p, struct pt_regs *regs)
   struct sk_buff *skb = (struct sk_buff *)regs->di;
 
   if (skb->mark & 0x00000300) {
+    __u16 off = skb->mark >> 16;
+    if (off < skb->len && skb->priority) {
+      *(__u32 *)(skb->data + off) = skb->priority;
+      skb->priority = 0;
+    }
     skb->ip_summed = CHECKSUM_UNNECESSARY;
   }
 
