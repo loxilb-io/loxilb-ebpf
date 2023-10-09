@@ -668,7 +668,8 @@ dp_ipv4_new_csum(struct iphdr *iph)
 #define DP_PASS     TC_ACT_OK
 
 #define DP_LLB_STAMP(md) (((struct __sk_buff *)md)->cb[0] = LLB_PIPE_STAMP_FLAG)
-#define DP_LLB_CRC_DONE(md) (((struct __sk_buff *)md)->mark |= LLB_PIPE_CRC_DONE_FLAG)
+#define DP_LLB_CRC_STAMP(md, crc) (((struct __sk_buff *)md)->priority = crc)
+#define DP_LLB_CRC_DONE(md, val) (((struct __sk_buff *)md)->mark = LLB_PIPE_CRC_DONE_FLAG | (val))
 #define DP_LLB_RST_STAMP(md) (((struct __sk_buff *)md)->cb[0] = 0)
 #define DP_LLB_STAMPED(md) (((struct __sk_buff *)md)->cb[0] == LLB_PIPE_STAMP_FLAG)
 #define DP_LLB_IS_EGR(md) ((((struct __sk_buff *)md)->ingress_ifindex) != (((struct __sk_buff *)md)->ifindex))
@@ -1791,7 +1792,8 @@ dp_pktbuf_expand_tail(void *md, __u32 len)
 #else /* XDP utilities */
 
 #define DP_LLB_STAMP(md)
-#define DP_LLB_CRC_DONE(md)
+#define DP_LLB_CRC_STAMP(md, crc)
+#define DP_LLB_CRC_DONE(md, val)
 #define DP_LLB_RST_STAMP(md)
 #define DP_LLB_STAMPED(md) (0)
 #define DP_LLB_EGRESS_HOOK(md) (0)

@@ -268,7 +268,7 @@ dp_pipe_check_res(void *ctx, struct xfi *xf, void *fa)
   if (xf->pm.pipe_act) {
 
     if (DP_LLB_IS_EGR(ctx)) {
-      if (xf->pm.nf == 0) {
+      if (xf->pm.nf == 0 && xf->pm.nfc == 0) {
         return DP_PASS;
       }
     }
