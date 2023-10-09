@@ -76,6 +76,8 @@ dp_sctp_csum(void *ctx, struct xfi *xf)
         csum = (crc ^ 0xffffffff);
         dp_pktbuf_write(ctx, sctp_csum_off, &csum , sizeof(csum), 0); 
         xf->pm.nf = 0;
+
+        DP_LLB_CRC_DONE(ctx);
       }
         
       RETURN_TO_MP_OUT();

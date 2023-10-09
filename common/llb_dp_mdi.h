@@ -15,6 +15,7 @@
 #endif
 
 #define LLB_PIPE_STAMP_FLAG         0xf01dab1e
+#define LLB_PIPE_CRC_DONE_FLAG      0x00000300
 
 #define LLBS_PPLN_RDR(F)      (F->pm.pipe_act |= LLB_PIPE_RDR);
 #define LLBS_PPLN_RDR_PRIO(F) (F->pm.pipe_act |= LLB_PIPE_RDR_PRIO);
