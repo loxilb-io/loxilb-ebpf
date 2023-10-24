@@ -1197,18 +1197,22 @@ llb_fetch_map_stats_cached(int tbl, uint32_t e, int raw,
 
   t = &xh->maps[tbl];
   if (t->has_pb && t->pb_xtid > 0) { 
-    if (t->pb_xtid < 0 || t->pb_xtid >= LL_DP_MAX_MAP)
+    if (t->pb_xtid >= LL_DP_MAX_MAP)
       return -1;
     
     t = &xh->maps[t->pb_xtid];
   }
 
-  /* FIXME : Handle non-pcpu */
+  if (!t->has_pb) {
+    return -1;
+  }
 
+  /* FIXME : Handle non-pcpu */
   pthread_rwlock_wrlock(&t->stat_lock);
   if (raw) {
     ll_get_stats_pcpu_arr(t->map_fd, e, &t->pbs[e], NULL);
   }
+
   if (e < t->max_entries) {
     *(uint64_t *)bytes = t->pbs[e].st.bytes;
     *(uint64_t *)packets = t->pbs[e].st.packets;
@@ -1566,7 +1570,14 @@ llb_add_map_elem(int tbl, void *k, void *v)
       cidx = ca->cidx;
     }
 
-    llb_clear_map_stats(tbl, cidx);
+    if (tbl == LL_DP_NAT_MAP) {
+      int aid = 0;
+      for (aid = 0; aid < LLB_MAX_NXFRMS; aid++) {
+        llb_clear_map_stats(tbl, LLB_NAT_STAT_CID(cidx, aid));
+      }
+    } else {
+      llb_clear_map_stats(tbl, cidx);
+    }
   }
 
   if (tbl == LL_DP_FW4_MAP) {

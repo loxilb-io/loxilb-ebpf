@@ -51,6 +51,8 @@
 #define LLB_DP_PKT_SLOW_PGM_ID (1)
 #define LLB_DP_PKT_PGM_ID      (0)
 
+#define LLB_NAT_STAT_CID(rid, aid) ((((rid) & 0xfff) << 4) | (aid & 0xf))
+
 /* Hard-timeout of 40s for fc dp entry */
 #define FC_V4_DPTO            (60000000000)
 

@@ -998,6 +998,10 @@ dp_unparse_packet_always_slow(void *ctx,  struct xfi *xf)
 static int __always_inline
 dp_unparse_packet_always(void *ctx,  struct xfi *xf)
 {
+  if (xf->pm.nf) {
+    dp_do_map_stats(ctx, xf, LL_DP_NAT_STATS_MAP,
+                    LLB_NAT_STAT_CID(xf->pm.rule_id, xf->nm.sel_aid));
+  }
 
   if (xf->pm.nf & LLB_NAT_SRC && xf->nm.dsr == 0) {
     LL_DBG_PRINTK("[DEPR] LL_SNAT 0x%lx:%x\n",
