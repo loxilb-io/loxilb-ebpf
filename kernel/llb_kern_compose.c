@@ -998,7 +998,6 @@ dp_unparse_packet_always_slow(void *ctx,  struct xfi *xf)
 static int __always_inline
 dp_unparse_packet_always(void *ctx,  struct xfi *xf)
 {
-
   if (xf->pm.nf & LLB_NAT_SRC && xf->nm.dsr == 0) {
     LL_DBG_PRINTK("[DEPR] LL_SNAT 0x%lx:%x\n",
                  xf->nm.nxip4, xf->nm.nxport);
