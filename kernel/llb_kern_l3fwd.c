@@ -221,8 +221,6 @@ dp_pipe_set_nat(void *ctx, struct xfi *xf,
   xf->nm.nv6 = na->nv6 ? 1 : 0;
   xf->nm.dsr = na->dsr;
   xf->nm.cdis = na->cdis;
-  xf->nm.sel_aid = na->aid;
-  xf->pm.rule_id = na->rid;
   LL_DBG_PRINTK("[CT] NAT ACT %x", xf->pm.nf);
 
   return 0;
@@ -292,6 +290,7 @@ dp_do_ctops(void *ctx, struct xfi *xf, void *fa_,
     }
 
     dp_pipe_set_nat(ctx, xf, na, act->ca.act_type == DP_SET_SNAT ? 1: 0);
+    dp_do_map_stats(ctx, xf, LL_DP_NAT_STATS_MAP, LLB_NAT_STAT_CID(na->rid, na->aid));
 
     if (na->fr == 1 || na->doct || xf->pm.goct) {
       goto ct_trk;
