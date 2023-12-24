@@ -4,6 +4,18 @@
  * 
  * SPDX-License-Identifier: (GPL-2.0 OR BSD-2-Clause)
  */
+
+#define DP_IN_ACCOUNTING(ctx)      \
+do {                               \
+  DP_SET_STARTS(md);               \
+}while(0)
+
+#define DP_EG_ACCOUNTING(ctx, xf)  \
+do {                               \
+  TRACER_CALL(ctx, xf);            \
+  RECPP_LATENCY(ctx, xf);          \
+}while(0)
+
 static int __always_inline
 dp_do_if_lkup(void *ctx, struct xfi *xf)
 {
@@ -263,9 +275,7 @@ dp_pipe_check_res(void *ctx, struct xfi *xf, void *fa)
 {
   LL_DBG_PRINTK("[PIPE] act 0x%x", xf->pm.pipe_act);
 
-  TRACER_CALL(ctx, xf);
-
-  RECPP_LATENCY(ctx, xf);
+  DP_EG_ACCOUNTING(ctx, xf);
 
   if (xf->pm.pipe_act) {
 
