@@ -724,6 +724,10 @@ dp_ipv4_new_csum(struct iphdr *iph)
 
 #define DP_SET_STARTS(ctx) ((struct __sk_buff *)ctx)->tstamp = bpf_ktime_get_ns()
 
+#ifndef LLB_LAT_RESOLUTION
+#define LLB_LAT_RESOLUTION (1000ULL)
+#endif
+
 #ifdef HAVE_DP_LAT
 #define RECPP_LATENCY(ctx, xf)           \
 do {                                     \
@@ -731,9 +735,9 @@ do {                                     \
   __u64 diff_ns;                         \
   diff_ns = bpf_ktime_get_ns() -         \
      (((struct __sk_buff *)ctx)->tstamp);\
-  idx = diff_ns/(500000000ULL);          \
+  idx = diff_ns/(LLB_LAT_RESOLUTION);    \
   if (idx >= LLB_PPLAT_MAP_ENTRIES) {    \
-    idx = LLB_PPLAT_MAP_ENTRIES;         \
+    idx = LLB_PPLAT_MAP_ENTRIES-1;       \
   }                                      \
   dp_do_map_stats(ctx, xf, LL_DP_PPLAT_MAP, idx); \
 } while(0)
