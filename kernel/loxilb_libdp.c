@@ -1074,6 +1074,10 @@ llb_xh_init(llb_dp_struct_t *xh)
   xh->maps[LL_DP_LCPU_MAP].has_pb   = 0;
   xh->maps[LL_DP_LCPU_MAP].max_entries = 128;
 
+  xh->maps[LL_DP_PPLAT_MAP].map_name = "pplat_map";
+  xh->maps[LL_DP_PPLAT_MAP].has_pb   = 1;
+  xh->maps[LL_DP_PPLAT_MAP].max_entries = LLB_PPLAT_MAP_ENTRIES;
+
   strcpy(xh->psecs[0].name, LLB_SECTION_PASS);
   strcpy(xh->psecs[1].name, XDP_LL_SEC_DEFAULT);
   xh->psecs[1].setup = llb_dflt_sec_map2fd_all;

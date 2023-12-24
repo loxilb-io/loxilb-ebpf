@@ -232,6 +232,7 @@ dp_ing_fc_main(void *ctx, struct xfi *xf)
       if (xf->pm.pipe_act == LLB_PIPE_RDR) {
         int oif = xf->pm.oport;
         TRACER_CALL(ctx, xf);
+        RECPP_LATENCY(ctx, xf);
         return bpf_redirect(oif, 0);         
       }
     }

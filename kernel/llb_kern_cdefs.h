@@ -577,6 +577,13 @@ struct {
 	      __uint(max_entries, MAX_CPUS);
 } live_cpu_map SEC(".maps");
 
+struct {
+	      __uint(type,        BPF_MAP_TYPE_PERCPU_ARRAY);
+	      __type(key,         __u32);
+	      __type(value,       struct dp_pb_stats);
+	      __uint(max_entries, LLB_PPLAT_MAP_ENTRIES);
+} pplat_map SEC(".maps");
+
 #endif
 
 static void __always_inline
@@ -623,6 +630,9 @@ dp_do_map_stats(struct xdp_md *ctx,
     break;
   case LL_DP_FW4_STATS_MAP:
     map = &fw_v4_stats_map;
+    break;
+  case LL_DP_PPLAT_MAP:
+    map = &pplat_map;
     break;
   default:
     return;
@@ -711,6 +721,22 @@ dp_ipv4_new_csum(struct iphdr *iph)
       dp_trace_packet(ctx, xf);          \
     }                                    \
   }
+
+#define DP_SET_STARTS(ctx) ((struct __sk_buff *)ctx)->tstamp = bpf_ktime_get_ns()
+
+#ifdef HAVE_DP_LAT
+#define RECPP_LATENCY(ctx, xf)           \
+do {                                     \
+  int idx;                               \
+  __u64 diff_ns;                         \
+  diff_ns = bpf_ktime_get_ns() -         \
+     (((struct __sk_buff *)ctx)->tstamp);\
+  idx = diff_ns/(50000000000ULL);        \
+  dp_do_map_stats(ctx, xf, LL_DP_PPLAT_MAP, idx); \
+} while(0)
+#else
+#define RECPP_LATENCY(ctx, xf)
+#endif
 
 #define RETURN_TO_MP_OUT()                       \
 do {                                             \
@@ -1810,6 +1836,8 @@ dp_pktbuf_expand_tail(void *md, __u32 len)
 #define TCALL_CRC2()
 #define RETURN_TO_MP_OUT()
 #define TRACER_CALL(ctx, xf)
+#define RECPP_LATENCY(ctx, xf)
+#define DP_SET_STARTS(ctx)
 
 static int __always_inline
 dp_pkt_is_l2mcbc(struct xfi *xf, void *md)

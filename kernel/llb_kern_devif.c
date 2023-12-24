@@ -265,6 +265,8 @@ dp_pipe_check_res(void *ctx, struct xfi *xf, void *fa)
 
   TRACER_CALL(ctx, xf);
 
+  RECPP_LATENCY(ctx, xf);
+
   if (xf->pm.pipe_act) {
 
     if (DP_LLB_IS_EGR(ctx)) {
@@ -473,7 +475,13 @@ dp_ing_ct_main(void *ctx,  struct xfi *xf)
   dp_eg_l2(ctx, xf, fa);
 
 res_end:
-  return dp_pipe_check_res(ctx, xf, fa);
+  if (1) {
+    int ret = dp_pipe_check_res(ctx, xf, fa);
+    if (ret == DP_DROP) {
+      bpf_printk("Drop RC 0x%x", xf->pm.rcode);
+    }
+    return ret;
+  }
 }
  
 static int __always_inline
