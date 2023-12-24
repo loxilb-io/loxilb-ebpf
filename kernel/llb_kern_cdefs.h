@@ -731,7 +731,10 @@ do {                                     \
   __u64 diff_ns;                         \
   diff_ns = bpf_ktime_get_ns() -         \
      (((struct __sk_buff *)ctx)->tstamp);\
-  idx = diff_ns/(50000000000ULL);        \
+  idx = diff_ns/(500000000ULL);          \
+  if (idx >= LLB_PPLAT_MAP_ENTRIES) {    \
+    idx = LLB_PPLAT_MAP_ENTRIES;         \
+  }                                      \
   dp_do_map_stats(ctx, xf, LL_DP_PPLAT_MAP, idx); \
 } while(0)
 #else
