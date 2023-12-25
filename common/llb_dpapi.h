@@ -37,7 +37,7 @@
 #define LLB_FCV4_MAP_ACTS     (DP_SET_TOCP)
 #define LLB_POL_MAP_ENTRIES   (8*1024)
 #define LLB_SESS_MAP_ENTRIES  (20*1024)
-#define LLB_PPLAT_MAP_ENTRIES (1024)
+#define LLB_PPLAT_MAP_ENTRIES (2048)
 #define LLB_PSECS             (8)
 #define LLB_MAX_NXFRMS        (16)
 #define LLB_CRC32C_ENTRIES    (256)

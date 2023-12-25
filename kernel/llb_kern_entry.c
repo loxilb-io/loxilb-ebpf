@@ -147,7 +147,7 @@ int tc_packet_func_fast(struct __sk_buff *md)
   DP_LLB_STAMP(md);
 #endif
 
-  DP_SET_STARTS(md);
+  DP_IN_ACCOUNTING(md);
 
 #ifdef HAVE_DP_FC
   struct xfi *xf;
