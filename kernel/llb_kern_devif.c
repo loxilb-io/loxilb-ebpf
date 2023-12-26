@@ -108,13 +108,14 @@ do {                                                        \
   if ((xf->pm.pipe_act & LLB_PIPE_DROP &&                   \
       xf->pm.rcode & LLB_PIPE_RC_PARSER) &&                 \
       ((struct __sk_buff *)ctx)->len > LLB_SKB_FIXUP_LEN) { \
-    dp_do_fixup_buf(ctx);                                   \
+    if (dp_do_fixup_buf(ctx)) {                             \
+      return DP_DROP;                                       \
+    }                                                       \
   }                                                         \
 }while(0)
 #else
 #define DP_DO_BUF_FIXUP(ctx, xf)
 #endif
-
 
 static int __always_inline
 dp_do_mark_mirr(void *ctx, struct xfi *xf)
