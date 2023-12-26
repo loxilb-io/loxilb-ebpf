@@ -238,6 +238,8 @@ dp_ing_fc_main(void *ctx, struct xfi *xf)
     }
   }
 
+  DP_DO_BUF_FIXUP(ctx, xf);
+
   bpf_map_update_elem(&xfis, &z, xf, BPF_ANY);
   bpf_tail_call(ctx, &pgm_tbl, idx);
 

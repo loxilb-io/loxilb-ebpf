@@ -72,6 +72,50 @@ dp_do_if_lkup(void *ctx, struct xfi *xf)
 }
 
 #ifdef LL_TC_EBPF
+
+#define HAVE_DP_BUF_FIXUP 1
+#define LLB_MARK_SKB_FIXUP 0xbeefdead
+#define LLB_SKB_FIXUP_LEN 1000
+
+static int __always_inline
+dp_do_fixup_buf(void *ctx)
+{
+  struct __sk_buff *skb = DP_TC_PTR(ctx);
+
+  if (skb->cb[2] != LLB_MARK_SKB_FIXUP && skb->len > LLB_SKB_FIXUP_LEN) {
+    int *oif;
+    int key;
+
+    key = LLB_PORT_NO;
+    oif = bpf_map_lookup_elem(&tx_intf_map, &key);
+    if (!oif) {
+      return DP_DROP;
+    }
+
+    skb->cb[2] = LLB_MARK_SKB_FIXUP;
+    //bpf_clone_redirect(skb, skb->ifindex, BPF_F_INGRESS);
+    bpf_clone_redirect(skb, *oif, BPF_F_INGRESS);
+    return DP_DROP;
+  } else if (skb->cb[2] == LLB_MARK_SKB_FIXUP) {
+    return DP_DROP;
+  }
+  return 0;
+}
+
+#ifdef HAVE_DP_BUF_FIXUP
+#define DP_DO_BUF_FIXUP(ctx, xf)                            \
+do {                                                        \
+  if ((xf->pm.pipe_act & LLB_PIPE_DROP &&                   \
+      xf->pm.rcode & LLB_PIPE_RC_PARSER) &&                 \
+      ((struct __sk_buff *)ctx)->len > LLB_SKB_FIXUP_LEN) { \
+    dp_do_fixup_buf(ctx);                                   \
+  }                                                         \
+}while(0)
+#else
+#define DP_DO_BUF_FIXUP(ctx, xf)
+#endif
+
+
 static int __always_inline
 dp_do_mark_mirr(void *ctx, struct xfi *xf)
 {
@@ -123,6 +167,8 @@ dp_do_mirr_lkup(void *ctx, struct xfi *xf)
 }
 
 #else
+
+#define DP_DO_BUF_FIXUP(ctx, xf)
 
 static int __always_inline
 dp_do_mark_mirr(void *ctx, struct xfi *xf)
