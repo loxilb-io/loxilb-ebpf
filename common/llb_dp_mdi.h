@@ -180,6 +180,7 @@ struct dp_pi_mdi {
 struct dp_fr_mdi {
     __u32            dat;
     __u32            dat_end;
+    __u64            tstamp;
 };
 
 struct dp_l2_mdi {

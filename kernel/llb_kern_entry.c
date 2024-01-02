@@ -121,6 +121,9 @@ tc_packet_func__(struct __sk_buff *md)
     return DP_DROP;
   }
 
+#ifndef HAVE_DP_FC
+  DP_IN_ACCOUNTING(ctx, xf);
+#endif
   //if (xf->pm.phit & LLB_DP_FC_HIT) {
   //  memset(xf, 0, sizeof(*xf));
   //  xf->pm.phit |= LLB_DP_FC_HIT;
@@ -147,12 +150,12 @@ int tc_packet_func_fast(struct __sk_buff *md)
   DP_LLB_STAMP(md);
 #endif
 
-  DP_IN_ACCOUNTING(md);
-
 #ifdef HAVE_DP_FC
   struct xfi *xf;
 
   DP_NEW_FCXF(xf);
+
+  DP_IN_ACCOUNTING(ctx, xf);
 
   dp_parse_d0(md, xf, 1);
 

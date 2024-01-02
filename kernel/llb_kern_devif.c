@@ -5,9 +5,9 @@
  * SPDX-License-Identifier: (GPL-2.0 OR BSD-2-Clause)
  */
 
-#define DP_IN_ACCOUNTING(ctx)      \
+#define DP_IN_ACCOUNTING(ctx, xf)  \
 do {                               \
-  DP_SET_STARTS(md);               \
+  DP_SET_STARTS(xf);               \
 }while(0)
 
 #define DP_EG_ACCOUNTING(ctx, xf)  \

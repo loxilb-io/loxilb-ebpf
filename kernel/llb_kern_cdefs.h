@@ -722,19 +722,21 @@ dp_ipv4_new_csum(struct iphdr *iph)
     }                                    \
   }
 
-#define DP_SET_STARTS(ctx) ((struct __sk_buff *)ctx)->tstamp = bpf_ktime_get_ns()
 
 #ifndef LLB_LAT_RESOLUTION
 #define LLB_LAT_RESOLUTION (1000ULL)
 #endif
 
 #ifdef HAVE_DP_LAT
+
+#define DP_SET_STARTS(xf) (xf)->fm.tstamp = bpf_ktime_get_ns()
+
 #define RECPP_LATENCY(ctx, xf)           \
 do {                                     \
   int idx;                               \
   __u64 diff_ns;                         \
   diff_ns = bpf_ktime_get_ns() -         \
-     (((struct __sk_buff *)ctx)->tstamp);\
+     ((xf)->fm.tstamp);                  \
   idx = diff_ns/(LLB_LAT_RESOLUTION);    \
   if (idx >= LLB_PPLAT_MAP_ENTRIES) {    \
     idx = LLB_PPLAT_MAP_ENTRIES-1;       \
@@ -742,6 +744,7 @@ do {                                     \
   dp_do_map_stats(ctx, xf, LL_DP_PPLAT_MAP, idx); \
 } while(0)
 #else
+#define DP_SET_STARTS(xf)
 #define RECPP_LATENCY(ctx, xf)
 #endif
 
@@ -1844,7 +1847,7 @@ dp_pktbuf_expand_tail(void *md, __u32 len)
 #define RETURN_TO_MP_OUT()
 #define TRACER_CALL(ctx, xf)
 #define RECPP_LATENCY(ctx, xf)
-#define DP_SET_STARTS(ctx)
+#define DP_SET_STARTS(xf)
 
 static int __always_inline
 dp_pkt_is_l2mcbc(struct xfi *xf, void *md)
