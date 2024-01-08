@@ -55,7 +55,7 @@ dp_do_if_lkup(void *ctx, struct xfi *xf)
   if (l2a->ca.act_type == DP_SET_DROP) {
     LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_ACT_DROP);
   } else if (l2a->ca.act_type == DP_SET_TOCP) {
-    LLBS_PPLN_TRAPC(xf, LLB_PIPE_RC_ACT_TRAP);
+    LLBS_PPLN_PASSC(xf, LLB_PIPE_RC_ACT_TRAP);
   } else if (l2a->ca.act_type == DP_SET_IFI) {
     xf->pm.iport = l2a->set_ifi.xdp_ifidx;
     xf->pm.zone  = l2a->set_ifi.zone;

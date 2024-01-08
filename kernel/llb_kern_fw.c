@@ -111,7 +111,7 @@ dp_do_fw4_main(void *ctx, struct xfi *xf)
     LLBS_PPLN_RDR_PRIO(xf);
     xf->pm.oport = ar->oport;
   } else if (act->ca.act_type == DP_SET_TOCP) {
-    LLBS_PPLN_TRAPC(xf, LLB_PIPE_RC_FW_RDR);
+    LLBS_PPLN_PASSC(xf, LLB_PIPE_RC_FW_RDR);
   } else {
     /* Same for DP_SET_DROP */
     LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_ACT_UNK);

@@ -188,6 +188,9 @@ dp_do_fcv4_lkup(void *ctx, struct xfi *xf)
     LL_FC_PRINTK("[FCH4] strip-l2-vlan-act\n");
     ta = &acts->fcta[DP_SET_RM_L2VLAN];
     dp_set_egr_vlan(ctx, xf, 0, ta->l2ov.oport);
+  } else if (acts->fcta[DP_SET_TOCP].ca.act_type == DP_SET_TOCP) {
+    LL_FC_PRINTK("[FCH4] to-cp-act\n");
+    LLBS_PPLN_TRAPC(xf, LLB_PIPE_RC_ACT_TRAP);
   } else {
     goto del_out;
   }
@@ -234,6 +237,8 @@ dp_ing_fc_main(void *ctx, struct xfi *xf)
         DP_EG_ACCOUNTING(ctx, xf);
         oif = xf->pm.oport;
         return bpf_redirect(oif, 0);         
+      } else if (xf->pm.pipe_act == LLB_PIPE_TRAP) {
+        return DP_PASS;
       }
     }
   }

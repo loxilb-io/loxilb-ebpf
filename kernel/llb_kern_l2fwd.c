@@ -39,7 +39,7 @@ dp_do_smac_lkup(void *ctx, struct xfi *xf, void *fc)
   if (sma->ca.act_type == DP_SET_DROP) {
     LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_ACT_DROP);
   } else if (sma->ca.act_type == DP_SET_TOCP) {
-    LLBS_PPLN_TRAPC(xf, LLB_PIPE_RC_ACT_TRAP);
+    LLBS_PPLN_PASSC(xf, LLB_PIPE_RC_ACT_TRAP);
   } else if (sma->ca.act_type == DP_SET_NOP) {
     /* Nothing to do */
     return 0;
@@ -120,7 +120,7 @@ __dp_do_tmac_lkup(void *ctx, struct xfi *xf,
   if (tma->ca.act_type == DP_SET_DROP) {
     LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_ACT_DROP);
   } else if (tma->ca.act_type == DP_SET_TOCP) {
-    LLBS_PPLN_TRAPC(xf, LLB_PIPE_RC_ACT_TRAP);
+    LLBS_PPLN_PASSC(xf, LLB_PIPE_RC_ACT_TRAP);
   } else if (tma->ca.act_type == DP_SET_RT_TUN_NH) {
 #ifdef HAVE_DP_EXTFC
     struct dp_fc_tact *ta = &fa->fcta[DP_SET_RT_TUN_NH];
@@ -203,7 +203,7 @@ dp_do_dmac_lkup(void *ctx, struct xfi *xf, void *fa_)
   if (dma->ca.act_type == DP_SET_DROP) {
     LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_ACT_DROP);
   } else if (dma->ca.act_type == DP_SET_TOCP) {
-    LLBS_PPLN_TRAPC(xf, LLB_PIPE_RC_ACT_TRAP);
+    LLBS_PPLN_PASSC(xf, LLB_PIPE_RC_ACT_TRAP);
   } else if (dma->ca.act_type == DP_SET_RDR_PORT) {
     struct dp_rdr_act *ra = &dma->port_act;
 
@@ -283,8 +283,8 @@ dp_do_nh_lkup(void *ctx, struct xfi *xf, void *fa_)
 
   nha = bpf_map_lookup_elem(&nh_map, &key);
   if (!nha) {
-    /* No NH - Trap */
-    LLBS_PPLN_TRAPC(xf, LLB_PIPE_RC_ACT_UNK);
+    /* No NH - PASS */
+    LLBS_PPLN_PASSC(xf, LLB_PIPE_RC_ACT_UNK);
     return 0;
   }
 
@@ -295,7 +295,7 @@ dp_do_nh_lkup(void *ctx, struct xfi *xf, void *fa_)
   if (nha->ca.act_type == DP_SET_DROP) {
     LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_ACT_DROP);
   } else if (nha->ca.act_type == DP_SET_TOCP) {
-    LLBS_PPLN_TRAPC(xf, LLB_PIPE_RC_ACT_TRAP);
+    LLBS_PPLN_PASSC(xf, LLB_PIPE_RC_ACT_TRAP);
   } else if (nha->ca.act_type == DP_SET_NEIGH_L2) {
 #ifdef HAVE_DP_FC
     struct dp_fc_tact *ta = &fa->fcta[DP_SET_NEIGH_L2];
@@ -308,8 +308,8 @@ dp_do_nh_lkup(void *ctx, struct xfi *xf, void *fa_)
       key.nh_num = (__u32)rnh;
       nha = bpf_map_lookup_elem(&nh_map, &key);
       if (!nha) {
-        /* No NH - Trap */
-        LLBS_PPLN_TRAPC(xf, LLB_PIPE_RC_ACT_UNK);
+        /* No NH - PASS */
+        LLBS_PPLN_PASSC(xf, LLB_PIPE_RC_ACT_UNK);
         return 0;
       }
     }

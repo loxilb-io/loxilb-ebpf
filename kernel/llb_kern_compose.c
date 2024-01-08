@@ -713,7 +713,7 @@ dp_parse_udp(struct parser *p,
   xf->l34m.dest = udp->dest;
 
   if (dp_pkt_is_l2mcbc(xf, md) == 1) {
-    LLBS_PPLN_TRAPC(xf, LLB_PIPE_RC_BCMC);
+    LLBS_PPLN_PASSC(xf, LLB_PIPE_RC_BCMC);
   }
 
   return dp_parse_outer_udp(p, md, udp + 1, xf);
@@ -918,11 +918,11 @@ dp_parse_d0(void *md,
 
 handle_excp:
   if (ret > DP_PRET_OK) {
-    if (ret == DP_PRET_PASS) {
+    //if (ret == DP_PRET_PASS) {
       LLBS_PPLN_PASSC(xf, LLB_PIPE_RC_PARSER);
-    } else {
-      LLBS_PPLN_TRAPC(xf, LLB_PIPE_RC_PARSER);
-    }
+    //} else {
+    //  LLBS_PPLN_TRAPC(xf, LLB_PIPE_RC_PARSER);
+    //}
   } else if (ret < DP_PRET_OK) {
     LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PARSER);
   }
