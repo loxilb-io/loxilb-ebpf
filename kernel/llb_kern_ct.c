@@ -428,24 +428,14 @@ dp_ct_tcp_sm(void *ctx, struct xfi *xf,
     if (ts->fndir != dir) {
       if ((tcp_flags & (LLB_TCP_FIN|LLB_TCP_ACK)) == 
           (LLB_TCP_FIN|LLB_TCP_ACK)) {
-        if (ack  != rtd->seq + 1) {
-          nstate = CT_TCP_ERR;
-          goto end;
-        }
-
         nstate = CT_TCP_FINI3;
         td->seq = seq;
       } else if (tcp_flags & LLB_TCP_ACK) {
-        if (ack  != rtd->seq + 1) {
-          nstate = CT_TCP_ERR;
-          goto end;
-        }
         nstate = CT_TCP_FINI2;
         td->seq = seq;
       }
     }
     break;
-
   case CT_TCP_FINI2:
     if (ts->fndir != dir) {
       if (tcp_flags & LLB_TCP_FIN) {
@@ -458,11 +448,6 @@ dp_ct_tcp_sm(void *ctx, struct xfi *xf,
   case CT_TCP_FINI3:
     if (ts->fndir == dir) {
       if (tcp_flags & LLB_TCP_ACK) {
-
-        if (ack != rtd->seq + 1) {
-          nstate = CT_TCP_ERR;
-          goto end;
-        }
         nstate = CT_TCP_CW;
       }
     }
