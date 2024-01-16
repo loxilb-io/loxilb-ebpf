@@ -108,7 +108,7 @@ struct llb_ethhdr {
   __be16 ntype;
 } __attribute__((packed));
 
-#define VXLAN_OUDP_DPORT (4789)
+#define VXLAN_OUDP_DPORT (8472)
 #define VXLAN_OUDP_SPORT (4788)
 #define VXLAN_VI_FLAG_ON (bpf_htonl(0x08 << 24))
 
