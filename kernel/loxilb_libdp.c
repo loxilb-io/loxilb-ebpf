@@ -2037,7 +2037,7 @@ ll_ct_map_ent_has_aged(int tid, void *k, void *ita)
   llb_fetch_map_stats_used(LL_DP_CT_STATS_MAP, adat->ca.cidx, 1, &used1);
   llb_fetch_map_stats_used(LL_DP_CT_STATS_MAP, adat->ca.cidx+1, 1, &used2);
 
-  if (curr_ns - latest_ns > to && !used1 && !used2) {
+  if (curr_ns - latest_ns > to && (!est || (!used1 && !used2))) {
     log_trace("ct: #%s:%d -> %s:%d (%d)# rid:%u est:%d nat:%d (Aged:%lluns:%d:%d)",
          sstr, ntohs(key->sport),
          dstr, ntohs(key->dport),  
