@@ -247,6 +247,7 @@ dp_do_ctops(void *ctx, struct xfi *xf, void *fa_,
     goto ct_trk;
   }
 
+  xf->pm.phit |= LLB_DP_CTM_HIT;
   act->lts = bpf_ktime_get_ns();
 
 #ifdef HAVE_DP_FC
@@ -327,7 +328,6 @@ dp_do_ctops(void *ctx, struct xfi *xf, void *fa_,
     dp_do_map_stats(ctx, xf, LL_DP_FW4_STATS_MAP, act->ca.fwrid);
   }
   dp_do_map_stats(ctx, xf, LL_DP_CT_STATS_MAP, act->ca.cidx);
-  xf->pm.phit |= LLB_DP_CTM_HIT;
 #if 0
   /* Note that this might result in consistency problems 
    * between packet and byte counts at times but this should be 
