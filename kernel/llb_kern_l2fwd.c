@@ -127,6 +127,7 @@ __dp_do_tmac_lkup(void *ctx, struct xfi *xf,
     ta->ca.act_type = DP_SET_RT_TUN_NH;
     memcpy(&ta->nh_act,  &tma->rt_nh, sizeof(tma->rt_nh));
 #endif
+    xf->pm.phit &= ~LLB_DP_TMAC_HIT;
     return dp_pipe_set_l22_tun_nh(ctx, xf, &tma->rt_nh);
   } else if (tma->ca.act_type == DP_SET_L3_EN) {
     xf->pm.phit |= LLB_DP_TMAC_HIT;

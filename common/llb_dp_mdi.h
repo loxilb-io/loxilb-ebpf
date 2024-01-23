@@ -41,8 +41,7 @@ do {                                  \
 } while (0)
 
 #define LL_PIPE_FC_CAP(x)                     \
-  ((x)->pm.pipe_act & (LLB_PIPE_RDR|          \
-                       LLB_PIPE_TRAP) &&      \
+  ((x)->pm.pipe_act & LLB_PIPE_RDR &&         \
   (x)->pm.phit & LLB_DP_CTM_HIT &&            \
   !((x)->pm.phit & LLB_DP_SESS_HIT) &&        \
   ((x)->tm.tun_type == 0) &&                  \
