@@ -34,7 +34,7 @@ dp_do_if_lkup(void *ctx, struct xfi *xf)
       return DP_PASS;
     }
     key.ifindex = *(__u32 *)oif;
-    xf->pm.phit & LLB_DP_TMAC_HIT;
+    xf->pm.phit |= LLB_DP_TMAC_HIT;
   }
 
   LL_DBG_PRINTK("[INTF] -- Lookup\n");
