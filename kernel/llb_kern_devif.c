@@ -26,14 +26,15 @@ dp_do_if_lkup(void *ctx, struct xfi *xf)
   key.ing_vid = xf->l2m.vlan[0];
   key.pad =  0;
 
-  if (DP_IIFI(ctx) == 0) {
-    __u32 ikey = LLB_PORT_NO;
+  if (DP_LLB_IS_EGR(ctx)) {
+    __u32 ikey = DP_OIFI(ctx);
     __u32 *oif = NULL;
     oif = bpf_map_lookup_elem(&tx_intf_map, &ikey);
     if (!oif) {
       return DP_PASS;
     }
     key.ifindex = *(__u32 *)oif;
+    xf->pm.phit & LLB_DP_TMAC_HIT;
   }
 
   LL_DBG_PRINTK("[INTF] -- Lookup\n");
@@ -329,6 +330,11 @@ dp_pipe_check_res(void *ctx, struct xfi *xf, void *fa)
     if (DP_LLB_IS_EGR(ctx)) {
       if (xf->pm.nf == 0 && xf->pm.nfc == 0) {
         return DP_PASS;
+      }
+      if (xf->pm.pipe_act & LLB_PIPE_TRAP) {
+        xf->pm.pipe_act &= ~(LLB_PIPE_TRAP|LLB_PIPE_PASS);
+        xf->pm.pipe_act |= LLB_PIPE_RDR;
+        xf->pm.oport = LLB_PORT_NO;
       }
     }
 
