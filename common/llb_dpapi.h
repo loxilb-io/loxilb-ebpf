@@ -719,6 +719,7 @@ struct dp_nat_key {
 #define NAT_LB_SEL_RR   0
 #define NAT_LB_SEL_HASH 1
 #define NAT_LB_SEL_PRIO 2
+#define NAT_LB_SEL_RR_PERSIST 3
 
 struct dp_nat_tacts {
   struct dp_cmn_act ca;

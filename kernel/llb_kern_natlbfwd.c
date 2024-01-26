@@ -5,7 +5,7 @@
  * SPDX-License-Identifier: (GPL-2.0 OR BSD-2-Clause)
  */
 static int __always_inline
-dp_sel_nat_ep(void *ctx, struct dp_nat_tacts *act)
+dp_sel_nat_ep(void *ctx, struct xfi *xf, struct dp_nat_tacts *act)
 {
   int sel = -1;
   uint8_t n = 0;
@@ -45,6 +45,9 @@ dp_sel_nat_ep(void *ctx, struct dp_nat_tacts *act)
         }
       }
     }
+  } else if (act->sel_type == NAT_LB_SEL_RR_PERSIST) {
+    sel = (xf->l34m.saddr4 & 0xff) ^  ((xf->l34m.saddr4 >> 24) & 0xff);
+    sel %= act->nxfrm;
   }
 
   LL_DBG_PRINTK("lb-sel %d", sel);
@@ -91,7 +94,7 @@ dp_do_nat(void *ctx, struct xfi *xf)
 
   if (act->ca.act_type == DP_SET_SNAT || 
       act->ca.act_type == DP_SET_DNAT) {
-    sel = dp_sel_nat_ep(ctx, act);
+    sel = dp_sel_nat_ep(ctx, xf, act);
 
     xf->nm.dsr = act->ca.oaux ? 1: 0;
     xf->nm.cdis = act->cdis ? 1: 0;
