@@ -677,11 +677,11 @@ dp_ipv4_new_csum(struct iphdr *iph)
 #define DP_DROP     TC_ACT_SHOT
 #define DP_PASS     TC_ACT_OK
 
-#define DP_LLB_STAMP(md) (((struct __sk_buff *)md)->cb[0] = LLB_PIPE_STAMP_FLAG)
+#define DP_LLB_STAMP(md) (((struct __sk_buff *)md)->cb[3] = LLB_PIPE_STAMP_FLAG)
 #define DP_LLB_CRC_STAMP(md, crc) (((struct __sk_buff *)md)->priority = crc)
 #define DP_LLB_CRC_DONE(md, val) (((struct __sk_buff *)md)->mark = LLB_PIPE_CRC_DONE_FLAG | (val))
-#define DP_LLB_RST_STAMP(md) (((struct __sk_buff *)md)->cb[0] = 0)
-#define DP_LLB_STAMPED(md) (((struct __sk_buff *)md)->cb[0] == LLB_PIPE_STAMP_FLAG)
+#define DP_LLB_RST_STAMP(md) (((struct __sk_buff *)md)->cb[3] = 0)
+#define DP_LLB_STAMPED(md) (((struct __sk_buff *)md)->cb[3] == LLB_PIPE_STAMP_FLAG)
 #define DP_LLB_IS_EGR(md) ((((struct __sk_buff *)md)->ingress_ifindex) != (((struct __sk_buff *)md)->ifindex))
 #define DP_LLB_INIFIDX_NONE(md) (((struct __sk_buff *)md)->ingress_ifindex == 0)
 #define DP_LLB_EGRESS_HOOK(md) (DP_LLB_STAMPED(md) || DP_LLB_INIFIDX_NONE(md))
@@ -839,6 +839,19 @@ dp_buf_delete_room(void *md, int delta, __u64 flags)
 {
   return bpf_skb_adjust_room(md, -delta, BPF_ADJ_ROOM_MAC, 
                             flags);
+}
+
+static int __always_inline
+dp_redirect_port_in(void *tbl, struct xfi *xf)
+{
+  int *oif;
+  int key = xf->pm.oport;
+
+  oif = bpf_map_lookup_elem(tbl, &key);
+  if (!oif) {
+    return TC_ACT_SHOT;
+  }
+  return bpf_redirect(*oif, BPF_F_INGRESS);
 }
 
 static int __always_inline
@@ -1894,6 +1907,12 @@ dp_buf_delete_room(void *md, int delta, __u64 flags)
 }
 
 static int __always_inline
+dp_redirect_port_in(void *tbl, struct xfi *xf)
+{
+  return 0;
+}
+
+static int __always_inline
 dp_redirect_port(void *tbl, struct xfi *xf)
 {
   return bpf_redirect_map(tbl, xf->pm.oport, 0);
@@ -2728,6 +2747,24 @@ dp_tail_call(void *ctx,  struct xfi *xf, void *fa, __u32 idx)
   bpf_tail_call(ctx, &pgm_tbl, idx);
 
   return DP_PASS;
+}
+
+static int __always_inline
+dp_swap_mac_header(void *ctx, struct xfi *xf)
+{
+  void *start = DP_TC_PTR(DP_PDATA(ctx));
+  void *dend = DP_TC_PTR(DP_PDATA_END(ctx));
+  struct ethhdr *eth;
+
+  if (start + sizeof(*eth) > dend) {
+    LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLERR);
+    return -1;
+  }
+
+  eth = DP_TC_PTR(start);
+  memcpy(eth->h_dest, xf->l2m.dl_src, 6);
+  memcpy(eth->h_source, xf->l2m.dl_dst, 6);
+  return 0;
 }
 
 #endif

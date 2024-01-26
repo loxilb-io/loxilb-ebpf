@@ -27,13 +27,7 @@ dp_do_if_lkup(void *ctx, struct xfi *xf)
   key.pad =  0;
 
   if (DP_LLB_IS_EGR(ctx)) {
-    __u32 ikey = DP_OIFI(ctx);
-    __u32 *oif = NULL;
-    oif = bpf_map_lookup_elem(&tx_intf_map, &ikey);
-    if (!oif) {
-      return DP_PASS;
-    }
-    key.ifindex = *(__u32 *)oif;
+    key.ifindex = DP_OIFI(ctx);
     xf->pm.phit |= LLB_DP_TMAC_HIT;
   }
 
@@ -327,6 +321,14 @@ dp_pipe_check_res(void *ctx, struct xfi *xf, void *fa)
 
   if (xf->pm.pipe_act) {
 
+    if (xf->pm.pipe_act & LLB_PIPE_DROP) {
+      return DP_DROP;
+    }
+
+    if (dp_unparse_packet_always(ctx, xf) != 0) {
+        return DP_DROP;
+    }
+
     if (DP_LLB_IS_EGR(ctx)) {
       if (xf->pm.nf == 0 && xf->pm.nfc == 0) {
         return DP_PASS;
@@ -334,16 +336,10 @@ dp_pipe_check_res(void *ctx, struct xfi *xf, void *fa)
       if (xf->pm.pipe_act & LLB_PIPE_TRAP) {
         xf->pm.pipe_act &= ~(LLB_PIPE_TRAP|LLB_PIPE_PASS);
         xf->pm.pipe_act |= LLB_PIPE_RDR;
-        xf->pm.oport = LLB_PORT_NO;
+        xf->pm.oport = xf->pm.iport;
+        dp_swap_mac_header(ctx, xf);
+        return dp_redirect_port_in(&tx_intf_map, xf);
       }
-    }
-
-    if (xf->pm.pipe_act & LLB_PIPE_DROP) {
-      return DP_DROP;
-    } 
-
-    if (dp_unparse_packet_always(ctx, xf) != 0) {
-        return DP_DROP;
     }
 
 #ifndef HAVE_LLB_DISAGGR
