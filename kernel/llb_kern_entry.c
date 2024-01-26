@@ -139,12 +139,19 @@ tc_packet_func__(struct __sk_buff *md)
 SEC("tc_packet_hook0")
 int tc_packet_func_fast(struct __sk_buff *md)
 {
-  if (DP_LLB_STAMPED(md)) {
+#ifdef LL_TC_EBPF_EHOOK
+  if (DP_LLB_ISTAMPED(md) || DP_LLB_OSTAMPED(md)) {
     DP_LLB_RST_STAMP(md);
     return DP_PASS;
   } else {
-    DP_LLB_STAMP(md);
+    DP_LLB_OSTAMP(md);
   }
+#else
+  if (DP_LLB_OSTAMPED(md)) {
+    return DP_PASS;
+  }
+  DP_LLB_ISTAMP(md);
+#endif
 
 #ifdef HAVE_DP_FC
   struct xfi *xf;

@@ -677,11 +677,13 @@ dp_ipv4_new_csum(struct iphdr *iph)
 #define DP_DROP     TC_ACT_SHOT
 #define DP_PASS     TC_ACT_OK
 
-#define DP_LLB_STAMP(md) (((struct __sk_buff *)md)->cb[3] = LLB_PIPE_STAMP_FLAG)
+#define DP_LLB_ISTAMP(md) (((struct __sk_buff *)md)->cb[3] = LLB_PIPE_ISTAMP_FLAG)
+#define DP_LLB_OSTAMP(md) (((struct __sk_buff *)md)->cb[3] = LLB_PIPE_OSTAMP_FLAG)
 #define DP_LLB_CRC_STAMP(md, crc) (((struct __sk_buff *)md)->priority = crc)
 #define DP_LLB_CRC_DONE(md, val) (((struct __sk_buff *)md)->mark = LLB_PIPE_CRC_DONE_FLAG | (val))
 #define DP_LLB_RST_STAMP(md) (((struct __sk_buff *)md)->cb[3] = 0)
-#define DP_LLB_STAMPED(md) (((struct __sk_buff *)md)->cb[3] == LLB_PIPE_STAMP_FLAG)
+#define DP_LLB_ISTAMPED(md) (((struct __sk_buff *)md)->cb[3] == LLB_PIPE_ISTAMP_FLAG)
+#define DP_LLB_OSTAMPED(md) (((struct __sk_buff *)md)->cb[3] == LLB_PIPE_OSTAMP_FLAG)
 #define DP_LLB_IS_EGR(md) ((((struct __sk_buff *)md)->ingress_ifindex) != (((struct __sk_buff *)md)->ifindex))
 #define DP_LLB_INIFIDX_NONE(md) (((struct __sk_buff *)md)->ingress_ifindex == 0)
 #define DP_LLB_EGRESS_HOOK(md) (DP_LLB_STAMPED(md) || DP_LLB_INIFIDX_NONE(md))
@@ -1841,11 +1843,13 @@ dp_pktbuf_expand_tail(void *md, __u32 len)
 
 #else /* XDP utilities */
 
-#define DP_LLB_STAMP(md)
+#define DP_LLB_ISTAMP(md)
+#define DP_LLB_OSTAMP(md)
 #define DP_LLB_CRC_STAMP(md, crc)
 #define DP_LLB_CRC_DONE(md, val)
 #define DP_LLB_RST_STAMP(md)
-#define DP_LLB_STAMPED(md) (0)
+#define DP_LLB_ISTAMPED(md) (0)
+#define DP_LLB_OSTAMPED(md) (0)
 #define DP_LLB_EGRESS_HOOK(md) (0)
 #define DP_LLB_INIFIDX_NONE(md) (0)
 #define DP_LLB_IS_EGR(md) (0)
