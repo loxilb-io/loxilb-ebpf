@@ -340,6 +340,9 @@ dp_pipe_check_res(void *ctx, struct xfi *xf, void *fa)
         dp_swap_mac_header(ctx, xf);
         return dp_redirect_port_in(&tx_intf_map, xf);
       }
+      /* At this time we are pretty sure this will
+       * go out of our domain and not come back to ingress */
+      DP_LLB_RST_STAMP(ctx);
     }
 
 #ifndef HAVE_LLB_DISAGGR
