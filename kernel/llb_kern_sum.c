@@ -78,10 +78,8 @@ dp_sctp_csum(void *ctx, struct xfi *xf)
         xf->pm.nf = 0;
         xf->pm.nfc = 1;
 
-        if (DP_LLB_IS_EGR(ctx)) {
-          DP_LLB_CRC_STAMP(ctx, csum);
-          DP_LLB_CRC_DONE(ctx, (sctp_csum_off<<16));
-        }
+        DP_LLB_CRC_STAMP(ctx, csum);
+        DP_LLB_CRC_DONE(ctx, (sctp_csum_off<<16));
       }
         
       RETURN_TO_MP_OUT();
