@@ -679,8 +679,6 @@ dp_ipv4_new_csum(struct iphdr *iph)
 
 #define DP_LLB_ISTAMP(md) (((struct __sk_buff *)md)->cb[3] = LLB_PIPE_ISTAMP_FLAG)
 #define DP_LLB_OSTAMP(md) (((struct __sk_buff *)md)->cb[3] = LLB_PIPE_OSTAMP_FLAG)
-#define DP_LLB_CRC_STAMP(md, crc) (((struct __sk_buff *)md)->priority = crc)
-#define DP_LLB_CRC_DONE(md, val) (((struct __sk_buff *)md)->mark = LLB_PIPE_CRC_DONE_FLAG | (val))
 #define DP_LLB_RST_STAMP(md) (((struct __sk_buff *)md)->cb[3] = 0)
 #define DP_LLB_ISTAMPED(md) (((struct __sk_buff *)md)->cb[3] == LLB_PIPE_ISTAMP_FLAG)
 #define DP_LLB_OSTAMPED(md) (((struct __sk_buff *)md)->cb[3] == LLB_PIPE_OSTAMP_FLAG)
@@ -697,6 +695,15 @@ dp_ipv4_new_csum(struct iphdr *iph)
 #define DP_PDATA_END(md) (((struct __sk_buff *)md)->data_end)
 #define DP_MDATA(md) (((struct __sk_buff *)md)->data_meta)
 #define DP_GET_LEN(md) (((struct __sk_buff *)md)->len)
+#define DP_LLB_SET_CRC_HINT(md, crc) (((struct __sk_buff *)md)->priority = crc)
+#define DP_LLB_SET_CRC_OFF(md, val) (((struct __sk_buff *)md)->mark = LLB_PIPE_CRC_DONE_FLAG | (val))
+#define DP_LLB_ADD_CRC_OFF(md, xf, val)                           \
+do {                                                              \
+  if (xf->pm.nfc) {                                               \
+    __u16 off = ((((struct __sk_buff *)md)->mark >> 16) & 0xffff);\
+    DP_LLB_SET_CRC_OFF(md, ((val)+off) << 16);                    \
+  }                                                               \
+} while (0)
 
 #ifdef HAVE_CLANG13
 #define DP_NEW_FCXF(xf)                  \
@@ -911,6 +918,7 @@ dp_remove_vlan_tag(void *ctx, struct xfi *xf)
   memcpy(eth->h_dest, xf->l2m.dl_dst, 6);
   memcpy(eth->h_source, xf->l2m.dl_src, 6);
   eth->h_proto = xf->l2m.dl_type;
+  DP_LLB_ADD_CRC_OFF(ctx, xf, -((int)sizeof(struct vlanhdr));
   return 0;
 }
 
@@ -928,6 +936,8 @@ dp_insert_vlan_tag(void *ctx, struct xfi *xf, __be16 vlan)
   }
   memcpy(eth->h_dest, xf->l2m.dl_dst, 6);
   memcpy(eth->h_source, xf->l2m.dl_src, 6);
+
+  DP_LLB_ADD_CRC_OFF(ctx, xf, sizeof(struct vlanhdr));
   return 0;
 }
 
@@ -1845,8 +1855,9 @@ dp_pktbuf_expand_tail(void *md, __u32 len)
 
 #define DP_LLB_ISTAMP(md)
 #define DP_LLB_OSTAMP(md)
-#define DP_LLB_CRC_STAMP(md, crc)
-#define DP_LLB_CRC_DONE(md, val)
+#define DP_LLB_SET_CRC_HINT(md, crc)
+#define DP_LLB_SET_CRC_OFF(md, val)
+#define DP_LLB_ADD_CRC_OFF(md, xf, val)
 #define DP_LLB_RST_STAMP(md)
 #define DP_LLB_ISTAMPED(md) (0)
 #define DP_LLB_OSTAMPED(md) (0)
@@ -2221,6 +2232,8 @@ dp_do_strip_ipip(void *md, struct xfi *xf)
   xf->tm.tun_decap = 1;
 #endif
 
+  DP_LLB_ADD_CRC_OFF(md, xf, -olen);
+
   return 0;
 }
 
@@ -2275,6 +2288,7 @@ dp_do_ins_ipip(void *md,
   dp_ipv4_new_csum((void *)iph);
 
   xf->tm.tun_encap = 1;
+  DP_LLB_ADD_CRC_OFF(md, xf, olen);
 
   if (skip_md) {
     return 0;
@@ -2332,6 +2346,8 @@ dp_do_strip_vxlan(void *md, struct xfi *xf, int olen)
     eth->h_proto = xf->il2m.dl_type;
   }
 
+  DP_LLB_ADD_CRC_OFF(md, xf, -olen);
+
 #if 0
   /* Reset pipeline metadata */
   memcpy(&xf->l34m, &xf->il34m, sizeof(xf->l34m));
@@ -2375,14 +2391,14 @@ dp_do_ins_vxlan(void *md,
   olen   = sizeof(*iph)  + sizeof(*udp) + sizeof(*vx); 
   l2_len = sizeof(*eth);
 
-    flags = BPF_F_ADJ_ROOM_FIXED_GSO |
+  flags = BPF_F_ADJ_ROOM_FIXED_GSO |
           BPF_F_ADJ_ROOM_ENCAP_L3_IPV4 |
           BPF_F_ADJ_ROOM_ENCAP_L4_UDP |
           BPF_F_ADJ_ROOM_ENCAP_L2(l2_len);
-    olen += l2_len;
+  olen += l2_len;
 
-    /* add room between mac and network header */
-    if (dp_buf_add_room(md, olen, flags)) {
+  /* add room between mac and network header */
+  if (dp_buf_add_room(md, olen, flags)) {
     LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLERR);
     return -1;
   }
@@ -2468,12 +2484,15 @@ dp_do_ins_vxlan(void *md,
   xf->tm.tunnel_id = bpf_ntohl(tid);
   xf->pm.tun_off   = sizeof(*eth) + 
                     sizeof(*iph) + 
-                    sizeof(*udp);
+                    sizeof(*udp) +
+                    sizeof(*vx);
   xf->tm.tun_encap = 1;
 
   /* Reset flags essential for L2 header rewrite */
   xf->l2m.vlan[0] = 0;
   xf->l2m.dl_type = bpf_htons(ETH_P_IP);
+
+  DP_LLB_ADD_CRC_OFF(md, xf, olen);
 
   if (skip_md) {
     return 0;
@@ -2498,8 +2517,8 @@ dp_do_ins_vxlan(void *md,
   xf->l34m.dest = udp->dest;
   xf->pm.l3_off = sizeof(*eth);
   xf->pm.l4_off = sizeof(*eth) + sizeof(*iph);
-  
-    return 0;
+
+  return 0;
 }
 
 static int __always_inline
@@ -2672,7 +2691,8 @@ dp_do_ins_gtp(void *md,
   xf->tm.tunnel_id = bpf_ntohl(tid);
   xf->pm.tun_off   = sizeof(*eth) + 
                     sizeof(*iph) + 
-                    sizeof(*udp);
+                    sizeof(*udp) +
+                    sizeof(*gh);
   xf->tm.tun_encap = 1;
 
   if (skip_md) {
