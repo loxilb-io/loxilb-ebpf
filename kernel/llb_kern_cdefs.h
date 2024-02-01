@@ -918,7 +918,7 @@ dp_remove_vlan_tag(void *ctx, struct xfi *xf)
   memcpy(eth->h_dest, xf->l2m.dl_dst, 6);
   memcpy(eth->h_source, xf->l2m.dl_src, 6);
   eth->h_proto = xf->l2m.dl_type;
-  DP_LLB_ADD_CRC_OFF(ctx, xf, -((int)sizeof(struct vlanhdr));
+  DP_LLB_ADD_CRC_OFF(ctx, xf, -((int)sizeof(struct vlanhdr)));
   return 0;
 }
 
