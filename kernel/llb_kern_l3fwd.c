@@ -174,9 +174,10 @@ dp_do_rtv6(void *ctx, struct xfi *xf, void *fa_)
 
   act = bpf_map_lookup_elem(&rt_v6_map, key);
   if (!act) {
-    /* Default action - Nothing to do */
     xf->pm.nf &= ~LLB_NAT_SRC;
-    LL_DBG_PRINTK("RT Not found");
+    if (!DP_LLB_IS_EGR(ctx)) {
+      LLBS_PPLN_TRAPC(xf, LLB_PIPE_RC_RT_TRAP);
+    }
     return 0;
   }
 
@@ -207,8 +208,10 @@ dp_do_rtv4(void *ctx, struct xfi *xf, void *fa_)
 
   act = bpf_map_lookup_elem(&rt_v4_map, key);
   if (!act) {
-    /* Default action - Nothing to do */
     xf->pm.nf &= ~LLB_NAT_SRC;
+    if (!DP_LLB_IS_EGR(ctx)) {
+      LLBS_PPLN_TRAPC(xf, LLB_PIPE_RC_RT_TRAP);
+    }
     return 0;
   }
 
