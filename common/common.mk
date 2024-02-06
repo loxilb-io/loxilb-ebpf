@@ -82,6 +82,10 @@ CFLAGS ?= -I$(LIBBPF_DIR)/build/usr/include/ -g
 CFLAGS += -I../headers/ -I$(LIBBPF_DIR)/ $(CFLAGS_ALL)
 LDFLAGS ?= -L$(LIBBPF_DIR)
 
+ifeq ($(DOCKER_BUILDX_ARM64), true)
+CFLAGS_ALL += -DDOCKER_BUILDX_ARM64=1
+endif
+
 BPF_CFLAGS ?= -I$(LIBBPF_DIR)/build/usr/include/ -I../headers/ -I/usr/include/$(shell uname -m)-linux-gnu $(CFLAGS_ALL)
 
 LIBS = $(OBJECT_LIBBPF) -lelf $(USER_LIBS) -lz -lpthread

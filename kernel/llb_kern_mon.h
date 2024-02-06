@@ -26,4 +26,13 @@ typedef struct map_update_data {
     char value[MAX_VALUE_SIZE];
 } map_update_data;
 
+#ifdef DOCKER_BUILDX_ARM64
+struct user_pt_regs {
+        __u64 regs[31];
+        __u64 sp;
+        __u64 pc;
+        __u64 pstate;
+};
+#endif
+
 #endif /* __LLB_KERN_MON_H__ */
