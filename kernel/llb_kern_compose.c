@@ -998,9 +998,15 @@ dp_unparse_packet_always_slow(void *ctx,  struct xfi *xf)
 static int __always_inline
 dp_unparse_packet_always(void *ctx,  struct xfi *xf)
 {
+
   if (xf->pm.nf & LLB_NAT_SRC && xf->nm.dsr == 0) {
     LL_DBG_PRINTK("[DEPR] LL_SNAT 0x%lx:%x\n",
                  xf->nm.nxip4, xf->nm.nxport);
+    if (xf->pm.rcode & (LLB_PIPE_RC_NODMAC|LLB_PIPE_RC_NH_UNK|LLB_PIPE_RC_RT_TRAP)) {
+      xf->pm.pten = DP_PTEN_ALL;
+      xf->pm.rcode |= LLB_PIPE_RC_RESOLVE;
+      dp_ring_event(ctx, xf, 1);
+    }
     if (xf->l2m.dl_type == bpf_ntohs(ETH_P_IPV6) || xf->nm.nv6) {
       dp_sunp_tcall(ctx, xf);
     } else {

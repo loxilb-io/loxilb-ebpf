@@ -128,6 +128,7 @@ enum llb_dp_tid {
   LL_DP_CPU_MAP,
   LL_DP_LCPU_MAP,
   LL_DP_PPLAT_MAP,
+  LL_DP_CP_PERF_RING,
   LL_DP_MAX_MAP
 };
 
@@ -526,11 +527,15 @@ typedef struct {
   ct_tcp_pinfd_t tcp_cts[CT_DIR_MAX];
 } ct_tcp_pinf_t;
 
+
+#define CT_UDP_FIN_MASK (CT_UDP_FINI)
+
 typedef enum {
   CT_UDP_CNI    = 0x0,
   CT_UDP_UEST   = 0x1,
   CT_UDP_EST    = 0x2,
   CT_UDP_FINI   = 0x8,
+  CT_UDP_CW     = 0x10,
 } ct_udp_state_t;
 
 typedef struct {
@@ -538,6 +543,7 @@ typedef struct {
 #define CT_UDP_CONN_THRESHOLD 4
   __u16 pkts_seen;
   __u16 rpkts_seen;
+   ct_dir_t fndir;
 } ct_udp_pinf_t;
 
 typedef enum {
@@ -770,7 +776,7 @@ struct ll_dp_pmdi {
   __u16 table_id;
   __u16 phit ;
   __u32 pkt_len;
-  __u32 pad;
+  __u32 resolve_ip;
   uint8_t data[];
 }; 
 

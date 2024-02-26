@@ -85,6 +85,7 @@ typedef struct llb_dp_struct
   const char *ll_dp_dfl_sec;
   const char *ll_dp_pdir;
   pthread_t pkt_thr;
+  pthread_t cp_thr;
   pthread_t mon_thr;
   int mgmt_ch_fd;
   int have_mtrace;
@@ -98,6 +99,7 @@ typedef struct llb_dp_struct
   struct pdi_map *ufw4;
   struct pdi_map *ufw6;
   FILE *logfp;
+  struct throttler cpt;
 } llb_dp_struct_t;
 
 #define XH_LOCK()    pthread_rwlock_wrlock(&xh->lock)
@@ -301,7 +303,15 @@ llb_decode_pmdata(char *buf, struct ll_dp_pmdi *pmd)
     if (pmd->rcode & LLB_PIPE_RC_NODMAC) {
       n += sprintf(buf + n, "dmac-excp,");
     }
+    if (pmd->rcode & LLB_PIPE_RC_NH_UNK) {
+      n += sprintf(buf + n, "nh-excp,");
+    }
   }
+}
+
+void __attribute__((weak))
+goLinuxArpResolver(unsigned int destIP)
+{
 }
 
 static void
@@ -440,6 +450,63 @@ cleanup:
   return -1;
 }
 
+static void
+llb_handle_cp_event(void *ctx,
+             int cpu,
+             void *data,
+             unsigned int data_sz)
+{
+  struct ll_dp_pmdi *pmd = data;
+
+  if (do_throttle(&xh->cpt)) {
+    return;
+  }
+
+  if (pmd->rcode & LLB_PIPE_RC_RESOLVE) {
+    goLinuxArpResolver(pmd->resolve_ip);
+    return;
+  }
+}
+
+static void *
+llb_cp_proc_main(void *arg)
+{
+  struct perf_buffer *pb = arg;
+
+  while (1) {
+    perf_buffer__poll(pb, 100 /* timeout, ms */);
+  }
+
+  /* NOT REACHED */
+  return NULL;
+}
+
+int
+llb_setup_cp_ring(void)
+{
+  struct perf_buffer *pb = NULL;
+  struct perf_buffer_opts pb_opts = { 0 };
+  int pkt_fd = xh->maps[LL_DP_CP_PERF_RING].map_fd;
+
+  if (pkt_fd < 0) return -1;
+
+  /* Set up ring buffer polling */
+  pb_opts.sample_cb = llb_handle_cp_event;
+
+  pb = perf_buffer__new(pkt_fd, 1 /* 4KB per CPU */, &pb_opts);
+  if (libbpf_get_error(pb)) {
+    fprintf(stderr, "Failed to create cp-ring perf buffer\n");
+    goto cleanup;
+  }
+
+  pthread_create(&xh->cp_thr, NULL, llb_cp_proc_main, pb);
+
+  return 0;
+
+cleanup:
+  perf_buffer__free(pb);
+  return -1;
+}
 
 #ifdef HAVE_DP_CT_SYNC
 
@@ -782,6 +849,8 @@ llb_dflt_sec_map2fd_all(struct bpf_object *bpf_obj)
         //assert(0);
       }
       llb_setup_lcpu_map(fd);
+    } else if (i == LL_DP_CP_PERF_RING) {
+      llb_setup_cp_ring();
     }
   }
 
@@ -1078,6 +1147,10 @@ llb_xh_init(llb_dp_struct_t *xh)
   xh->maps[LL_DP_PPLAT_MAP].has_pb   = 1;
   xh->maps[LL_DP_PPLAT_MAP].max_entries = LLB_PPLAT_MAP_ENTRIES;
 
+  xh->maps[LL_DP_CP_PERF_RING].map_name = "cp_ring";
+  xh->maps[LL_DP_CP_PERF_RING].has_pb   = 0;
+  xh->maps[LL_DP_CP_PERF_RING].max_entries = 128;  /* MAX_CPUS */
+
   strcpy(xh->psecs[0].name, LLB_SECTION_PASS);
   strcpy(xh->psecs[1].name, XDP_LL_SEC_DEFAULT);
   xh->psecs[1].setup = llb_dflt_sec_map2fd_all;
@@ -1101,6 +1174,8 @@ llb_xh_init(llb_dp_struct_t *xh)
       assert(0);
     }
   }
+
+  init_throttler(&xh->cpt, 50);
 
   return;
 }

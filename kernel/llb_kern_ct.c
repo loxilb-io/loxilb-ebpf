@@ -524,11 +524,19 @@ dp_ct_udp_sm(void *ctx, struct xfi *xf,
       nstate = CT_UDP_EST;
     break;
   case CT_UDP_EST:
+    if (xf->pm.l4fin) {
+      nstate = CT_UDP_FINI;
+      us->fndir = dir;
+    }
+    break;
+  case CT_UDP_FINI:
+    if (xf->pm.l4fin && us->fndir != dir) {
+      nstate = CT_UDP_CW;
+    }
     break;
   default:
     break;
   }
-
 
   us->state = nstate;
   xus->state = nstate;
@@ -539,7 +547,10 @@ dp_ct_udp_sm(void *ctx, struct xfi *xf,
     return CT_SMR_UEST;
   else if (nstate == CT_UDP_EST)
     return CT_SMR_EST;
-
+  else if (nstate & CT_UDP_CW)
+    return CT_SMR_CTD;
+  else if (nstate & CT_UDP_FIN_MASK)
+    return CT_SMR_FIN;
 
   return CT_SMR_INPROG;
 }
@@ -1442,6 +1453,8 @@ dp_ct_in(void *ctx, struct xfi *xf)
     adat->ctd.pi.pmhh[0] = xf->nm.pmhh[0];
     adat->ctd.pi.pmhh[1] = xf->nm.pmhh[1];
     adat->ctd.pi.pmhh[2] = xf->nm.pmhh[2]; // LLB_MAX_MHOSTS
+    adat->ctd.pb.bytes = 0;
+    adat->ctd.pb.packets = 0;
 
     axdat->ca.ftrap = 0;
     axdat->ca.oaux = 0;
@@ -1476,6 +1489,8 @@ dp_ct_in(void *ctx, struct xfi *xf)
     axdat->ctd.pi.pmhh[0] = xf->nm.pmhh[0];
     axdat->ctd.pi.pmhh[1] = xf->nm.pmhh[1];
     axdat->ctd.pi.pmhh[2] = xf->nm.pmhh[2]; // LLB_MAX_MHOSTS
+    axdat->ctd.pb.bytes = 0;
+    axdat->ctd.pb.packets = 0;
 
     bpf_map_update_elem(&ct_map, &xkey, axdat, BPF_ANY);
     bpf_map_update_elem(&ct_map, &key, adat, BPF_ANY);

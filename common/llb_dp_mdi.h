@@ -128,6 +128,8 @@ struct dp_pi_mdi {
 #define LLB_PIPE_RC_NODMAC    0x400000
 #define LLB_PIPE_RC_RT_TRAP   0x800000
 #define LLB_PIPE_RC_CSUM_DRP  0x1000000
+#define LLB_PIPE_RC_NH_UNK    0x2000000
+#define LLB_PIPE_RC_RESOLVE   0x4000000
     __u32            rcode;
 
     __u8             tc;
@@ -136,11 +138,13 @@ struct dp_pi_mdi {
     __u8             lkup_dmac[6];
     __u16            iport;
     __u16            oport;
-
-    __u32            sess_id;
     __u16            zone;
     __u8             l4_off;
     __u8             table_id;
+
+    __u64            sseid;
+    __u64            dseid;
+
 #define LLB_MIRR_MARK         0xdeadbeef
     __u16            mirr;
 #define LLB_TCP_FIN           0x01
@@ -157,6 +161,7 @@ struct dp_pi_mdi {
     __u8             nf;
     __u16            rule_id;
     __u16            l3_adj;
+
     __u8             il3_off;
     __u8             il4_off;
     __u8             itcp_flags;

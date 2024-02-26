@@ -87,6 +87,13 @@ struct bpf_map_def SEC("maps") pkt_ring = {
   .max_entries = MAX_CPUS,
 };
 
+struct bpf_map_def SEC("maps") cp_ring = {
+  .type = BPF_MAP_TYPE_PERF_EVENT_ARRAY,
+  .key_size = sizeof(int),
+  .value_size = sizeof(__u32),
+  .max_entries = MAX_CPUS,
+};
+
 struct bpf_map_def SEC("maps") pkts = {
   .type = BPF_MAP_TYPE_PERCPU_ARRAY,
   .key_size = sizeof(__u32),  /* Index xdp_ifidx */
@@ -327,6 +334,13 @@ struct {
 */
 
 struct bpf_map_def SEC("maps") pkt_ring = {
+          .type             = BPF_MAP_TYPE_PERF_EVENT_ARRAY,
+          .key_size         = sizeof(int),
+          .value_size       = sizeof(__u32),
+          .max_entries      = MAX_CPUS,
+};
+
+struct bpf_map_def SEC("maps") cp_ring = {
           .type             = BPF_MAP_TYPE_PERF_EVENT_ARRAY,
           .key_size         = sizeof(int),
           .value_size       = sizeof(__u32),
@@ -731,7 +745,7 @@ dp_llb_add_crc_off(void *md,  struct xfi *xf, int val)
     if (xf->pm.pten == DP_PTEN_ALL ||    \
        ((xf->pm.pten == DP_PTEN_TRAP) && \
         (xf->pm.pipe_act & LLB_PIPE_EXCP_MASK))) { \
-      dp_trace_packet(ctx, xf);          \
+      dp_ring_event(ctx, xf, 0);         \
     }                                    \
   }
 
@@ -770,6 +784,44 @@ do {                                             \
 
 #define TCALL_CRC1() bpf_tail_call(ctx, &pgm_tbl, LLB_DP_CRC_PGM_ID1)
 #define TCALL_CRC2() bpf_tail_call(ctx, &pgm_tbl, LLB_DP_CRC_PGM_ID2)
+
+static int __always_inline
+dp_ring_event(void *ctx,  struct xfi *xf, int cp)
+{
+  struct ll_dp_pmdi *pmd;
+  int z = 0;
+  __u64 flags = BPF_F_CURRENT_CPU;
+
+  /* Metadata will be in the perf event before the packet data. */
+  pmd = bpf_map_lookup_elem(&pkts, &z);
+  if (!pmd) return 0;
+
+  LL_DBG_PRINTK("[TRACE] START--");
+
+  pmd->ifindex = DP_IFI(ctx);
+  pmd->phit = xf->pm.phit;
+  pmd->dp_inport = xf->pm.iport;
+  pmd->dp_oport = xf->pm.oport;
+  pmd->table_id = xf->pm.table_id;
+  pmd->rcode = xf->pm.rcode;
+  pmd->pkt_len = DP_GET_LEN(ctx);
+  pmd->resolve_ip = xf->l34m.daddr[0];
+
+  flags |= (__u64)pmd->pkt_len << 32;
+  
+  if (cp == 0) {
+    if (bpf_perf_event_output(ctx, &pkt_ring, flags,
+                            pmd, sizeof(*pmd))) {
+      LL_DBG_PRINTK("[TRACE] PKT FAIL--");
+    }
+  } else {
+    if (bpf_perf_event_output(ctx, &cp_ring, flags,
+                            pmd, sizeof(*pmd))) {
+      LL_DBG_PRINTK("[TRACE] CP FAIL--");
+    }
+  }
+  return DP_DROP;
+}
 
 static int __always_inline
 dp_csum_tcall(void *ctx,  struct xfi *xf)
@@ -1032,7 +1084,7 @@ dp_set_tcp_sport(void *md, struct xfi *xf, __be16 xport)
   int tcp_sport_off = xf->pm.l4_off + offsetof(struct tcphdr, source);
   __be32 old_sport = xf->l34m.source;
 
-  if (xf->l34m.frg) return 0;
+  if (xf->l34m.frg || !xport) return 0;
 
   bpf_l4_csum_replace(md, tcp_csum_off, old_sport, xport, sizeof(xport));
   bpf_skb_store_bytes(md, tcp_sport_off, &xport, sizeof(xport), 0);
@@ -1144,7 +1196,7 @@ dp_set_udp_sport(void *md, struct xfi *xf, __be16 xport)
   __be32 old_sport = xf->l34m.source;
   //__be16 csum = 0;
 
-  if (xf->l34m.frg) return 0;
+  if (xf->l34m.frg || !xport) return 0;
 
   /* UDP checksum = 0 is valid */
   //bpf_skb_store_bytes(md, udp_csum_off, &csum, sizeof(csum), 0);
@@ -1302,7 +1354,7 @@ dp_set_sctp_sport(void *md, struct xfi *xf, __be16 xport)
   int sctp_csum_off = xf->pm.l4_off + offsetof(struct sctphdr, checksum);
   int sctp_sport_off = xf->pm.l4_off + offsetof(struct sctphdr, source);
 
-  if (xf->l34m.frg) return 0;
+  if (xf->l34m.frg || !xport) return 0;
 
   bpf_skb_store_bytes(md, sctp_csum_off, &csum , sizeof(csum), 0);
   bpf_skb_store_bytes(md, sctp_sport_off, &xport, sizeof(xport), 0);
@@ -1910,6 +1962,12 @@ dp_pkt_is_l2mcbc(struct xfi *xf, void *md)
   return 0;
 }
 
+static int __always_inline
+dp_ring_event(void *ctx,  struct xfi *xf, int cp)
+{
+  return 0;
+}
+ 
 static int __always_inline
 dp_add_l2(void *md, int delta)
 {

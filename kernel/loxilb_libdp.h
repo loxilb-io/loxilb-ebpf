@@ -46,6 +46,7 @@ enum llb_bpf_mnt_type {
 #include "../common/common_user_bpf_xdp.h"
 #include "../common/common_libbpf.h"
 #include "../common/common_pdi.h"
+#include "../common/throttler.h"
 #include "../common/llb_dpapi.h"
 #include "../common/llb_dp_mdi.h"
 #include "../common/log.h"

@@ -181,36 +181,6 @@ dp_do_mirr_lkup(void *ctx, struct xfi *xf)
 #endif
 
 static int __always_inline
-dp_trace_packet(void *ctx,  struct xfi *xf)
-{
-  struct ll_dp_pmdi *pmd;
-  int z = 0;
-  __u64 flags = BPF_F_CURRENT_CPU;
-
-  /* Metadata will be in the perf event before the packet data. */
-  pmd = bpf_map_lookup_elem(&pkts, &z);
-  if (!pmd) return 0;
-
-  LL_DBG_PRINTK("[TRACE] START--");
-
-  pmd->ifindex = DP_IFI(ctx);
-  pmd->phit = xf->pm.phit;
-  pmd->dp_inport = xf->pm.iport;
-  pmd->dp_oport = xf->pm.oport;
-  pmd->table_id = xf->pm.table_id;
-  pmd->rcode = xf->pm.rcode;
-  pmd->pkt_len = DP_GET_LEN(ctx);
-
-  flags |= (__u64)pmd->pkt_len << 32;
-  
-  if (bpf_perf_event_output(ctx, &pkt_ring, flags,
-                            pmd, sizeof(*pmd))) {
-    LL_DBG_PRINTK("[TRACE] FAIL--");
-  }
-  return DP_DROP;
-}
-
-static int __always_inline
 dp_trap_packet(void *ctx,  struct xfi *xf, void *fa_)
 {
   struct ethhdr *neth;

@@ -309,9 +309,6 @@ dp_do_ctops(void *ctx, struct xfi *xf, void *fa_,
 
   } else if (act->ca.act_type == DP_SET_TOCP) {
     LLBS_PPLN_PASSC(xf, LLB_PIPE_RC_ACL_TRAP);
-  } else if (act->ca.act_type == DP_SET_SESS_FWD_ACT) {
-    struct dp_sess_act *pa = &act->pdr_sess_act; 
-    xf->pm.sess_id = pa->sess_id;
   } else {
     /* Same for DP_SET_DROP */
     LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_ACT_DROP);
