@@ -374,8 +374,11 @@ dp_do_ipv4_fwd(void *ctx,  struct xfi *xf, void *fa_)
   if (xf->tm.tunnel_id == 0 ||  xf->tm.tun_type != LLB_TUN_GTP) {
     dp_do_sess4_lkup(ctx, xf);
   }
-
+#ifndef HAVE_DP_LBMODE_ONLY
   if (xf->pm.phit & LLB_DP_TMAC_HIT) {
+#else
+  if (1) {
+#endif
 
     /* If some pipeline block already set a redirect before this,
      * we honor this and dont do further l3 processing 
@@ -389,7 +392,12 @@ dp_do_ipv4_fwd(void *ctx,  struct xfi *xf, void *fa_)
 static void __always_inline
 dp_do_ipv6_fwd(void *ctx,  struct xfi *xf, void *fa_)
 {
+
+#ifndef HAVE_DP_LBMODE_ONLY
   if (xf->pm.phit & LLB_DP_TMAC_HIT) {
+#else
+  if (1) {
+#endif
 
     /* If some pipeline block already set a redirect before this,
      * we honor this and dont do further l3 processing

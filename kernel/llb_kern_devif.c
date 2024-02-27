@@ -482,6 +482,12 @@ dp_ing_ct_main(void *ctx,  struct xfi *xf)
     }
 
     dp_do_nat(ctx, xf);
+
+#ifdef HAVE_DP_LBMODE_ONLY
+    if ((xf->pm.phit & LLB_DP_NAT_HIT) == 0) {
+      return DP_PASS;
+    }
+#endif
   }
 
   LL_DBG_PRINTK("[CTRK] start");
