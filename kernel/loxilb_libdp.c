@@ -164,7 +164,7 @@ libbpf_print_fn(enum libbpf_print_level level,
                 va_list args)
 {
   /* Ignore debug-level libbpf logs */
-  if (level > LIBBPF_INFO)
+  if (level == LIBBPF_DEBUG)
     return 0;
   return vfprintf(stderr, format, args);
 }
@@ -427,7 +427,7 @@ int
 llb_setup_pkt_ring(void)
 {
   struct perf_buffer *pb = NULL;
-  struct perf_buffer_opts pb_opts = { 0 };
+  struct perf_buffer_opts pb_opts = { .sz = sizeof(struct perf_buffer_opts) } ;
   int pkt_fd = xh->maps[LL_DP_PKT_PERF_RING].map_fd;
 
   if (pkt_fd < 0) return -1;
@@ -483,7 +483,7 @@ int
 llb_setup_cp_ring(void)
 {
   struct perf_buffer *pb = NULL;
-  struct perf_buffer_opts pb_opts = { 0 };
+  struct perf_buffer_opts pb_opts = { .sz = sizeof(struct perf_buffer_opts) } ;
   int pkt_fd = xh->maps[LL_DP_CP_PERF_RING].map_fd;
 
   if (pkt_fd < 0) return -1;
@@ -646,8 +646,9 @@ llb_setup_kern_mon(void)
       goto cleanup;
   }
 
-  // Setup Pef buffer to process events from kernel
-  struct perf_buffer_opts pb_opts = { 0 } ;
+  // Setup Perf buffer to process events from kernel
+  struct perf_buffer_opts pb_opts = { .sz = sizeof(struct perf_buffer_opts) } ;
+
   struct perf_buffer *pb;
   pb = perf_buffer__new(bpf_map__fd(prog->maps.map_events), 16384,
             llb_maptrace_output, llb_maptrace_lost, NULL, &pb_opts);
