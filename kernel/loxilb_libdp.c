@@ -854,7 +854,7 @@ llb_dflt_sec_map2fd_all(struct bpf_object *bpf_obj)
 
   /* Clean previous pins */
   if (bpf_object__unpin_maps(bpf_obj, xh->ll_dp_pdir) != 0) {
-    log_error("%s: Unpin maps failed", xh->ll_dp_pdir);
+    log_warn("%s: Unpin maps failed", xh->ll_dp_pdir);
   }
 
   /* This will pin all maps in our bpf_object */
