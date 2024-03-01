@@ -1227,14 +1227,6 @@ dp_ct_sm(void *ctx, struct xfi *xf,
   return sm_ret;
 }
 
-struct {
-        __uint(type,        BPF_MAP_TYPE_PERCPU_ARRAY);
-        __type(key,         int);
-        __type(value,       struct dp_ct_tact);
-        __uint(max_entries, 2);
-} xctk SEC(".maps");
-
-
 #define CP_CT_NAT_TACTS(dst, src)  \
   memcpy(&dst->ca, &src->ca, sizeof(struct dp_cmn_act));  \
   memcpy(&dst->ctd, &src->ctd, sizeof(struct dp_ct_dat)); \
