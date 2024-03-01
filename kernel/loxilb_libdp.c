@@ -432,9 +432,6 @@ llb_setup_pkt_ring(void)
 
   if (pkt_fd < 0) return -1;
 
-  /* Set up ring buffer polling */
-  pb_opts.sample_cb = llb_handle_pkt_tracer_event;
-
   pb = perf_buffer__new(pkt_fd, 8 /* 32KB per CPU */,
           llb_handle_pkt_tracer_event, NULL, NULL, &pb_opts);
   if (libbpf_get_error(pb)) {
@@ -490,9 +487,6 @@ llb_setup_cp_ring(void)
   int pkt_fd = xh->maps[LL_DP_CP_PERF_RING].map_fd;
 
   if (pkt_fd < 0) return -1;
-
-  /* Set up ring buffer polling */
-  pb_opts.sample_cb = llb_handle_cp_event;
 
   pb = perf_buffer__new(pkt_fd, 1 /* 4KB per CPU */, llb_handle_cp_event, NULL, NULL, &pb_opts);
   if (libbpf_get_error(pb)) {
@@ -655,8 +649,6 @@ llb_setup_kern_mon(void)
   // Setup Pef buffer to process events from kernel
   struct perf_buffer_opts pb_opts = { 0 } ;
   struct perf_buffer *pb;
-  pb_opts.sample_cb = llb_maptrace_output;
-  pb_opts.lost_cb = llb_maptrace_lost;
   pb = perf_buffer__new(bpf_map__fd(prog->maps.map_events), 16384,
             llb_maptrace_output, llb_maptrace_lost, NULL, &pb_opts);
   err = libbpf_get_error(pb);
