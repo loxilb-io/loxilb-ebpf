@@ -512,9 +512,9 @@ dp_ing_ct_main(void *ctx,  struct xfi *xf)
 res_end:
   if (1) {
     int ret = dp_pipe_check_res(ctx, xf, fa);
-    //if (ret == DP_DROP) {
-    // bpf_printk("Drop RC 0x%x", xf->pm.rcode);
-    //}
+    if (ret == DP_DROP) {
+     bpf_printk("Drop RC 0x%x", xf->pm.rcode);
+    }
     return ret;
   }
 }
