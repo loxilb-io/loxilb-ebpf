@@ -26,7 +26,7 @@
 #define LLB_DMAC_MAP_ENTRIES  (8*1024)
 #define LLB_NATV4_MAP_ENTRIES (4*1024)
 #define LLB_NATV4_STAT_MAP_ENTRIES (4*16*1024) /* 16 end-points */
-#define LLB_NAT_EP_MAP_ENTRIES (4*16*1024) /* 16 end-points */
+#define LLB_NAT_EP_MAP_ENTRIES (4*1024)
 #define LLB_SMAC_MAP_ENTRIES  (LLB_DMAC_MAP_ENTRIES)
 #define LLB_FW4_MAP_ENTRIES   (8*1024)
 #define LLB_INTERFACES        (512)
@@ -159,7 +159,8 @@ enum {
   DP_SET_RM_GTP          = 21,
   DP_SET_ADD_GTP         = 22,
   DP_SET_NEIGH_IPIP      = 23,
-  DP_SET_RM_IPIP         = 24
+  DP_SET_RM_IPIP         = 24,
+  DP_SET_NACT_SESS       = 25
 };
 
 struct dp_cmn_act {
@@ -745,7 +746,8 @@ struct dp_nat_tacts {
 
 struct dp_nat_epacts {
   struct dp_cmn_act ca;
-  uint32_t active_sess;
+  struct bpf_spin_lock lock;
+  uint32_t active_sess[LLB_MAX_NXFRMS];
 };
 
 /* This is currently based on ULCL classification scheme */

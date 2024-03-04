@@ -1528,7 +1528,7 @@ dp_ct_in(void *ctx, struct xfi *xf)
       bpf_map_delete_elem(&ct_map, &key);
 
       if (xi->nat_flags) {
-        dp_do_dec_nat_sess(ctx, xf, LLB_NAT_STAT_CID(atdat->ctd.rid, atdat->ctd.aid));
+        dp_do_dec_nat_sess(ctx, xf, atdat->ctd.rid, atdat->ctd.aid);
       }
     }
   }

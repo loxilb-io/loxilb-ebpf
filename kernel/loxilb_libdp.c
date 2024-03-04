@@ -1499,7 +1499,7 @@ llb_del_map_elem_nat_post_proc(void *k, void *v)
 }
 
 static void
-llb_nat_dec_act_sessions(uint32_t raid)
+llb_nat_dec_act_sessions(uint32_t rid, uint32_t aid)
 {
   llb_dp_map_t *t;
   struct dp_nat_epacts epa;
@@ -1508,30 +1508,32 @@ llb_nat_dec_act_sessions(uint32_t raid)
 
   if (t != NULL) {
     memset(&epa, 0, sizeof(epa));
-    if ((bpf_map_lookup_elem(t->map_fd, &raid, &epa)) != 0) {
-      if (epa.active_sess > 0) {
-        epa.active_sess--;
-        bpf_map_update_elem(t->map_fd, &raid, &epa, 0);
+    if ((bpf_map_lookup_elem_flags(t->map_fd, &rid, &epa, BPF_F_LOCK)) != 0) {
+      if (epa.active_sess[aid] > 0) {
+        epa.active_sess[aid]--;
+        bpf_map_update_elem(t->map_fd, &rid, &epa, BPF_F_LOCK);
       }
     }
   }
 }
 
 static void
-llb_nat_rst_act_sessions(uint32_t raid)
+llb_nat_rst_act_sessions(uint32_t rid)
 {
   llb_dp_map_t *t;
   struct dp_nat_epacts epa;
+  int i;
 
   t = &xh->maps[LL_DP_NAT_EP_MAP];
 
   if (t != NULL) {
     memset(&epa, 0, sizeof(epa));
-    if ((bpf_map_lookup_elem(t->map_fd, &raid, &epa)) != 0) {
-      if (epa.active_sess > 0) {
-        epa.active_sess = 0;
-        bpf_map_update_elem(t->map_fd, &raid, &epa, 0);
+    if ((bpf_map_lookup_elem(t->map_fd, &rid, &epa), BPF_F_LOCK) != 0) {
+      epa.ca.act_type = 0;
+      for (i = 0; i < LLB_MAX_NXFRMS; i++) {
+        epa.active_sess[i] = 0;
       }
+      bpf_map_update_elem(t->map_fd, &rid, &epa, BPF_F_LOCK);
     }
   }
 }
@@ -1688,7 +1690,7 @@ llb_add_map_elem(int tbl, void *k, void *v)
       int aid = 0;
       for (aid = 0; aid < LLB_MAX_NXFRMS; aid++) {
         llb_clear_map_stats(tbl, LLB_NAT_STAT_CID(cidx, aid));
-        llb_nat_rst_act_sessions(LLB_NAT_STAT_CID(cidx, aid));
+        llb_nat_rst_act_sessions(cidx);
       }
     } else {
       llb_clear_map_stats(tbl, cidx);
@@ -2158,7 +2160,7 @@ ll_ct_map_ent_has_aged(int tid, void *k, void *ita)
     ll_send_ctep_reset(key, adat);
     llb_clear_map_stats(LL_DP_CT_STATS_MAP, adat->ca.cidx);
     if (adat->ctd.xi.nat_flags) {
-      llb_nat_dec_act_sessions(LLB_NAT_STAT_CID(adat->ctd.rid, adat->ctd.aid));
+      llb_nat_dec_act_sessions(adat->ctd.rid, adat->ctd.aid);
     }
 
     if (!adat->ctd.pi.frag) {

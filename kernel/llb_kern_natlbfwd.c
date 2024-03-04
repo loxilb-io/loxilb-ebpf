@@ -5,22 +5,16 @@
  * SPDX-License-Identifier: (GPL-2.0 OR BSD-2-Clause)
  */
 static void __always_inline
-dp_do_dec_nat_sess(void *ctx, struct xfi *xf, __u32 key)
+dp_do_dec_nat_sess(void *ctx, struct xfi *xf, __u32 rule, __u16 aid)
 {
   struct dp_nat_epacts *epa;
-  epa = bpf_map_lookup_elem(&nat_ep_map, &key);
-  if (epa != NULL) {
-    __sync_fetch_and_add_4(&epa->active_sess, -1);
-  }
-}
-
-static void __always_inline
-dp_do_inc_nat_sess(void *ctx, struct xfi *xf, __u32 key)
-{
-  struct dp_nat_epacts *epa;
-  epa = bpf_map_lookup_elem(&nat_ep_map, &key);
-  if (epa != NULL) {
-    __sync_fetch_and_add_4(&epa->active_sess, 1);
+  epa = bpf_map_lookup_elem(&nat_ep_map, &rule);
+  if (epa != NULL && epa->ca.act_type == DP_SET_NACT_SESS) {
+    bpf_spin_lock(&epa->lock);
+    if (aid < LLB_MAX_NXFRMS) {
+      epa->active_sess[aid]--;
+    }
+    bpf_spin_unlock(&epa->lock);
   }
 }
 
@@ -71,13 +65,14 @@ dp_sel_nat_ep(void *ctx, struct xfi *xf, struct dp_nat_tacts *act)
     sel %= act->nxfrm;
   } else if (act->sel_type == NAT_LB_SEL_LC) {
     struct dp_nat_epacts *epa;
-    __u32 key = 0;
+    __u32 key = rule_num;
     __u32 lc = 0;
-    for (i = 0; i < LLB_MAX_NXFRMS; i++) {
-      key = LLB_NAT_STAT_CID(rule_num, i);
-      epa = bpf_map_lookup_elem(&nat_ep_map, &key);
-      if (epa != NULL ) {
-        __u32 as = epa->active_sess;
+    epa = bpf_map_lookup_elem(&nat_ep_map, &key);
+    if (epa != NULL) {
+      epa->ca.act_type = DP_SET_NACT_SESS;
+      bpf_spin_lock(&epa->lock);
+      for (i = 0; i < LLB_MAX_NXFRMS; i++) {
+        __u32 as = epa->active_sess[i];
         if (sel < 0) {
           sel = i;
           lc = as;
@@ -88,11 +83,11 @@ dp_sel_nat_ep(void *ctx, struct xfi *xf, struct dp_nat_tacts *act)
           }
         }
       }
+      if (sel >= 0 && sel < LLB_MAX_NXFRMS) {
+        epa->active_sess[sel]++;
+      }
+      bpf_spin_unlock(&epa->lock);
     }
-  }
-
-  if (sel >= 0) {
-    dp_do_inc_nat_sess(ctx, xf, LLB_NAT_STAT_CID(rule_num, sel));
   }
 
   LL_DBG_PRINTK("lb-sel %d", sel);
