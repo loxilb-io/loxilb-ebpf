@@ -1528,7 +1528,7 @@ llb_nat_rst_act_sessions(uint32_t rid)
 
   if (t != NULL) {
     memset(&epa, 0, sizeof(epa));
-    if ((bpf_map_lookup_elem(t->map_fd, &rid, &epa), BPF_F_LOCK) != 0) {
+    if ((bpf_map_lookup_elem_flags(t->map_fd, &rid, &epa, BPF_F_LOCK)) != 0) {
       epa.ca.act_type = 0;
       for (i = 0; i < LLB_MAX_NXFRMS; i++) {
         epa.active_sess[i] = 0;
