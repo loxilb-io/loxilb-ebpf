@@ -1526,6 +1526,10 @@ dp_ct_in(void *ctx, struct xfi *xf)
     } else if (smr == CT_SMR_ERR || smr == CT_SMR_CTD) {
       bpf_map_delete_elem(&ct_map, &xkey);
       bpf_map_delete_elem(&ct_map, &key);
+
+      if (xi->nat_flags) {
+        dp_do_dec_nat_sess(ctx, xf, LLB_NAT_STAT_CID(atdat->ctd.rid, atdat->ctd.aid));
+      }
     }
   }
 

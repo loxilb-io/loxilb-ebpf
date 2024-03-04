@@ -833,7 +833,6 @@ llb_dflt_sec_map2fd_all(struct bpf_object *bpf_obj)
                                                   xh->maps[i].map_name);
       if (bpf_map__set_max_entries(cpu_map, libbpf_num_possible_cpus()) < 0) {
         log_warn("Failed to set max entries for cpu_map map: %s", strerror(errno));
-        //assert(0);
       }
       llb_setup_cpu_map(fd);
     } else if (i == LL_DP_LCPU_MAP) {
@@ -841,7 +840,6 @@ llb_dflt_sec_map2fd_all(struct bpf_object *bpf_obj)
                                                   xh->maps[i].map_name);
       if (bpf_map__set_max_entries(cpu_map, libbpf_num_online_cpus()) < 0) {
         log_warn("Failed to set max entries for live_cpu_map map: %s", strerror(errno));
-        //assert(0);
       }
       llb_setup_lcpu_map(fd);
     } else if (i == LL_DP_CP_PERF_RING) {
@@ -1145,6 +1143,10 @@ llb_xh_init(llb_dp_struct_t *xh)
   xh->maps[LL_DP_CP_PERF_RING].map_name = "cp_ring";
   xh->maps[LL_DP_CP_PERF_RING].has_pb   = 0;
   xh->maps[LL_DP_CP_PERF_RING].max_entries = 128;  /* MAX_CPUS */
+
+  xh->maps[LL_DP_NAT_EP_MAP].map_name = "nat_ep_map";
+  xh->maps[LL_DP_NAT_EP_MAP].has_pb   = 0;
+  xh->maps[LL_DP_NAT_EP_MAP].max_entries = LLB_NAT_EP_MAP_ENTRIES;
 
   strcpy(xh->psecs[0].name, LLB_SECTION_PASS);
   strcpy(xh->psecs[1].name, XDP_LL_SEC_DEFAULT);
@@ -1497,6 +1499,44 @@ llb_del_map_elem_nat_post_proc(void *k, void *v)
 }
 
 static void
+llb_nat_dec_act_sessions(uint32_t raid)
+{
+  llb_dp_map_t *t;
+  struct dp_nat_epacts epa;
+
+  t = &xh->maps[LL_DP_NAT_EP_MAP];
+
+  if (t != NULL) {
+    memset(&epa, 0, sizeof(epa));
+    if ((bpf_map_lookup_elem(t->map_fd, &raid, &epa)) != 0) {
+      if (epa.active_sess > 0) {
+        epa.active_sess--;
+        bpf_map_update_elem(t->map_fd, &raid, &epa, 0);
+      }
+    }
+  }
+}
+
+static void
+llb_nat_rst_act_sessions(uint32_t raid)
+{
+  llb_dp_map_t *t;
+  struct dp_nat_epacts epa;
+
+  t = &xh->maps[LL_DP_NAT_EP_MAP];
+
+  if (t != NULL) {
+    memset(&epa, 0, sizeof(epa));
+    if ((bpf_map_lookup_elem(t->map_fd, &raid, &epa)) != 0) {
+      if (epa.active_sess > 0) {
+        epa.active_sess = 0;
+        bpf_map_update_elem(t->map_fd, &raid, &epa, 0);
+      }
+    }
+  }
+}
+
+static void
 llb_dp_pdik2_ufw4(struct pdi_rule *new, struct pdi_key *k) 
 {
   memset(k, 0, sizeof(struct pdi_key));
@@ -1648,6 +1688,7 @@ llb_add_map_elem(int tbl, void *k, void *v)
       int aid = 0;
       for (aid = 0; aid < LLB_MAX_NXFRMS; aid++) {
         llb_clear_map_stats(tbl, LLB_NAT_STAT_CID(cidx, aid));
+        llb_nat_rst_act_sessions(LLB_NAT_STAT_CID(cidx, aid));
       }
     } else {
       llb_clear_map_stats(tbl, cidx);
@@ -2116,6 +2157,9 @@ ll_ct_map_ent_has_aged(int tid, void *k, void *ita)
          used1, used2);
     ll_send_ctep_reset(key, adat);
     llb_clear_map_stats(LL_DP_CT_STATS_MAP, adat->ca.cidx);
+    if (adat->ctd.xi.nat_flags) {
+      llb_nat_dec_act_sessions(LLB_NAT_STAT_CID(adat->ctd.rid, adat->ctd.aid));
+    }
 
     if (!adat->ctd.pi.frag) {
       ll_send_ctep_reset(&xkey, &axdat);

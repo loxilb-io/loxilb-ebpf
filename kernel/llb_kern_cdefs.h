@@ -199,6 +199,13 @@ struct bpf_map_def SEC("maps") nat_stats_map = {
   .max_entries = LLB_NATV4_STAT_MAP_ENTRIES
 };
 
+struct bpf_map_def SEC("maps") nat_ep_map = {
+  .type = BPF_MAP_TYPE_ARRAY,
+  .key_size = sizeof(__u32),
+  .value_size = sizeof(struct dp_nat_epacts),
+  .max_entries = LLB_NAT_EP_MAP_ENTRIES
+};
+
 struct bpf_map_def SEC("maps") rt_v4_map = {
   .type = BPF_MAP_TYPE_LPM_TRIE,
   .key_size = sizeof(struct dp_rtv4_key),
@@ -442,6 +449,13 @@ struct {
         __type(value,       struct dp_pb_stats);
         __uint(max_entries, LLB_NATV4_MAP_ENTRIES);
 } nat_stats_map SEC(".maps");
+
+struct {
+        __uint(type,        BPF_MAP_TYPE_ARRAY);
+        __type(key,         __u32);
+        __type(value,       struct dp_nat_epacts);
+        __uint(max_entries, LLB_NAT_EP_MAP_ENTRIES);
+} nat_ep_map SEC(".maps");
 
 struct {
         __uint(type,        BPF_MAP_TYPE_LPM_TRIE);

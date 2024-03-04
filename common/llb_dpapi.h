@@ -26,6 +26,7 @@
 #define LLB_DMAC_MAP_ENTRIES  (8*1024)
 #define LLB_NATV4_MAP_ENTRIES (4*1024)
 #define LLB_NATV4_STAT_MAP_ENTRIES (4*16*1024) /* 16 end-points */
+#define LLB_NAT_EP_MAP_ENTRIES (4*16*1024) /* 16 end-points */
 #define LLB_SMAC_MAP_ENTRIES  (LLB_DMAC_MAP_ENTRIES)
 #define LLB_FW4_MAP_ENTRIES   (8*1024)
 #define LLB_INTERFACES        (512)
@@ -129,6 +130,7 @@ enum llb_dp_tid {
   LL_DP_LCPU_MAP,
   LL_DP_PPLAT_MAP,
   LL_DP_CP_PERF_RING,
+  LL_DP_NAT_EP_MAP,
   LL_DP_MAX_MAP
 };
 
@@ -726,6 +728,7 @@ struct dp_nat_key {
 #define NAT_LB_SEL_HASH 1
 #define NAT_LB_SEL_PRIO 2
 #define NAT_LB_SEL_RR_PERSIST 3
+#define NAT_LB_SEL_LC 4
 
 struct dp_nat_tacts {
   struct dp_cmn_act ca;
@@ -738,6 +741,11 @@ struct dp_nat_tacts {
   uint16_t sel_type;
   uint32_t pmhh[LLB_MAX_MHOSTS];
   struct mf_xfrm_inf nxfrms[LLB_MAX_NXFRMS];
+};
+
+struct dp_nat_epacts {
+  struct dp_cmn_act ca;
+  uint32_t active_sess;
 };
 
 /* This is currently based on ULCL classification scheme */

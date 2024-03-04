@@ -4,6 +4,26 @@
  * 
  * SPDX-License-Identifier: (GPL-2.0 OR BSD-2-Clause)
  */
+static void __always_inline
+dp_do_dec_nat_sess(void *ctx, struct xfi *xf, __u32 key)
+{
+  struct dp_nat_epacts *epa;
+  epa = bpf_map_lookup_elem(&nat_ep_map, &key);
+  if (epa != NULL) {
+    __sync_fetch_and_add_4(&epa->active_sess, -1);
+  }
+}
+
+static void __always_inline
+dp_do_inc_nat_sess(void *ctx, struct xfi *xf, __u32 key)
+{
+  struct dp_nat_epacts *epa;
+  epa = bpf_map_lookup_elem(&nat_ep_map, &key);
+  if (epa != NULL) {
+    __sync_fetch_and_add_4(&epa->active_sess, 1);
+  }
+}
+
 static int __always_inline
 dp_sel_nat_ep(void *ctx, struct xfi *xf, struct dp_nat_tacts *act)
 {
@@ -11,6 +31,7 @@ dp_sel_nat_ep(void *ctx, struct xfi *xf, struct dp_nat_tacts *act)
   uint8_t n = 0;
   uint16_t i = 0;
   struct mf_xfrm_inf *nxfrm_act;
+  __u16 rule_num = act->ca.cidx;
 
   if (act->sel_type == NAT_LB_SEL_RR) {
     bpf_spin_lock(&act->lock);
@@ -48,6 +69,30 @@ dp_sel_nat_ep(void *ctx, struct xfi *xf, struct dp_nat_tacts *act)
   } else if (act->sel_type == NAT_LB_SEL_RR_PERSIST) {
     sel = (xf->l34m.saddr4 & 0xff) ^  ((xf->l34m.saddr4 >> 24) & 0xff);
     sel %= act->nxfrm;
+  } else if (act->sel_type == NAT_LB_SEL_LC) {
+    struct dp_nat_epacts *epa;
+    __u32 key = 0;
+    __u32 lc = 0;
+    for (i = 0; i < LLB_MAX_NXFRMS; i++) {
+      key = LLB_NAT_STAT_CID(rule_num, i);
+      epa = bpf_map_lookup_elem(&nat_ep_map, &key);
+      if (epa != NULL ) {
+        __u32 as = epa->active_sess;
+        if (sel < 0) {
+          sel = i;
+          lc = as;
+        } else {
+          if (lc > as) {
+            sel = i;
+            lc = as;
+          }
+        }
+      }
+    }
+  }
+
+  if (sel >= 0) {
+    dp_do_inc_nat_sess(ctx, xf, LLB_NAT_STAT_CID(rule_num, sel));
   }
 
   LL_DBG_PRINTK("lb-sel %d", sel);
