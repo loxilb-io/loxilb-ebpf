@@ -1371,7 +1371,7 @@ llb_map_loop_and_delete(int tid, dp_map_walker_t cb, dp_map_ita_t *it)
 {
   void *key = NULL;
   llb_dp_map_t *t;
-  int n = 0;
+  uint32_t n = 0;
 
   if (!cb) return;
 
@@ -1381,7 +1381,7 @@ llb_map_loop_and_delete(int tid, dp_map_walker_t cb, dp_map_ita_t *it)
   t = &xh->maps[tid];
 
   while (bpf_map_get_next_key(t->map_fd, key, it->next_key) == 0) {
-    if (n >= t->max_entries) break;
+    if (n >= (10*t->max_entries)) break;
 
     if (bpf_map_lookup_elem(t->map_fd, it->next_key, it->val) != 0) {
       goto next;
@@ -2089,12 +2089,8 @@ ll_ct_map_ent_has_aged(int tid, void *k, void *ita)
     latest_ns = axdat.lts;
   }
 
-  if (!adat->ctd.pi.frag && dat->dir == CT_DIR_OUT) {
-    return 0;
-  } 
-
   llb_fetch_map_stats_cached(LL_DP_CT_STATS_MAP, adat->ca.cidx, 1, &bytes, &pkts);
-  llb_fetch_map_stats_cached(LL_DP_CT_STATS_MAP, adat->ca.cidx+1, 1, &bytes, &pkts);
+  llb_fetch_map_stats_cached(LL_DP_CT_STATS_MAP, axdat.ca.cidx, 1, &bytes, &pkts);
 
   if (key->l4proto == IPPROTO_TCP) {
     ct_tcp_pinf_t *ts = &dat->pi.t;
@@ -2148,7 +2144,7 @@ ll_ct_map_ent_has_aged(int tid, void *k, void *ita)
 
   /* CT is allocated both for current and reverse direction */
   llb_fetch_map_stats_used(LL_DP_CT_STATS_MAP, adat->ca.cidx, 1, &used1);
-  llb_fetch_map_stats_used(LL_DP_CT_STATS_MAP, adat->ca.cidx+1, 1, &used2);
+  llb_fetch_map_stats_used(LL_DP_CT_STATS_MAP, axdat.ca.cidx, 1, &used2);
 
   if (curr_ns - latest_ns > to && (!est || (!used1 && !used2))) {
     log_trace("ct: #%s:%d -> %s:%d (%d)# rid:%u est:%d nat:%d (Aged:%lluns:%d:%d)",
