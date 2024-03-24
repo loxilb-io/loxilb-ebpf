@@ -45,6 +45,7 @@
 #define LLB_CRC32C_ENTRIES    (256)
 #define LLB_MAX_MHOSTS        (3)
 #define LLB_MAX_MPHOSTS       (7)
+#define LLB_RWR_MAP_ENTRIES   (1024)
 
 #define LLB_DP_SUNP_PGM_ID2    (6)
 #define LLB_DP_CRC_PGM_ID2     (5)
@@ -132,6 +133,7 @@ enum llb_dp_tid {
   LL_DP_PPLAT_MAP,
   LL_DP_CP_PERF_RING,
   LL_DP_NAT_EP_MAP,
+  LL_DP_SOCK_RWR_MAP,
   LL_DP_MAX_MAP
 };
 

@@ -46,6 +46,9 @@ int llb_connect_v4_prog(struct bpf_sock_addr *ska_ctx)
   key.vip4 = ska_ctx->user_ip4;
   key.port = ska_ctx->user_port;
 
+  bpf_printk("vip4 0x%x", key.vip4);
+  bpf_printk("port 0x%x", key.port);
+
   act = bpf_map_lookup_elem(&sock_rwr_map, &key);
   if (!act) {
     return 0;

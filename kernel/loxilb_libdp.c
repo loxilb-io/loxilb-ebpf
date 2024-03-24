@@ -625,8 +625,9 @@ llb_maptrace_main(void *arg)
 static int
 llb_setup_kern_sock(void)
 {
+  struct bpf_map *map;
   struct bpf_prog_load_attr attr;
-  struct bpf_object *obj;
+  struct bpf_object *bpf_obj;
   int cgfd = -1;
   int pfd;
 
@@ -650,7 +651,7 @@ llb_setup_kern_sock(void)
   attr.expected_attach_type = BPF_CGROUP_INET4_CONNECT;
   attr.prog_flags = BPF_F_TEST_RND_HI32;
 
-  if (bpf_prog_load_xattr(&attr, &obj, &pfd)) {
+  if (bpf_prog_load_xattr(&attr, &bpf_obj, &pfd)) {
     printf("Load failed\n");
     goto err;
   }
@@ -661,9 +662,23 @@ llb_setup_kern_sock(void)
     goto err;
   }
 
+  map = bpf_object__find_map_by_name(bpf_obj, "sock_rwr_map");
+  if (!map) {
+    goto err;
+  }
 
-  printf("loxilb kern-sock attached\n");
+  int map_fd = bpf_map__fd(map);
+  if (map_fd < 0) {
+    printf("sock_rwr_map get failed\n");
+    goto err1;
+  }
+
+  xh->maps[LL_DP_SOCK_RWR_MAP].map_fd = map_fd;
+
+  printf("loxilb kern-sock attached (%d)\n", map_fd);
   return 0;
+err1:
+  bpf_prog_detach(cgfd, BPF_CGROUP_INET4_CONNECT);
 err:
   close(cgfd);
   cgroup_clean();
@@ -838,6 +853,7 @@ llb_dflt_sec_map2fd_all(struct bpf_object *bpf_obj)
   const char *section;
 
   for (; i < LL_DP_MAX_MAP; i++) {
+    if (i == LL_DP_SOCK_RWR_MAP) continue;
     fd = llb_objmap2fd(bpf_obj, xh->maps[i].map_name);  
     if (fd < 0) {
       log_error("BPF: map2fd failed %s", xh->maps[i].map_name);
@@ -1196,6 +1212,10 @@ llb_xh_init(llb_dp_struct_t *xh)
   xh->maps[LL_DP_NAT_EP_MAP].map_name = "nat_ep_map";
   xh->maps[LL_DP_NAT_EP_MAP].has_pb   = 0;
   xh->maps[LL_DP_NAT_EP_MAP].max_entries = LLB_NAT_EP_MAP_ENTRIES;
+
+  xh->maps[LL_DP_SOCK_RWR_MAP].map_name = "sock_rwr_map";
+  xh->maps[LL_DP_SOCK_RWR_MAP].has_pb   = 0;
+  xh->maps[LL_DP_SOCK_RWR_MAP].max_entries = LLB_RWR_MAP_ENTRIES;
 
   strcpy(xh->psecs[0].name, LLB_SECTION_PASS);
   strcpy(xh->psecs[1].name, XDP_LL_SEC_DEFAULT);
