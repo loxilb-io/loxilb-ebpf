@@ -49,6 +49,7 @@ enum llb_bpf_mnt_type {
 #include "../common/throttler.h"
 #include "../common/llb_dpapi.h"
 #include "../common/llb_dp_mdi.h"
+#include "../common/cgroup.h"
 #include "../common/log.h"
 
 unsigned long long get_os_usecs(void);

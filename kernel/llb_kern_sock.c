@@ -34,7 +34,7 @@ struct {
 } sock_rwr_map SEC(".maps");
 
 SEC("cgroup/connect")
-int chekc_connect_v4_prog(struct bpf_sock_addr *ska_ctx)
+int llb_connect_v4_prog(struct bpf_sock_addr *ska_ctx)
 {
   struct sockaddr_in sa;
   struct bpf_sock *sk;

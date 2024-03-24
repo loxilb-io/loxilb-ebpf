@@ -91,6 +91,7 @@ typedef struct llb_dp_struct
   int have_mtrace;
   int have_ptrace;
   int have_loader;
+  int have_sockrwr;
   int egr_hooks;
   int nodenum;
   llb_dp_map_t maps[LL_DP_MAX_MAP];
@@ -619,6 +620,54 @@ llb_maptrace_main(void *arg)
 
   /* NOT REACHED */
   return NULL;
+}
+
+static int
+llb_setup_kern_sock(void)
+{
+  struct bpf_prog_load_attr attr;
+  struct bpf_object *obj;
+  int cgfd = -1;
+  int pfd;
+
+  /* Clean cgroups */
+  cgroup_clean();
+
+  if (cgroup_mkenv())
+    goto err;
+
+  cgfd = cgroup_create_get(CGROUP_PATH);
+  if (cgfd < 0)
+    goto err;
+
+  if (cgroup_join(CGROUP_PATH)) {
+    goto err;
+  }
+
+  memset(&attr, 0, sizeof(struct bpf_prog_load_attr));
+  attr.file = LLB_SOCK_ADDR_IMG_BPF;
+  attr.prog_type = BPF_PROG_TYPE_CGROUP_SOCK_ADDR;
+  attr.expected_attach_type = BPF_CGROUP_INET4_CONNECT;
+  attr.prog_flags = BPF_F_TEST_RND_HI32;
+
+  if (bpf_prog_load_xattr(&attr, &obj, &pfd)) {
+    printf("Load failed\n");
+    goto err;
+  }
+
+  if (bpf_prog_attach(pfd, cgfd, BPF_CGROUP_INET4_CONNECT,
+            BPF_F_ALLOW_OVERRIDE)) {
+    printf("Attach failed\n");
+    goto err;
+  }
+
+
+  printf("loxilb kern-sock attached\n");
+  return 0;
+err:
+  close(cgfd);
+  cgroup_clean();
+  return -1;
 }
 
 static int
@@ -1168,6 +1217,12 @@ llb_xh_init(llb_dp_struct_t *xh)
 
   if (xh->have_mtrace) {
     if (llb_setup_kern_mon() != 0) {
+      assert(0);
+    }
+  }
+
+  if (xh->have_sockrwr) {
+    if (llb_setup_kern_sock() != 0) {
       assert(0);
     }
   }
@@ -2713,6 +2768,7 @@ loxilb_main(struct ebpfcfg *cfg)
     xh->have_loader = !cfg->no_loader;
     xh->have_mtrace = cfg->have_mtrace;
     xh->have_ptrace = cfg->have_ptrace;
+    xh->have_sockrwr = 1;
     xh->nodenum = cfg->nodenum;
     xh->egr_hooks = cfg->egr_hooks;
     xh->logfp = fp;
