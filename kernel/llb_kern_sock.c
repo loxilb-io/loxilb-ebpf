@@ -8,23 +8,15 @@
 #include <linux/in.h>
 #include <linux/in6.h>
 #include <sys/socket.h>
+#include <stdint.h>
 
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_endian.h>
 
+#include "../common/common_pdi.h"
+#include "../common/llb_dpapi.h"
+
 #define LLB_RWR_MAP_SZ (1024)
-
-struct sock_rwr_key {
-#define vip4 vip[0]
-  __u32 vip[4];
-  __u16 port;
-  __u16 res;
-};
-
-struct sock_rwr_action {
-  __u16 rw_port;
-  __u16 res;
-};
 
 struct {
   __uint(type,        BPF_MAP_TYPE_HASH);
@@ -46,13 +38,14 @@ int llb_connect_v4_prog(struct bpf_sock_addr *ska_ctx)
   key.vip4 = ska_ctx->user_ip4;
   key.port = ska_ctx->user_port;
 
-  bpf_printk("vip4 0x%x", key.vip4);
-  bpf_printk("port 0x%x", key.port);
-
   act = bpf_map_lookup_elem(&sock_rwr_map, &key);
   if (!act) {
-    return 0;
+    return 1;
   }
+
+  bpf_printk("vip4 0x%x", key.vip4);
+  bpf_printk("port 0x%x", key.port);
+  bpf_printk("rwrport 0x%x", act->rw_port);
 
   memset(&t, 0, sizeof(t));
 
@@ -60,7 +53,7 @@ int llb_connect_v4_prog(struct bpf_sock_addr *ska_ctx)
   t.ipv4.dport = act->rw_port;
 
   if (ska_ctx->type != SOCK_STREAM && ska_ctx->type != SOCK_DGRAM) {
-    return 0;
+    return 1;
   } else if (ska_ctx->type == SOCK_STREAM) {
     sk = bpf_sk_lookup_tcp(ska_ctx, &t, sizeof(t.ipv4), BPF_F_CURRENT_NETNS, 0);
   } else {
@@ -68,12 +61,12 @@ int llb_connect_v4_prog(struct bpf_sock_addr *ska_ctx)
   }
 
   if (!sk) {
-    return 0;
+    return 1;
   }
 
   if (sk->src_ip4 != t.ipv4.daddr || sk->src_port != bpf_ntohs(act->rw_port)) {
     bpf_sk_release(sk);
-    return 0;
+    return 1;
   }
 
   bpf_sk_release(sk);

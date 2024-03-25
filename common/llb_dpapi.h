@@ -458,6 +458,18 @@ struct dp_pol_tact {
   };
 };
 
+struct sock_rwr_key {
+#define vip4 vip[0]
+  __u32 vip[4];
+  __u16 port;
+  __u16 res;
+};
+
+struct sock_rwr_action {
+  __u16 rw_port;
+  __u16 res;
+};
+
 struct dp_pb_stats {
   uint64_t bytes;
   uint64_t packets;
@@ -843,6 +855,8 @@ int llb_add_map_elem(int tbl, void *k, void *v);
 int llb_del_map_elem(int tbl, void *k);
 void llb_map_loop_and_delete(int tbl, dp_map_walker_t cb, dp_map_ita_t *it);
 int llb_dp_link_attach(const char *ifname, const char *psec, int mp_type, int unload);
+void llb_unload_kern_sock(void);
+void llb_unload_kern_mon(void);
 void llb_xh_lock(void);
 void llb_xh_unlock(void);
 

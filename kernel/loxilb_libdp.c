@@ -93,6 +93,7 @@ typedef struct llb_dp_struct
   int have_loader;
   int have_sockrwr;
   const char *cgroup_dfl_path;
+  int cgfd;
   int egr_hooks;
   int nodenum;
   llb_dp_map_t maps[LL_DP_MAX_MAP];
@@ -670,6 +671,7 @@ llb_setup_kern_sock(const char *cgroup_path)
   }
 
   xh->maps[LL_DP_SOCK_RWR_MAP].map_fd = map_fd;
+  xh->cgfd = cgfd;
 
   printf("loxilb kern-sock attached (%d)\n", map_fd);
   return 0;
@@ -677,8 +679,16 @@ err1:
   bpf_prog_detach(cgfd, BPF_CGROUP_INET4_CONNECT);
 err:
   close(cgfd);
-  cgroup_clean();
   return -1;
+}
+
+void
+llb_unload_kern_sock(void)
+{
+  if (xh->cgfd > 0) {
+    bpf_prog_detach(xh->cgfd, BPF_CGROUP_INET4_CONNECT);
+    close(xh->cgfd);
+  }
 }
 
 static int
@@ -2784,8 +2794,10 @@ loxilb_main(struct ebpfcfg *cfg)
     xh->have_loader = !cfg->no_loader;
     xh->have_mtrace = cfg->have_mtrace;
     xh->have_ptrace = cfg->have_ptrace;
-    xh->have_sockrwr = 1;
-    xh->cgroup_dfl_path = CGROUP_PATH;
+    xh->have_sockrwr = cfg->have_sockrwr;
+    if (xh->have_sockrwr != 0) {
+      xh->cgroup_dfl_path = CGROUP_PATH;
+    }
     xh->nodenum = cfg->nodenum;
     xh->egr_hooks = cfg->egr_hooks;
     xh->logfp = fp;
