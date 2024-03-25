@@ -6,9 +6,9 @@
 #include <string.h>
 
 #define MAX_FD_LIMIT        16
-#define CGROUP_MOUNT_PATH   "/mnt"
-#define CGROUP_WORK_DIR     "/llb-cgroup"
-#define CGROUP_PATH         "/sock"
+#define CGROUP_MOUNT_PATH   "/sys/fs/cgroup/unified/"
+#define CGROUP_WORK_DIR     ""
+#define CGROUP_PATH         ""
 
 #define get_cgroup_path(buf, path) \
   snprintf(buf, sizeof(buf), "%s%s%s", CGROUP_MOUNT_PATH, CGROUP_WORK_DIR, path)

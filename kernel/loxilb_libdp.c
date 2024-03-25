@@ -92,6 +92,7 @@ typedef struct llb_dp_struct
   int have_ptrace;
   int have_loader;
   int have_sockrwr;
+  const char *cgroup_dfl_path;
   int egr_hooks;
   int nodenum;
   llb_dp_map_t maps[LL_DP_MAX_MAP];
@@ -623,7 +624,7 @@ llb_maptrace_main(void *arg)
 }
 
 static int
-llb_setup_kern_sock(void)
+llb_setup_kern_sock(const char *cgroup_path)
 {
   struct bpf_map *map;
   struct bpf_prog_load_attr attr;
@@ -631,17 +632,12 @@ llb_setup_kern_sock(void)
   int cgfd = -1;
   int pfd;
 
-  /* Clean cgroups */
-  cgroup_clean();
-
-  if (cgroup_mkenv())
+  cgfd = cgroup_create_get(cgroup_path);
+  if (cgfd < 0) {
     goto err;
+  }
 
-  cgfd = cgroup_create_get(CGROUP_PATH);
-  if (cgfd < 0)
-    goto err;
-
-  if (cgroup_join(CGROUP_PATH)) {
+  if (cgroup_join(cgroup_path)) {
     goto err;
   }
 
@@ -1242,7 +1238,7 @@ llb_xh_init(llb_dp_struct_t *xh)
   }
 
   if (xh->have_sockrwr) {
-    if (llb_setup_kern_sock() != 0) {
+    if (llb_setup_kern_sock(xh->cgroup_dfl_path) != 0) {
       assert(0);
     }
   }
@@ -2789,6 +2785,7 @@ loxilb_main(struct ebpfcfg *cfg)
     xh->have_mtrace = cfg->have_mtrace;
     xh->have_ptrace = cfg->have_ptrace;
     xh->have_sockrwr = 1;
+    xh->cgroup_dfl_path = CGROUP_PATH;
     xh->nodenum = cfg->nodenum;
     xh->egr_hooks = cfg->egr_hooks;
     xh->logfp = fp;
