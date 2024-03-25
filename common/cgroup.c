@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include <stdbool.h>
 #include <fcntl.h>
 #include <unistd.h>
 #include <sched.h>
@@ -13,6 +14,27 @@
 #include <linux/sched.h>
 #include <ftw.h>
 #include "cgroup.h"
+
+static bool
+file_exists(const char *path)
+{
+  struct stat sb;
+
+  if (stat(path, &sb) == 0 && S_ISDIR(sb.st_mode)) {
+    return true;
+  } else {
+    return false;
+  }
+}
+
+#define get_cgroup_path(buf, path)                                                        \
+do {                                                                                      \
+  if (file_exists(CGROUP_MOUNT_PATH)) {                                                   \
+    snprintf(buf, sizeof(buf), "%s%s%s", CGROUP_MOUNT_PATH, CGROUP_WORK_DIR, path);       \
+  } else {                                                                                \
+    snprintf(buf, sizeof(buf), "%s%s%s", CGROUP_MOUNT_PATH_NEW, CGROUP_WORK_DIR, path);   \
+  }                                                                                       \
+} while(0)
 
 static int nftwfunc(const char *filename, const struct stat *statptr,
 		    int fileflags, struct FTW *pfwt)

@@ -5,13 +5,11 @@
 #include <errno.h>
 #include <string.h>
 
-#define MAX_FD_LIMIT        16
-#define CGROUP_MOUNT_PATH   "/sys/fs/cgroup/unified/"
-#define CGROUP_WORK_DIR     ""
-#define CGROUP_PATH         ""
-
-#define get_cgroup_path(buf, path) \
-  snprintf(buf, sizeof(buf), "%s%s%s", CGROUP_MOUNT_PATH, CGROUP_WORK_DIR, path)
+#define MAX_FD_LIMIT            16
+#define CGROUP_MOUNT_PATH       "/sys/fs/cgroup/unified/"
+#define CGROUP_MOUNT_PATH_NEW   "/sys/fs/cgroup/"
+#define CGROUP_WORK_DIR         ""
+#define CGROUP_PATH             ""
 
 #define pr_errno() (errno == 0 ? "none" : strerror(errno))
 #define cgroup_log(LOG, ...) fprintf(stderr, "(%s:%d: errno: %s) " LOG "\n", \
