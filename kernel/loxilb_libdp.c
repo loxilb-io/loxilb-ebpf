@@ -91,6 +91,9 @@ typedef struct llb_dp_struct
   int have_mtrace;
   int have_ptrace;
   int have_loader;
+  int have_sockrwr;
+  const char *cgroup_dfl_path;
+  int cgfd;
   int egr_hooks;
   int nodenum;
   llb_dp_map_t maps[LL_DP_MAX_MAP];
@@ -622,6 +625,73 @@ llb_maptrace_main(void *arg)
 }
 
 static int
+llb_setup_kern_sock(const char *cgroup_path)
+{
+  struct bpf_map *map;
+  struct bpf_prog_load_attr attr;
+  struct bpf_object *bpf_obj;
+  int cgfd = -1;
+  int pfd;
+
+  cgfd = cgroup_create_get(cgroup_path);
+  if (cgfd < 0) {
+    goto err;
+  }
+
+  if (cgroup_join(cgroup_path)) {
+    goto err;
+  }
+
+  memset(&attr, 0, sizeof(struct bpf_prog_load_attr));
+  attr.file = LLB_SOCK_ADDR_IMG_BPF;
+  attr.prog_type = BPF_PROG_TYPE_CGROUP_SOCK_ADDR;
+  attr.expected_attach_type = BPF_CGROUP_INET4_CONNECT;
+  attr.prog_flags = BPF_F_TEST_RND_HI32;
+
+  if (bpf_prog_load_xattr(&attr, &bpf_obj, &pfd)) {
+    printf("Load failed\n");
+    goto err;
+  }
+
+  if (bpf_prog_attach(pfd, cgfd, BPF_CGROUP_INET4_CONNECT,
+            BPF_F_ALLOW_OVERRIDE)) {
+    printf("Attach failed\n");
+    goto err;
+  }
+
+  map = bpf_object__find_map_by_name(bpf_obj, "sock_rwr_map");
+  if (!map) {
+    goto err;
+  }
+
+  int map_fd = bpf_map__fd(map);
+  if (map_fd < 0) {
+    printf("sock_rwr_map get failed\n");
+    goto err1;
+  }
+
+  xh->maps[LL_DP_SOCK_RWR_MAP].map_fd = map_fd;
+  xh->cgfd = cgfd;
+
+  printf("loxilb kern-sock attached (%d)\n", map_fd);
+  return 0;
+err1:
+  bpf_prog_detach(cgfd, BPF_CGROUP_INET4_CONNECT);
+err:
+  close(cgfd);
+  return -1;
+}
+
+void
+llb_unload_kern_sock(void)
+{
+  if (xh->cgfd > 0) {
+    bpf_prog_detach(xh->cgfd, BPF_CGROUP_INET4_CONNECT);
+    close(xh->cgfd);
+  }
+}
+
+static int
 llb_setup_kern_mon(void)
 {
   struct llb_kern_mon *prog;
@@ -789,6 +859,7 @@ llb_dflt_sec_map2fd_all(struct bpf_object *bpf_obj)
   const char *section;
 
   for (; i < LL_DP_MAX_MAP; i++) {
+    if (i == LL_DP_SOCK_RWR_MAP) continue;
     fd = llb_objmap2fd(bpf_obj, xh->maps[i].map_name);  
     if (fd < 0) {
       log_error("BPF: map2fd failed %s", xh->maps[i].map_name);
@@ -1148,6 +1219,10 @@ llb_xh_init(llb_dp_struct_t *xh)
   xh->maps[LL_DP_NAT_EP_MAP].has_pb   = 0;
   xh->maps[LL_DP_NAT_EP_MAP].max_entries = LLB_NAT_EP_MAP_ENTRIES;
 
+  xh->maps[LL_DP_SOCK_RWR_MAP].map_name = "sock_rwr_map";
+  xh->maps[LL_DP_SOCK_RWR_MAP].has_pb   = 0;
+  xh->maps[LL_DP_SOCK_RWR_MAP].max_entries = LLB_RWR_MAP_ENTRIES;
+
   strcpy(xh->psecs[0].name, LLB_SECTION_PASS);
   strcpy(xh->psecs[1].name, XDP_LL_SEC_DEFAULT);
   xh->psecs[1].setup = llb_dflt_sec_map2fd_all;
@@ -1168,6 +1243,12 @@ llb_xh_init(llb_dp_struct_t *xh)
 
   if (xh->have_mtrace) {
     if (llb_setup_kern_mon() != 0) {
+      assert(0);
+    }
+  }
+
+  if (xh->have_sockrwr) {
+    if (llb_setup_kern_sock(xh->cgroup_dfl_path) != 0) {
       assert(0);
     }
   }
@@ -2713,6 +2794,10 @@ loxilb_main(struct ebpfcfg *cfg)
     xh->have_loader = !cfg->no_loader;
     xh->have_mtrace = cfg->have_mtrace;
     xh->have_ptrace = cfg->have_ptrace;
+    xh->have_sockrwr = cfg->have_sockrwr;
+    if (xh->have_sockrwr != 0) {
+      xh->cgroup_dfl_path = CGROUP_PATH;
+    }
     xh->nodenum = cfg->nodenum;
     xh->egr_hooks = cfg->egr_hooks;
     xh->logfp = fp;

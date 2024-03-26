@@ -12,6 +12,7 @@
 #define LLB_FP_IMG_DEFAULT    "/opt/loxilb/llb_xdp_main.o"
 #define LLB_FP_IMG_BPF        "/opt/loxilb/llb_ebpf_main.o"
 #define LLB_FP_IMG_BPF_EGR    "/opt/loxilb/llb_ebpf_emain.o"
+#define LLB_SOCK_ADDR_IMG_BPF "/opt/loxilb/llb_kern_sock.o"
 #define LLB_DB_MAP_PDIR       "/opt/loxilb/dp/bpf"
 
 #define LLB_MAX_LB_NODES      (2)
@@ -44,6 +45,7 @@
 #define LLB_CRC32C_ENTRIES    (256)
 #define LLB_MAX_MHOSTS        (3)
 #define LLB_MAX_MPHOSTS       (7)
+#define LLB_RWR_MAP_ENTRIES   (1024)
 
 #define LLB_DP_SUNP_PGM_ID2    (6)
 #define LLB_DP_CRC_PGM_ID2     (5)
@@ -131,6 +133,7 @@ enum llb_dp_tid {
   LL_DP_PPLAT_MAP,
   LL_DP_CP_PERF_RING,
   LL_DP_NAT_EP_MAP,
+  LL_DP_SOCK_RWR_MAP,
   LL_DP_MAX_MAP
 };
 
@@ -453,6 +456,18 @@ struct dp_pol_tact {
   union {
     struct dp_policer_act pol;
   };
+};
+
+struct sock_rwr_key {
+#define vip4 vip[0]
+  __u32 vip[4];
+  __u16 port;
+  __u16 res;
+};
+
+struct sock_rwr_action {
+  __u16 rw_port;
+  __u16 res;
 };
 
 struct dp_pb_stats {
@@ -840,6 +855,8 @@ int llb_add_map_elem(int tbl, void *k, void *v);
 int llb_del_map_elem(int tbl, void *k);
 void llb_map_loop_and_delete(int tbl, dp_map_walker_t cb, dp_map_ita_t *it);
 int llb_dp_link_attach(const char *ifname, const char *psec, int mp_type, int unload);
+void llb_unload_kern_sock(void);
+void llb_unload_kern_mon(void);
 void llb_xh_lock(void);
 void llb_xh_unlock(void);
 

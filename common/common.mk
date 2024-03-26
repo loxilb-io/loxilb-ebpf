@@ -19,10 +19,12 @@ XDP_C = ${XDP_TARGETS:=.c}
 TC_C = ${TC_TARGETS:=.c}
 TC_EC = ${TC_ETARGETS:=.c}
 MON_C = ${MON_TARGETS:=.c}
+SOCK_C = ${SOCK_TARGETS:=.c}
 XDP_OBJ = ${XDP_C:.c=.o}
 TC_OBJ = ${TC_C:.c=.o}
 TC_EOBJ = ${TC_EC:.c=.o}
 MON_OBJ = ${MON_C:.c=.o}
+SOCK_OBJ = ${SOCK_C:.c=.o}
 USER_C := ${USER_TARGETS:=.c}
 USER_OBJ := ${USER_C:.c=.o}
 USER_TARGETS_LIB := libloxilbdp.a
@@ -64,7 +66,7 @@ LIBBPF_DIR ?= ../libbpf/src/
 OBJECT_LIBBPF = $(LIBBPF_DIR)/libbpf.a
 
 # Extend if including Makefile already added some
-COMMON_OBJS += $(COMMON_DIR)/common_sum.o $(COMMON_DIR)/common_user_bpf_xdp.o $(COMMON_DIR)/common_pdi.o $(COMMON_DIR)/common_frame.o $(COMMON_DIR)/log.o $(COMMON_DIR)/throttler.o
+COMMON_OBJS += $(COMMON_DIR)/common_sum.o $(COMMON_DIR)/common_user_bpf_xdp.o $(COMMON_DIR)/common_pdi.o $(COMMON_DIR)/common_frame.o $(COMMON_DIR)/log.o $(COMMON_DIR)/throttler.o $(COMMON_DIR)/cgroup.o
 
 # Create expansions for dependencies
 COMMON_H := ${COMMON_OBJS:.o=.h}
@@ -90,7 +92,7 @@ BPF_CFLAGS ?= -I$(LIBBPF_DIR)/build/usr/include/ -I../headers/ -I/usr/include/$(
 
 LIBS = $(OBJECT_LIBBPF) -lelf $(USER_LIBS) -lz -lpthread
 
-all: llvm-check $(USER_TARGETS) $(XDP_OBJ) $(TC_OBJ) $(TC_EOBJ) $(MON_OBJ) $(USER_TARGETS_LIB)
+all: llvm-check $(USER_TARGETS) $(XDP_OBJ) $(TC_OBJ) $(TC_EOBJ) $(MON_OBJ) $(SOCK_OBJ) $(USER_TARGETS_LIB)
 #all: llvm-check $(XDP_OBJ) $(USER_TARGETS_LIB)
 
 .PHONY: clean $(CLANG) $(LLC) vmlinux
@@ -99,7 +101,7 @@ clean:
 	rm -rf $(LIBBPF_DIR)/build
 	$(MAKE) -C $(LIBBPF_DIR) clean
 	$(MAKE) -C $(COMMON_DIR) clean
-	rm -f $(USER_TARGETS) $(XDP_OBJ) $(USER_OBJ)
+	rm -f $(USER_TARGETS) $(XDP_OBJ) $(USER_OBJ) $(TC_OBJ) $(TC_EOBJ) $(MON_OBJ) $(MON_OBJ) $(SOCK_OBJ) $(USER_TARGETS_LIB)
 	rm -f loxilb_dp_debug 
 	rm -f $@
 	rm -f *.ll
@@ -209,6 +211,20 @@ $(MON_OBJ): %.o: %.c  Makefile $(COMMON_MK) $(KERN_USER_H) $(EXTRA_DEPS) $(XDP_D
 	#$(LLC) -march=bpf -mattr=dwarfris -filetype=obj -o $@ ${@:.o=.o}
 	@sudo cp $@ /opt/loxilb/
 	@#sudo pahole -J /opt/loxilb/$@
+
+$(SOCK_OBJ): %.o: %.c  Makefile $(COMMON_MK) $(KERN_USER_H) $(EXTRA_DEPS) 
+	$(CLANG) \
+		-target bpf \
+		-D __BPF_TRACING__ \
+		-D__TARGET_ARCH_$(ARCH) \
+		-DLL_TC_EBPF=1 \
+		$(BPF_CFLAGS) \
+		$(CLANG_BPF_SYS_INCLUDES) \
+		-O2 -g -c -o ${@:.o=.o} $<
+	#$(LLC) -march=bpf -mattr=dwarfris -filetype=obj -o $@ ${@:.o=.o}
+	@sudo cp $@ /opt/loxilb/
+	@#sudo pahole -J /opt/loxilb/$@
+
 
 # Generate BPF skeletons
 %.skel.h: $(MON_OBJ)
