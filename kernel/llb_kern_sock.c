@@ -43,9 +43,9 @@ int llb_connect_v4_prog(struct bpf_sock_addr *ska_ctx)
     return 1;
   }
 
-  bpf_printk("vip4 0x%x", key.vip4);
-  bpf_printk("port 0x%x", key.port);
-  bpf_printk("rwrport 0x%x", act->rw_port);
+  //bpf_printk("vip4 0x%x", key.vip4);
+  //bpf_printk("port 0x%x", key.port);
+  //bpf_printk("rwrport 0x%x", act->rw_port);
 
   memset(&t, 0, sizeof(t));
 
@@ -64,7 +64,7 @@ int llb_connect_v4_prog(struct bpf_sock_addr *ska_ctx)
     return 1;
   }
 
-  if (sk->src_ip4 != t.ipv4.daddr || sk->src_port != bpf_ntohs(act->rw_port)) {
+  if ((sk->src_ip4 && sk->src_ip4 != t.ipv4.daddr) || sk->src_port != bpf_ntohs(act->rw_port)) {
     bpf_sk_release(sk);
     return 1;
   }
