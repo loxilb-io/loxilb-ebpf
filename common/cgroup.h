@@ -6,7 +6,7 @@
 #include <string.h>
 
 #define MAX_FD_LIMIT            16
-#define CGROUP_MOUNT_PATH       "/sys/fs/cgroup/unified/"
+#define CGROUP_MOUNT_PATH       "/opt/loxilb/cgroup"
 #define CGROUP_MOUNT_PATH_NEW   "/sys/fs/cgroup/"
 #define CGROUP_WORK_DIR         ""
 #define CGROUP_PATH             ""

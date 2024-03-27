@@ -28,9 +28,7 @@ struct {
 SEC("cgroup/connect")
 int llb_connect_v4_prog(struct bpf_sock_addr *ska_ctx)
 {
-  struct sockaddr_in sa;
   struct bpf_sock *sk;
-  struct bpf_sock_tuple t;
   struct sock_rwr_key key;
   struct sock_rwr_action *act;
   
@@ -47,14 +45,18 @@ int llb_connect_v4_prog(struct bpf_sock_addr *ska_ctx)
   //bpf_printk("port 0x%x", key.port);
   //bpf_printk("rwrport 0x%x", act->rw_port);
 
+  if (ska_ctx->type != SOCK_STREAM && ska_ctx->type != SOCK_DGRAM) {
+    return 1;
+  }
+
+#ifdef HAVE_LLB_SOCK_RWR_ACTIVE
+  struct bpf_sock_tuple t;
   memset(&t, 0, sizeof(t));
 
   t.ipv4.daddr = ska_ctx->user_ip4;
   t.ipv4.dport = act->rw_port;
 
-  if (ska_ctx->type != SOCK_STREAM && ska_ctx->type != SOCK_DGRAM) {
-    return 1;
-  } else if (ska_ctx->type == SOCK_STREAM) {
+  if (ska_ctx->type == SOCK_STREAM) {
     sk = bpf_sk_lookup_tcp(ska_ctx, &t, sizeof(t.ipv4), BPF_F_CURRENT_NETNS, 0);
   } else {
     sk = bpf_sk_lookup_udp(ska_ctx, &t, sizeof(t.ipv4), BPF_F_CURRENT_NETNS, 0);
@@ -68,8 +70,9 @@ int llb_connect_v4_prog(struct bpf_sock_addr *ska_ctx)
     bpf_sk_release(sk);
     return 1;
   }
-
   bpf_sk_release(sk);
+#endif
+
 
   ska_ctx->user_port = act->rw_port;
 

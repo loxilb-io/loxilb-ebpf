@@ -6,6 +6,7 @@
 #include <stdbool.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <assert.h>
 #include <sched.h>
 #include <sys/mount.h>
 #include <sys/stat.h>
@@ -32,7 +33,7 @@ do {                                                                            
   if (file_exists(CGROUP_MOUNT_PATH)) {                                                   \
     snprintf(buf, sizeof(buf), "%s%s%s", CGROUP_MOUNT_PATH, CGROUP_WORK_DIR, path);       \
   } else {                                                                                \
-    snprintf(buf, sizeof(buf), "%s%s%s", CGROUP_MOUNT_PATH_NEW, CGROUP_WORK_DIR, path);   \
+    assert(0);                                                                            \
   }                                                                                       \
 } while(0)
 
