@@ -513,7 +513,7 @@ res_end:
   if (1) {
     int ret = dp_pipe_check_res(ctx, xf, fa);
     if (ret == DP_DROP) {
-     bpf_printk("Drop RC 0x%x", xf->pm.rcode);
+      bpf_printk("Drop RC 0x%x", xf->pm.rcode);
     }
     return ret;
   }

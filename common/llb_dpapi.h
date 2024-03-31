@@ -69,8 +69,8 @@
 /* Hard-timeouts for ct xxx entry */
 #define CT_TCP_FN_CPTO        (10000000000)
 #define CT_SCTP_FN_CPTO       (20000000000)
-#define CT_UDP_FN_CPTO        (20000000000)
-#define CT_UDP_EST_CPTO       (60000000000)
+#define CT_UDP_FN_CPTO        (10000000000)
+#define CT_UDP_EST_CPTO       (20000000000)
 #define CT_ICMP_EST_CPTO      (20000000000)
 #define CT_ICMP_FN_CPTO       (5000000000)
 #define CT_MISMATCH_FN_CPTO   (180000000000)

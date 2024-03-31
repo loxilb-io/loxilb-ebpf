@@ -447,7 +447,7 @@ struct {
         __uint(type,        BPF_MAP_TYPE_PERCPU_ARRAY);
         __type(key,         __u32);
         __type(value,       struct dp_pb_stats);
-        __uint(max_entries, LLB_NATV4_MAP_ENTRIES);
+        __uint(max_entries, LLB_NATV4_STAT_MAP_ENTRIES);
 } nat_stats_map SEC(".maps");
 
 struct {

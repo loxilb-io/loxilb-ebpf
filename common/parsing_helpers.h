@@ -145,6 +145,11 @@ static __always_inline int ip_is_fragment(const struct iphdr *iph)
 	return (iph->frag_off & bpf_htons(IP_MF | IP_OFFSET)) != 0;
 }
 
+static __always_inline int ip_is_last_fragment(const struct iphdr *iph)
+{
+	return (iph->frag_off & bpf_htons(IP_MF)) == 0;
+}
+
 static __always_inline int ip_is_first_fragment(const struct iphdr *iph)
 {
 	return (iph->frag_off & bpf_htons(IP_OFFSET)) == 0;
