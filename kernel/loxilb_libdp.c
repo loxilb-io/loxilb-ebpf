@@ -930,7 +930,7 @@ llb_dflt_sec_map2fd_all(struct bpf_object *bpf_obj)
   /* This will pin all maps in our bpf_object */
   err = bpf_object__pin_maps(bpf_obj, xh->ll_dp_pdir);
   if (err) {
-    log_error("BPF: Object pin failed");
+    log_error("bpf: object pin failed");
     //assert(0);
   }
 
@@ -2635,18 +2635,18 @@ llb_ebpf_link_attach(struct config *cfg)
     /* ntc is netlox's modified tc tool */
     sprintf(cmd, "ntc qdisc add dev %s clsact 2>&1 >/dev/null", cfg->ifname);
     llb_sys_exec(cmd);
-    log_debug("%s", cmd);
+    log_debug("exec: %s", cmd);
 
     sprintf(cmd, "ntc filter add dev %s ingress bpf da obj %s sec %s 2>&1",
             cfg->ifname, cfg->filename, cfg->progsec);
     llb_sys_exec(cmd);
-    log_debug("%s", cmd);
+    log_debug("exec: %s", cmd);
 
     if (cfg->tc_egr_bpf) {
       sprintf(cmd, "ntc filter add dev %s egress bpf da obj %s sec %s 2>&1",
             cfg->ifname, LLB_FP_IMG_BPF_EGR, cfg->progsec);
       llb_sys_exec(cmd);
-      log_debug("%s", cmd);
+      log_debug("exec: %s", cmd);
     }
 
     return 0;
@@ -2663,13 +2663,13 @@ llb_ebpf_link_detach(struct config *cfg)
   if (cfg->tc_bpf) {
     /* ntc is netlox's modified tc tool */
     if (cfg->tc_egr_bpf) {
-      sprintf(cmd, "ntc filter del dev %s egress 2>&1", cfg->ifname);
-      log_debug("%s\n", cmd);
+      sprintf(cmd, "ntc filter del dev %s egress 2>&1 > /dev/null", cfg->ifname);
+      log_debug("exec: %s\n", cmd);
       llb_sys_exec(cmd);
     }
 
-    sprintf(cmd, "ntc filter del dev %s ingress 2>&1", cfg->ifname);
-    log_debug("%s", cmd);
+    sprintf(cmd, "ntc filter del dev %s ingress 2>&1 > /dev/null", cfg->ifname);
+    log_debug("exec: %s", cmd);
     llb_sys_exec(cmd);
     return 0;
   } else {
@@ -2730,7 +2730,7 @@ llb_dp_link_attach(const char *ifname,
   }
 
   nr = llb_psec_add(psec);
-  log_debug("NR %d PSEC %s %s", nr, psec, cfg.filename);
+  log_debug("%s: nr %d psection %s", cfg.filename, nr, psec);
   if (nr > 0) {
     cfg.reuse_maps = 1;
   }
@@ -2749,7 +2749,7 @@ llb_dp_link_attach(const char *ifname,
   }
 
   if (nr == 0 && mp_type == LL_BPF_MOUNT_XDP) {
-    log_debug("Setting up for %s|%s", ifname, psec);
+    log_debug("setting up xdp for %s|%s", ifname, psec);
     llb_psec_setup(psec, bpf_obj);
   }
 
