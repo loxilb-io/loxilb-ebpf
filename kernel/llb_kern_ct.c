@@ -1384,6 +1384,8 @@ dp_ct_est(struct xfi *xf,
     }
     break;
   case IPPROTO_SCTP:
+    if (xf->pm.goct) return 0;
+
     if (tdat->xi.mhon) {
       ct_sctp_pinfd_t *pss = &ss->sctp_cts[CT_DIR_IN];
       //ct_sctp_pinfd_t *pxss = &ss->sctp_cts[CT_DIR_OUT];
@@ -1438,6 +1440,58 @@ dp_ct_est(struct xfi *xf,
         }
       }
 #endif
+    }
+    break;
+  default:
+    break;
+  }
+  atdat->ctd.xi.mhon = 0;
+  axtdat->ctd.xi.mhon = 0;
+  return 0;
+}
+
+static int __always_inline
+dp_ct_ctd(struct xfi *xf,
+         struct dp_ct_key *key,
+         struct dp_ct_key *xkey,
+         struct dp_ct_tact *atdat,
+         struct dp_ct_tact *axtdat)
+{
+  struct dp_ct_dat *tdat = &atdat->ctd;
+  struct dp_ct_dat *xtdat = &axtdat->ctd;
+  ct_sctp_pinf_t *ss;
+  int i,j;
+
+  ss = &atdat->ctd.pi.s;
+
+  switch (xf->l34m.nw_proto) {
+  case IPPROTO_SCTP:
+    if (xf->nm.npmhh) {
+      ct_sctp_pinfd_t *pss = &ss->sctp_cts[CT_DIR_IN];
+      ct_sctp_pinfd_t *pxss = &ss->sctp_cts[CT_DIR_OUT];
+
+      for (i = 0; i < pss->nh && i < LLB_MAX_MHOSTS; i++) {
+        key->saddr[0] = pss->mh_host[i];
+        for (j = 0; j < LLB_MAX_MHOSTS; j++) {
+          if (tdat->pi.pmhh[j]) {
+            key->daddr[0] = tdat->pi.pmhh[j];
+            xkey->daddr[0] = tdat->pi.pmhh[j];
+
+            bpf_map_delete_elem(&ct_map, key);
+            bpf_map_delete_elem(&ct_map, xkey);
+          }
+        }
+      }
+
+      for (i = 0; i < pxss->nh && i < LLB_MAX_MHOSTS; i++) {
+        xkey->saddr[0] = pxss->mh_host[i];
+        for (j = 0; j < LLB_MAX_MHOSTS; j++) {
+          if (xtdat->pi.pmhh[j]) {
+            xkey->daddr[0] = xtdat->pi.pmhh[j];
+            bpf_map_delete_elem(&ct_map, xkey);
+          }
+        }
+      }
     }
     break;
   default:
@@ -1624,10 +1678,8 @@ dp_ct_in(void *ctx, struct xfi *xf)
         axtdat->nat_act.doct = 0;
         if (atdat->ctd.dir == CT_DIR_IN) {
           dp_ct_est(xf, &key, &xkey, atdat, axtdat);
-          atdat->ctd.xi.mhon = 0;
         } else {
           dp_ct_est(xf, &xkey, &key, axtdat, atdat);
-          atdat->ctd.xi.mhon = 0;
         }
       } else {
         atdat->ca.act_type = DP_SET_NOP;
@@ -1636,6 +1688,12 @@ dp_ct_in(void *ctx, struct xfi *xf)
     } else if (smr == CT_SMR_ERR || smr == CT_SMR_CTD) {
       bpf_map_delete_elem(&ct_map, &xkey);
       bpf_map_delete_elem(&ct_map, &key);
+
+      if (atdat->ctd.dir == CT_DIR_IN) {
+        dp_ct_ctd(xf, &key, &xkey, atdat, axtdat);
+      } else {
+        dp_ct_ctd(xf, &xkey, &key, axtdat, atdat);
+      }
 
       if (xi->nat_flags) {
         dp_do_dec_nat_sess(ctx, xf, atdat->ctd.rid, atdat->ctd.aid);
