@@ -48,6 +48,7 @@ do {                                  \
   ((x)->tm.tun_type == 0) &&                  \
   (x)->l2m.dl_type == bpf_htons(ETH_P_IP) &&  \
   (x)->qm.ipolid == 0 &&                      \
+  (x)->nm.npmhh == 0 &&                       \
   (x)->nm.xlate_proto == 0 &&                 \
   (x)->pm.dp_rec == 0 &&                      \
   (x)->l2m.ssnid == 0 &&                      \

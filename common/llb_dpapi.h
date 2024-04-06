@@ -227,7 +227,7 @@ struct dp_nat_act {
   __u8 nv6;
   __u8 dsr;
   __u8 cdis;
-  __u8 res;
+  __u8 nmh;
 };
 
 #define MIN_DP_POLICER_RATE  (8*1000*1000)  /* 1 MBps = 8 Mbps */
@@ -589,12 +589,13 @@ typedef enum {
   CT_SCTP_INITA   = 0x2,
   CT_SCTP_COOKIE  = 0x4,
   CT_SCTP_COOKIEA = 0x10,
-  CT_SCTP_EST     = 0x10,
-  CT_SCTP_SHUT    = 0x20,
-  CT_SCTP_SHUTA   = 0x40,
-  CT_SCTP_SHUTC   = 0x80,
-  CT_SCTP_ERR     = 0x100,
-  CT_SCTP_ABRT    = 0x200
+  CT_SCTP_PRE_EST = 0x20,
+  CT_SCTP_EST     = 0x40,
+  CT_SCTP_SHUT    = 0x80,
+  CT_SCTP_SHUTA   = 0x100,
+  CT_SCTP_SHUTC   = 0x200,
+  CT_SCTP_ERR     = 0x400,
+  CT_SCTP_ABRT    = 0x800
 } ct_sctp_state_t;
 
 typedef struct {

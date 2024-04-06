@@ -1154,7 +1154,12 @@ add_nph1:
     nstate = CT_SCTP_COOKIEA;
     break;
   case CT_SCTP_COOKIEA:
-    nstate = CT_SCTP_EST;
+    nstate = CT_SCTP_PRE_EST;
+    break;
+  case CT_SCTP_PRE_EST:
+    if (dir != CT_DIR_OUT) {
+      nstate = CT_SCTP_EST;
+    }
     break;
   case CT_SCTP_ABRT:
     nstate = CT_SCTP_ABRT;
@@ -1177,12 +1182,17 @@ add_nph1:
     break;
   }
 end:
+
+  if (pss->nh && nstate == CT_SCTP_COOKIE) {
+    nstate = CT_SCTP_EST;
+  }
   ss->state = nstate;
   xss->state = nstate;
 
   bpf_spin_unlock(&atdat->lock);
 
-  if (nstate == CT_SCTP_COOKIEA) {
+  bpf_printk("sctp nstate = %x", nstate);
+  if (nstate == CT_SCTP_EST) {
     return CT_SMR_EST;
   } else if (nstate & CT_SCTP_SHUTC) {
     return CT_SMR_CTD;
@@ -1295,15 +1305,23 @@ dp_ct_est(struct xfi *xf,
             key->daddr[0] = tdat->pi.pmhh[j];
             xkey->daddr[0] = tdat->pi.pmhh[j];
 
+            if (xf->pm.dir == CT_DIR_IN) {
+              if (pss->mh_host[i] != xf->l34m.saddr[0]) {
+                adat->ca.act_type = DP_SET_DO_CT;
+              }
+            }
+
             //adat->ctd.xi.nat_rip[0] = tdat->pi.pmhh[j];
             //axdat->ctd.xi.nat_xip[0] = tdat->pi.pmhh[j];
 
             adat->nat_act.rip[0] = tdat->pi.pmhh[j];
             axdat->nat_act.xip[0] = tdat->pi.pmhh[j];
 
-            LL_DBG_PRINTK("[CTRK] ASSOC 0x%x->0x%x",key->saddr[0], key->daddr[0]);
+            bpf_printk("[CTRK] host 0x%x->0x%x", pss->mh_host[i], xf->l34m.saddr[0]);
+            bpf_printk("[CTRK] ASSOC 0x%x->0x%x",key->saddr[0], key->daddr[0]);
             bpf_map_update_elem(&ct_map, key, adat, BPF_ANY);
-            if (i == 0) {
+            if (pss->mh_host[i] == xf->l34m.saddr[0]) {
+              bpf_printk("[CTRK] xASSOC %d 0x%x->0x%x", i, key->saddr[0], key->daddr[0]);
               bpf_map_update_elem(&ct_map, xkey, axdat, BPF_ANY);
             }
           }
@@ -1430,6 +1448,7 @@ dp_ct_in(void *ctx, struct xfi *xf)
       adat->nat_act.nv6 = xf->nm.nv6 ? 1:0;
       adat->nat_act.dsr = xf->nm.dsr;
       adat->nat_act.cdis = xf->nm.cdis;
+      adat->nat_act.nmh = xf->nm.npmhh;
       adat->ito = xf->nm.ito;
     } else {
       adat->ito = 0;
@@ -1466,6 +1485,7 @@ dp_ct_in(void *ctx, struct xfi *xf)
       axdat->nat_act.nv6 = key.v6 ? 1:0;
       axdat->nat_act.dsr = xf->nm.dsr;
       axdat->nat_act.cdis = xf->nm.cdis;
+      axdat->nat_act.nmh = xf->nm.npmhh;
       axdat->ito = xf->nm.ito;
     } else {
       axdat->ito = 0;
