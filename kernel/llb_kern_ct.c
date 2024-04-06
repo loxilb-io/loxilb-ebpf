@@ -1161,6 +1161,60 @@ add_nph1:
       nstate = CT_SCTP_EST;
     }
     break;
+  case CT_SCTP_EST:
+    if (pss->nh) {
+      int grow;
+      sz = (((struct __sk_buff *)ctx)->len);
+      if (c->type == SCTP_HB_REQ) {
+        grow = sizeof(__u32);
+        bpf_spin_unlock(&atdat->lock);
+        if (dp_pktbuf_expand_tail(ctx, grow+sz) < 0) {
+          LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLCT_ERR);
+          bpf_spin_lock(&atdat->lock);
+          break;
+        }
+
+        bpf_spin_lock(&atdat->lock);
+        dend = DP_TC_PTR(DP_PDATA_END(ctx));
+        s = DP_ADD_PTR(DP_PDATA(ctx), xf->pm.l4_off);
+
+        if (s + 1 > dend) {
+          LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLCT_ERR);
+          break;
+        }
+
+        c = DP_TC_PTR(DP_ADD_PTR(s, sizeof(*s)));
+
+        if (c + 1 > dend) {
+          LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLCT_ERR);
+          break;
+        }
+
+        pm = DP_TC_PTR(DP_ADD_PTR(c, sizeof(*c)));
+        if (pm + 1 > dend) {
+          LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLCT_ERR);
+          break;
+        }
+
+        __u16 pmlen = bpf_ntohs(pm->len);
+        if (pmlen > 512) {
+          LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLCT_ERR);
+          break;
+        }
+        __be32 *ip = DP_ADD_PTR(pm, pmlen);
+        if (ip + 1 > dend) {
+          LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLCT_ERR);
+          break;
+        }
+
+        *ip = xf->l34m.saddr[0];
+        c->len = bpf_htons((bpf_ntohs(c->len) + 4));
+        pm->len = bpf_htons((bpf_ntohs(pm->len) + 4));
+        xf->pm.l3_adj = grow;
+      } else if (c->type == SCTP_HB_ACK) {
+      }
+    }
+    break;
   case CT_SCTP_ABRT:
     nstate = CT_SCTP_ABRT;
     break;
