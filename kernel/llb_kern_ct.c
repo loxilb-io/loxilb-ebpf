@@ -842,6 +842,7 @@ dp_ct_sctp_sm(void *ctx, struct xfi *xf,
 
     pss->mh_host[0] = xf->l34m.saddr[0];
     pss->nh = 1;
+    pss->ph = xf->l34m.daddr[0];
 
     for (i = 0; i < LLB_MAX_MPHOSTS; i++) {
       if (pm->type == bpf_htons(SCTP_IPV4_ADDR_PARAM)) {
@@ -991,6 +992,7 @@ add_nph0:
 
     pxss->mh_host[0] = xf->l34m.saddr[0];
     pxss->nh = 1;
+    pxss->ph = xf->l34m.daddr[0];
 
     for (i = 0; i < LLB_MAX_MPHOSTS; i++) {
       if (pm->type == bpf_htons(SCTP_IPV4_ADDR_PARAM)) {
@@ -1384,36 +1386,73 @@ dp_ct_est(struct xfi *xf,
     }
     break;
   case IPPROTO_SCTP:
+    /* Ignore Hearbeats */
     if (xf->pm.goct) return 0;
 
-    if (tdat->xi.mhon) {
+    bpf_printk("[CTRK] EST %d: %d", tdat->xi.mhon, xf->pm.dir == CT_DIR_IN);
+    if (tdat->xi.mhon && xf->pm.dir == CT_DIR_IN) {
+      __be32 primary_src = 0;
+      int primary_path = -1;
       ct_sctp_pinfd_t *pss = &ss->sctp_cts[CT_DIR_IN];
       //ct_sctp_pinfd_t *pxss = &ss->sctp_cts[CT_DIR_OUT];
+
+
+      for (i = 0; i < pss->nh && i < LLB_MAX_MHOSTS; i++) {
+        if (pss->mh_host[i] == xf->l34m.saddr[0]) {
+          primary_src = pss->mh_host[i];
+          primary_path  = i;
+        }
+
+      }
 
       for (i = 0; i < pss->nh && i < LLB_MAX_MHOSTS; i++) {
         key->saddr[0] = pss->mh_host[i];
         for (j = 0; j < LLB_MAX_MHOSTS; j++) {
           if (tdat->pi.pmhh[j]) {
+
+            if (primary_path == i) {
+              adat->nat_act.doct = 0;
+            } else {
+              adat->nat_act.doct = 1;
+            }
+
+            /* The primary association is not in pmhh array.So, we plumb it
+             * from init primary stored for all secondary associations
+             */
+            if (i != 0) {
+              key->daddr[0] = pss->ph;
+              xkey->daddr[0] = pss->ph;
+
+              adat->ctd.xi.nat_rip[0] = pss->ph;
+              adat->nat_act.rip[0] = pss->ph;
+
+              axdat->ctd.xi.nat_xip[0] = pss->ph;
+              axdat->nat_act.xip[0] = pss->ph;
+
+              bpf_printk("[CTRK] host 0x%x->0x%x", pss->mh_host[i], xf->l34m.saddr[0]);
+              bpf_printk("[CTRK] ASSOC 0x%x->0x%x",key->saddr[0], key->daddr[0]);
+              bpf_map_update_elem(&ct_map, key, adat, BPF_ANY);
+            }
+
             key->daddr[0] = tdat->pi.pmhh[j];
             xkey->daddr[0] = tdat->pi.pmhh[j];
 
-            if (xf->pm.dir == CT_DIR_IN) {
-              if (pss->mh_host[i] != xf->l34m.saddr[0]) {
-                adat->ca.act_type = DP_SET_DO_CT;
-              }
-            }
-
-            //adat->ctd.xi.nat_rip[0] = tdat->pi.pmhh[j];
-            //axdat->ctd.xi.nat_xip[0] = tdat->pi.pmhh[j];
-
+            adat->ctd.xi.nat_rip[0] = tdat->pi.pmhh[j];
             adat->nat_act.rip[0] = tdat->pi.pmhh[j];
+
+            axdat->ctd.xi.nat_xip[0] = tdat->pi.pmhh[j];
             axdat->nat_act.xip[0] = tdat->pi.pmhh[j];
 
             bpf_printk("[CTRK] host 0x%x->0x%x", pss->mh_host[i], xf->l34m.saddr[0]);
             bpf_printk("[CTRK] ASSOC 0x%x->0x%x",key->saddr[0], key->daddr[0]);
             bpf_map_update_elem(&ct_map, key, adat, BPF_ANY);
-            if (pss->mh_host[i] == xf->l34m.saddr[0]) {
+            if (primary_path == i) {
               bpf_printk("[CTRK] xASSOC %d 0x%x->0x%x", i, key->saddr[0], key->daddr[0]);
+              bpf_printk("[CTRK] ppath %d primary_scr 0x%x", primary_path, primary_src);
+              bpf_printk("[CTRK] action %d: %d", adat->ca.act_type, axdat->ca.act_type);
+              /* Only install xPath if it is primary */
+              axdat->nat_act.rip[0] = primary_src;
+              axdat->ctd.xi.nat_rip[0] = primary_src;
               bpf_map_update_elem(&ct_map, xkey, axdat, BPF_ANY);
             }
           }
@@ -1445,8 +1484,8 @@ dp_ct_est(struct xfi *xf,
   default:
     break;
   }
-  atdat->ctd.xi.mhon = 0;
-  axtdat->ctd.xi.mhon = 0;
+  //atdat->ctd.xi.mhon = 0;
+  //axtdat->ctd.xi.mhon = 0;
   return 0;
 }
 
@@ -1568,12 +1607,18 @@ dp_ct_in(void *ctx, struct xfi *xf)
   }
 
   dp_ct_proto_xfk_init(&key, xi, &xkey, xxi);
+  if (xf->l34m.nw_proto == IPPROTO_SCTP) {
+    bpf_printk("ct: saddr %lx daddr %lx", key.saddr[0], key.daddr[0]);
+    bpf_printk("ct: xsaddr %lx xdaddr %lx", xkey.saddr[0], xkey.daddr[0]);
+    bpf_printk("ct: xsport %lu dport %lu", bpf_ntohs(xkey.sport), bpf_ntohs(xkey.dport));
+    bpf_printk("ct: 0x%x nat xip %lx rip %lx", xf->pm.nf, xi->nat_xip[0], xi->nat_rip[0]);
+  }
 
   atdat = bpf_map_lookup_elem(&ct_map, &key);
   axtdat = bpf_map_lookup_elem(&ct_map, &xkey);
   if (atdat == NULL || axtdat == NULL) {
 
-    LL_DBG_PRINTK("[CTRK] new-ct4");
+    bpf_printk("[CTRK] new-ct4 %p:%p", atdat, axtdat);
     adat->ca.ftrap = 0;
     adat->ca.oaux = 0;
     adat->ca.cidx = dp_ct_get_newctr(&adat->ctd.nid);
@@ -1660,17 +1705,18 @@ dp_ct_in(void *ctx, struct xfi *xf)
     axtdat->lts = atdat->lts;
     if (atdat->ctd.dir == CT_DIR_IN) {
       xf->pm.dir = CT_DIR_IN;
-      LL_DBG_PRINTK("[CTRK] in-dir");
+      bpf_printk("[CTRK] in-dir");
       xf->pm.phit |= LLB_DP_CTSI_HIT;
       smr = dp_ct_sm(ctx, xf, atdat, axtdat, CT_DIR_IN);
     } else {
-      LL_DBG_PRINTK("[CTRK] out-dir");
+      //LL_DBG_PRINTK("[CTRK] out-dir");
+      bpf_printk("[CTRK] out-dir");
       xf->pm.dir = CT_DIR_OUT;
       xf->pm.phit |= LLB_DP_CTSO_HIT;
       smr = dp_ct_sm(ctx, xf, axtdat, atdat, CT_DIR_OUT);
     }
 
-    LL_DBG_PRINTK("[CTRK] smr %d", smr);
+    bpf_printk("[CTRK] smr %d :nat %d", smr, xi->nat_flags);
 
     if (smr == CT_SMR_EST) {
       if (xi->nat_flags) {
