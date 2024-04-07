@@ -1154,7 +1154,7 @@ add_nph1:
     nstate = CT_SCTP_COOKIEA;
     break;
   case CT_SCTP_COOKIEA:
-    nstate = CT_SCTP_PRE_EST;
+    nstate = CT_SCTP_EST;
     break;
   case CT_SCTP_PRE_EST:
     if (dir != CT_DIR_OUT) {
