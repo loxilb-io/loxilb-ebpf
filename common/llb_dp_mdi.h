@@ -48,6 +48,7 @@ do {                                  \
   ((x)->tm.tun_type == 0) &&                  \
   (x)->l2m.dl_type == bpf_htons(ETH_P_IP) &&  \
   (x)->qm.ipolid == 0 &&                      \
+  (x)->nm.npmhh == 0 &&                       \
   (x)->nm.xlate_proto == 0 &&                 \
   (x)->pm.dp_rec == 0 &&                      \
   (x)->l2m.ssnid == 0 &&                      \
@@ -160,7 +161,7 @@ struct dp_pi_mdi {
 #define LLB_NAT_HSRC          0x08
     __u8             nf;
     __u16            rule_id;
-    __u16            l3_adj;
+    __s16            l3_adj;
 
     __u8             il3_off;
     __u8             il4_off;
