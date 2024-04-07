@@ -1283,7 +1283,6 @@ end:
 
   bpf_spin_unlock(&atdat->lock);
 
-  bpf_printk("sctp nstate = %x", nstate);
   if (nstate == CT_SCTP_EST) {
     return CT_SMR_EST;
   } else if (nstate & CT_SCTP_SHUTC) {
@@ -1389,7 +1388,6 @@ dp_ct_est(struct xfi *xf,
     /* Ignore Hearbeats */
     if (xf->pm.goct) return 0;
 
-    bpf_printk("[CTRK] EST %d: %d", tdat->xi.mhon, xf->pm.dir == CT_DIR_IN);
     if (tdat->xi.mhon && xf->pm.dir == CT_DIR_IN) {
       __be32 primary_src = 0;
       int primary_path = -1;
@@ -1429,8 +1427,7 @@ dp_ct_est(struct xfi *xf,
               axdat->ctd.xi.nat_xip[0] = pss->ph;
               axdat->nat_act.xip[0] = pss->ph;
 
-              bpf_printk("[CTRK] host 0x%x->0x%x", pss->mh_host[i], xf->l34m.saddr[0]);
-              bpf_printk("[CTRK] ASSOC 0x%x->0x%x",key->saddr[0], key->daddr[0]);
+              LL_DBG_PRINTK("[CTRK] ASSOC 0x%x->0x%x",key->saddr[0], key->daddr[0]);
               bpf_map_update_elem(&ct_map, key, adat, BPF_ANY);
             }
 
@@ -1443,13 +1440,11 @@ dp_ct_est(struct xfi *xf,
             axdat->ctd.xi.nat_xip[0] = tdat->pi.pmhh[j];
             axdat->nat_act.xip[0] = tdat->pi.pmhh[j];
 
-            bpf_printk("[CTRK] host 0x%x->0x%x", pss->mh_host[i], xf->l34m.saddr[0]);
-            bpf_printk("[CTRK] ASSOC 0x%x->0x%x",key->saddr[0], key->daddr[0]);
+            LL_DBG_PRINTK("[CTRK] ASSOC 0x%x->0x%x",key->saddr[0], key->daddr[0]);
             bpf_map_update_elem(&ct_map, key, adat, BPF_ANY);
             if (primary_path == i) {
-              bpf_printk("[CTRK] xASSOC %d 0x%x->0x%x", i, key->saddr[0], key->daddr[0]);
-              bpf_printk("[CTRK] ppath %d primary_scr 0x%x", primary_path, primary_src);
-              bpf_printk("[CTRK] action %d: %d", adat->ca.act_type, axdat->ca.act_type);
+              LL_DBG_PRINTK("[CTRK] xASSOC %d 0x%x->0x%x", i, key->saddr[0], key->daddr[0]);
+
               /* Only install xPath if it is primary */
               axdat->nat_act.rip[0] = primary_src;
               axdat->ctd.xi.nat_rip[0] = primary_src;
@@ -1484,8 +1479,6 @@ dp_ct_est(struct xfi *xf,
   default:
     break;
   }
-  //atdat->ctd.xi.mhon = 0;
-  //axtdat->ctd.xi.mhon = 0;
   return 0;
 }
 
@@ -1607,18 +1600,12 @@ dp_ct_in(void *ctx, struct xfi *xf)
   }
 
   dp_ct_proto_xfk_init(&key, xi, &xkey, xxi);
-  if (xf->l34m.nw_proto == IPPROTO_SCTP) {
-    bpf_printk("ct: saddr %lx daddr %lx", key.saddr[0], key.daddr[0]);
-    bpf_printk("ct: xsaddr %lx xdaddr %lx", xkey.saddr[0], xkey.daddr[0]);
-    bpf_printk("ct: xsport %lu dport %lu", bpf_ntohs(xkey.sport), bpf_ntohs(xkey.dport));
-    bpf_printk("ct: 0x%x nat xip %lx rip %lx", xf->pm.nf, xi->nat_xip[0], xi->nat_rip[0]);
-  }
 
   atdat = bpf_map_lookup_elem(&ct_map, &key);
   axtdat = bpf_map_lookup_elem(&ct_map, &xkey);
   if (atdat == NULL || axtdat == NULL) {
 
-    bpf_printk("[CTRK] new-ct4 %p:%p", atdat, axtdat);
+    LL_DBG_PRINTK("[CTRK] new-ct4");
     adat->ca.ftrap = 0;
     adat->ca.oaux = 0;
     adat->ca.cidx = dp_ct_get_newctr(&adat->ctd.nid);
@@ -1705,18 +1692,17 @@ dp_ct_in(void *ctx, struct xfi *xf)
     axtdat->lts = atdat->lts;
     if (atdat->ctd.dir == CT_DIR_IN) {
       xf->pm.dir = CT_DIR_IN;
-      bpf_printk("[CTRK] in-dir");
+      LL_DBG_PRINTK("[CTRK] in-dir");
       xf->pm.phit |= LLB_DP_CTSI_HIT;
       smr = dp_ct_sm(ctx, xf, atdat, axtdat, CT_DIR_IN);
     } else {
-      //LL_DBG_PRINTK("[CTRK] out-dir");
-      bpf_printk("[CTRK] out-dir");
+      LL_DBG_PRINTK("[CTRK] out-dir");
       xf->pm.dir = CT_DIR_OUT;
       xf->pm.phit |= LLB_DP_CTSO_HIT;
       smr = dp_ct_sm(ctx, xf, axtdat, atdat, CT_DIR_OUT);
     }
 
-    bpf_printk("[CTRK] smr %d :nat %d", smr, xi->nat_flags);
+    LL_DBG_PRINTK("[CTRK] smr %d", smr);
 
     if (smr == CT_SMR_EST) {
       if (xi->nat_flags) {
