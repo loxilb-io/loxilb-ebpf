@@ -577,7 +577,9 @@ typedef enum {
 
 typedef struct {
   __u32 nh;
-  __u32 ph;
+  __u32 odst;
+  __u32 pdst;
+  __u32 psrc;
   __be32 mh_host[LLB_MAX_MHOSTS+1];
 } ct_sctp_pinfd_t;
 

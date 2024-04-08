@@ -775,6 +775,7 @@ dp_ct_sctp_sm(void *ctx, struct xfi *xf,
   struct sctp_cookie *ck;
   struct sctp_param  *pm;
   int i = 0;
+  int nh = 0;
 
   if (s + 1 > dend) {
     LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLCT_ERR);
@@ -842,8 +843,11 @@ dp_ct_sctp_sm(void *ctx, struct xfi *xf,
 
     pss->mh_host[0] = xf->l34m.saddr[0];
     pss->nh = 1;
-    pss->ph = xf->l34m.daddr[0];
+    pss->pdst = xf->l34m.daddr[0];
+    pss->odst = xf->l34m.daddr[0];
+    pss->psrc = xf->l34m.saddr[0];
 
+    nh = 1;
     for (i = 0; i < LLB_MAX_MPHOSTS; i++) {
       if (pm->type == bpf_htons(SCTP_IPV4_ADDR_PARAM)) {
         __be32 *ip = DP_TC_PTR(DP_ADD_PTR(pm, sizeof(*pm)));
@@ -851,9 +855,12 @@ dp_ct_sctp_sm(void *ctx, struct xfi *xf,
           break;
         }
 
-        if (i < LLB_MAX_MHOSTS) {
-          pss->mh_host[i+1] = *ip;
-          pss->nh++;
+        if (i < LLB_MAX_MHOSTS && *ip != pss->psrc) {
+          if (nh < LLB_MAX_MHOSTS) {
+            pss->mh_host[nh] = *ip;
+            pss->nh++;
+            nh++;
+          }
         }
 
         if (!atdat->nat_act.nv6) {
@@ -992,8 +999,11 @@ add_nph0:
 
     pxss->mh_host[0] = xf->l34m.saddr[0];
     pxss->nh = 1;
-    pxss->ph = xf->l34m.daddr[0];
+    pxss->pdst = xf->l34m.daddr[0];
+    pxss->odst = xf->l34m.daddr[0];
+    pxss->psrc = xf->l34m.saddr[0];
 
+    nh = 1;
     for (i = 0; i < LLB_MAX_MPHOSTS; i++) {
       if (pm->type == bpf_htons(SCTP_IPV4_ADDR_PARAM)) {
         __be32 *ip = DP_TC_PTR(DP_ADD_PTR(pm, sizeof(*pm)));
@@ -1001,9 +1011,12 @@ add_nph0:
           break;
         }
 
-        if (i < LLB_MAX_MHOSTS) {
-          pxss->mh_host[i+1] = *ip;
-          pxss->nh++;
+        if (i < LLB_MAX_MHOSTS && *ip != pxss->psrc) {
+          if (nh < LLB_MAX_MHOSTS) {
+            pxss->mh_host[nh] = *ip;
+            pxss->nh++;
+            nh++;
+          }
         }
 
         if (!axtdat->nat_act.nv6) {
@@ -1346,6 +1359,7 @@ dp_ct_est(struct xfi *xf,
   //struct dp_ct_dat *xtdat = &axtdat->ctd;
   struct dp_ct_tact *adat, *axdat;
   ct_sctp_pinf_t *ss;
+  ct_sctp_pinf_t *tss;
   int i,j;
   int k;
 
@@ -1363,6 +1377,7 @@ dp_ct_est(struct xfi *xf,
   CP_CT_NAT_TACTS(axdat, axtdat);
 
   ss = &adat->ctd.pi.s;
+  tss = &atdat->ctd.pi.s;
 
   switch (xf->l34m.nw_proto) {
   case IPPROTO_UDP:
@@ -1389,56 +1404,71 @@ dp_ct_est(struct xfi *xf,
     if (xf->pm.goct) return 0;
 
     if (tdat->xi.mhon && xf->pm.dir == CT_DIR_IN) {
-      __be32 primary_src = 0;
       int primary_path = -1;
+      __be32 primary_src = 0;
+      __be32 primary_dst = 0;
       ct_sctp_pinfd_t *pss = &ss->sctp_cts[CT_DIR_IN];
       //ct_sctp_pinfd_t *pxss = &ss->sctp_cts[CT_DIR_OUT];
-
+      ct_sctp_pinfd_t *tpss = &tss->sctp_cts[CT_DIR_IN];
+      ct_sctp_pinfd_t *tpxss = &tss->sctp_cts[CT_DIR_OUT];
 
       for (i = 0; i < pss->nh && i < LLB_MAX_MHOSTS; i++) {
         if (pss->mh_host[i] == xf->l34m.saddr[0]) {
-          primary_src = pss->mh_host[i];
           primary_path  = i;
+          tpss->psrc = pss->mh_host[i];
+          tpxss->pdst = tpss->psrc;
+          primary_src = tpss->psrc;
+          primary_dst = tpss->pdst;
+          break;
         }
+      }
 
+      if (!primary_src || !primary_dst) {
+        break;
       }
 
       for (i = 0; i < pss->nh && i < LLB_MAX_MHOSTS; i++) {
-        key->saddr[0] = pss->mh_host[i];
         for (j = 0; j < LLB_MAX_MHOSTS; j++) {
-          if (tdat->pi.pmhh[j]) {
-
+          if (tdat->pi.pmhh[j] && pss->mh_host[i]) {
+            __be32 mhvip = tdat->pi.pmhh[j];
             if (primary_path == i) {
               adat->nat_act.doct = 0;
             } else {
               adat->nat_act.doct = 1;
             }
 
+            key->saddr[0] = pss->mh_host[i];
             /* The primary association is not in pmhh array.So, we plumb it
              * from init primary stored for all secondary associations
              */
             if (i != 0) {
-              key->daddr[0] = pss->ph;
-              xkey->daddr[0] = pss->ph;
+              key->daddr[0] = primary_dst;
+              xkey->daddr[0] = primary_dst;
 
-              adat->ctd.xi.nat_rip[0] = pss->ph;
-              adat->nat_act.rip[0] = pss->ph;
-
-              axdat->ctd.xi.nat_xip[0] = pss->ph;
-              axdat->nat_act.xip[0] = pss->ph;
+              adat->ctd.xi.nat_rip[0] = primary_dst;
+              adat->nat_act.rip[0] = primary_dst;
+              axdat->ctd.xi.nat_xip[0] = primary_dst;
+              axdat->nat_act.xip[0] = primary_dst;
 
               LL_DBG_PRINTK("[CTRK] ASSOC 0x%x->0x%x",key->saddr[0], key->daddr[0]);
               bpf_map_update_elem(&ct_map, key, adat, BPF_ANY);
+              if (primary_path == i) {
+                LL_DBG_PRINTK("[CTRK] xASSOC %d 0x%x->0x%x", i, key->saddr[0], key->daddr[0]);
+                /* Only install xPath if it is primary */
+                axdat->nat_act.rip[0] = primary_src;
+                axdat->ctd.xi.nat_rip[0] = primary_src;
+                bpf_map_update_elem(&ct_map, xkey, axdat, BPF_ANY);
+              }
             }
 
-            key->daddr[0] = tdat->pi.pmhh[j];
-            xkey->daddr[0] = tdat->pi.pmhh[j];
+            key->daddr[0] = mhvip;
+            xkey->daddr[0] = mhvip;
 
-            adat->ctd.xi.nat_rip[0] = tdat->pi.pmhh[j];
-            adat->nat_act.rip[0] = tdat->pi.pmhh[j];
+            adat->ctd.xi.nat_rip[0] = mhvip;
+            adat->nat_act.rip[0] = mhvip;
 
-            axdat->ctd.xi.nat_xip[0] = tdat->pi.pmhh[j];
-            axdat->nat_act.xip[0] = tdat->pi.pmhh[j];
+            axdat->ctd.xi.nat_xip[0] = mhvip;
+            axdat->nat_act.xip[0] = mhvip;
 
             LL_DBG_PRINTK("[CTRK] ASSOC 0x%x->0x%x",key->saddr[0], key->daddr[0]);
             bpf_map_update_elem(&ct_map, key, adat, BPF_ANY);
@@ -1505,7 +1535,7 @@ dp_ct_ctd(struct xfi *xf,
       for (i = 0; i < pss->nh && i < LLB_MAX_MHOSTS; i++) {
         key->saddr[0] = pss->mh_host[i];
         for (j = 0; j < LLB_MAX_MHOSTS; j++) {
-          if (tdat->pi.pmhh[j]) {
+          if (tdat->pi.pmhh[j] && pss->mh_host[i]) {
             key->daddr[0] = tdat->pi.pmhh[j];
             xkey->daddr[0] = tdat->pi.pmhh[j];
 
@@ -1513,12 +1543,14 @@ dp_ct_ctd(struct xfi *xf,
             bpf_map_delete_elem(&ct_map, xkey);
           }
         }
+        key->daddr[0] = pss->odst;
+        bpf_map_delete_elem(&ct_map, key);
       }
 
       for (i = 0; i < pxss->nh && i < LLB_MAX_MHOSTS; i++) {
         xkey->saddr[0] = pxss->mh_host[i];
         for (j = 0; j < LLB_MAX_MHOSTS; j++) {
-          if (xtdat->pi.pmhh[j]) {
+          if (xtdat->pi.pmhh[j] && pxss->mh_host[i]) {
             xkey->daddr[0] = xtdat->pi.pmhh[j];
             bpf_map_delete_elem(&ct_map, xkey);
           }
