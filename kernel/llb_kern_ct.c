@@ -1407,8 +1407,10 @@ dp_ct_est(struct xfi *xf,
       int primary_path = -1;
       __be32 primary_src = 0;
       __be32 primary_dst = 0;
+      __be32 primary_ep = 0;
+      __be32 mhvip = 0;
       ct_sctp_pinfd_t *pss = &ss->sctp_cts[CT_DIR_IN];
-      //ct_sctp_pinfd_t *pxss = &ss->sctp_cts[CT_DIR_OUT];
+      ct_sctp_pinfd_t *pxss = &ss->sctp_cts[CT_DIR_OUT];
       ct_sctp_pinfd_t *tpss = &tss->sctp_cts[CT_DIR_IN];
       ct_sctp_pinfd_t *tpxss = &tss->sctp_cts[CT_DIR_OUT];
 
@@ -1419,18 +1421,19 @@ dp_ct_est(struct xfi *xf,
           tpxss->pdst = tpss->psrc;
           primary_src = tpss->psrc;
           primary_dst = tpss->pdst;
+          primary_ep = tpxss->psrc;
           break;
         }
       }
 
-      if (!primary_src || !primary_dst) {
+      if (!primary_src || !primary_dst || !primary_ep) {
         break;
       }
 
       for (i = 0; i < pss->nh && i < LLB_MAX_MHOSTS; i++) {
         for (j = 0; j < LLB_MAX_MHOSTS; j++) {
           if (tdat->pi.pmhh[j] && pss->mh_host[i]) {
-            __be32 mhvip = tdat->pi.pmhh[j];
+            mhvip = tdat->pi.pmhh[j];
             if (primary_path == i) {
               adat->nat_act.doct = 0;
             } else {
@@ -1443,10 +1446,15 @@ dp_ct_est(struct xfi *xf,
              */
             if (i != 0) {
               key->daddr[0] = primary_dst;
-              xkey->daddr[0] = primary_dst;
 
               adat->ctd.xi.nat_rip[0] = primary_dst;
               adat->nat_act.rip[0] = primary_dst;
+              adat->ctd.xi.nat_xip[0] = primary_ep;
+              adat->nat_act.xip[0] = primary_ep;
+
+              xkey->daddr[0] = primary_dst;
+              xkey->saddr[0] = primary_ep;
+
               axdat->ctd.xi.nat_xip[0] = primary_dst;
               axdat->nat_act.xip[0] = primary_dst;
 
@@ -1462,11 +1470,13 @@ dp_ct_est(struct xfi *xf,
             }
 
             key->daddr[0] = mhvip;
-            xkey->daddr[0] = mhvip;
-
             adat->ctd.xi.nat_rip[0] = mhvip;
             adat->nat_act.rip[0] = mhvip;
+            adat->ctd.xi.nat_xip[0] = primary_ep;
+            adat->nat_act.xip[0] = primary_ep;
 
+            xkey->daddr[0] = mhvip;
+            xkey->saddr[0] = primary_ep;
             axdat->ctd.xi.nat_xip[0] = mhvip;
             axdat->nat_act.xip[0] = mhvip;
 
@@ -1484,26 +1494,33 @@ dp_ct_est(struct xfi *xf,
         }
       }
 
-#if 0
       for (i = 0; i < pxss->nh && i < LLB_MAX_MHOSTS; i++) {
+        if (primary_ep == pxss->mh_host[i]) {
+          continue;
+        }
         xkey->saddr[0] = pxss->mh_host[i];
-        xkey->saddr[1] = 0;
-        xkey->saddr[2] = 0;
-        xkey->saddr[3] = 0;
-        for (j = 1; j < LLB_MAX_MHOSTS; j++) {
-          if (xtdat->pi.pmhh[j]) {
-            xkey->daddr[0] = xtdat->pi.pmhh[j];
-            xkey->daddr[1] = 0;
-            xkey->daddr[2] = 0;
-            xkey->daddr[3] = 0;
+        for (j = 0; j < LLB_MAX_MHOSTS; j++) {
+          if (tdat->pi.pmhh[j] && pxss->mh_host[i]) {
+            mhvip = tdat->pi.pmhh[j];
 
-            axdat->nat_act.xip[0] = xtdat->pi.pmhh[j];
+            xkey->daddr[0] = primary_dst;
+            axdat->ctd.xi.nat_rip[0] = primary_src;
+            axdat->nat_act.rip[0] = primary_src;
+            axdat->ctd.xi.nat_xip[0] = primary_dst;
+            axdat->nat_act.xip[0] = primary_dst;
+            bpf_printk("%x->%x", xkey->saddr[0], xkey->daddr[0]);
+            bpf_map_update_elem(&ct_map, xkey, axdat, BPF_ANY);
+
+            xkey->daddr[0] = mhvip;
+            axdat->ctd.xi.nat_xip[0] = mhvip;
+            axdat->nat_act.xip[0] = mhvip;
+            axdat->ctd.xi.nat_xip[0] = primary_dst;
+            axdat->nat_act.xip[0] = primary_dst;
             bpf_printk("%x->%x", xkey->saddr[0], xkey->daddr[0]);
             bpf_map_update_elem(&ct_map, xkey, axdat, BPF_ANY);
           }
         }
       }
-#endif
     }
     break;
   default:
@@ -1555,6 +1572,9 @@ dp_ct_ctd(struct xfi *xf,
             bpf_map_delete_elem(&ct_map, xkey);
           }
         }
+        xkey->daddr[0] = pxss->odst;
+        bpf_map_delete_elem(&ct_map, xkey);
+
       }
     }
     break;
