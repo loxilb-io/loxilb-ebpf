@@ -1508,7 +1508,6 @@ dp_ct_est(struct xfi *xf,
             axdat->nat_act.rip[0] = primary_src;
             axdat->ctd.xi.nat_xip[0] = primary_dst;
             axdat->nat_act.xip[0] = primary_dst;
-            bpf_printk("%x->%x", xkey->saddr[0], xkey->daddr[0]);
             bpf_map_update_elem(&ct_map, xkey, axdat, BPF_ANY);
 
             xkey->daddr[0] = mhvip;
@@ -1516,7 +1515,6 @@ dp_ct_est(struct xfi *xf,
             axdat->nat_act.xip[0] = mhvip;
             axdat->ctd.xi.nat_xip[0] = primary_dst;
             axdat->nat_act.xip[0] = primary_dst;
-            bpf_printk("%x->%x", xkey->saddr[0], xkey->daddr[0]);
             bpf_map_update_elem(&ct_map, xkey, axdat, BPF_ANY);
           }
         }
