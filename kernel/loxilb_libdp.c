@@ -2095,6 +2095,56 @@ ll_send_ctep_reset(struct dp_ct_key *ep, struct dp_ct_tact *adat)
   create_xmit_raw_tcp(&r);
 }
 
+static void
+ll_ct_get_state(struct dp_ct_key *key, struct dp_ct_tact *adat, bool *est, uint64_t *to)
+{
+  struct dp_ct_dat *dat = &adat->ctd;
+
+  if (key->l4proto == IPPROTO_TCP) {
+    ct_tcp_pinf_t *ts = &dat->pi.t;
+
+    if (ts->state & CT_TCP_FIN_MASK ||
+        ts->state & CT_TCP_ERR ||
+        ts->state & CT_TCP_SYNC_MASK ||
+        ts->state == CT_TCP_CLOSED) {
+      *to = CT_TCP_FN_CPTO;
+    } else if (ts->state == CT_TCP_EST) {
+      *est = true;
+    }
+  } else if (key->l4proto == IPPROTO_UDP) {
+    ct_udp_pinf_t *us = &dat->pi.u;
+
+    if (adat->ctd.pi.frag) {
+      *to = CT_UDP_FN_CPTO;
+    } else if (us->state & (CT_UDP_UEST|CT_UDP_EST)) {
+      *to = CT_UDP_EST_CPTO;
+      *est = true;
+    } else {
+      *to = CT_UDP_FN_CPTO;
+    }
+  } else if (key->l4proto == IPPROTO_ICMP ||
+             key->l4proto == IPPROTO_ICMPV6) {
+    ct_icmp_pinf_t *is = &dat->pi.i;
+    if (is->state == CT_ICMP_REPS) {
+      *est = true;
+      *to = CT_ICMP_EST_CPTO;
+    } else {
+      *to = CT_ICMP_FN_CPTO;
+    }
+  } else if (key->l4proto == IPPROTO_SCTP) {
+    ct_sctp_pinf_t *ss = &dat->pi.s;
+
+    if (ss->state & CT_SCTP_FIN_MASK ||
+        ss->state & CT_SCTP_ERR ||
+        (ss->state & CT_SCTP_INIT_MASK && ss->state != CT_SCTP_EST) ||
+        ss->state == CT_SCTP_CLOSED) {
+      *to = CT_SCTP_FN_CPTO;
+    } else if (ss->state == CT_SCTP_EST) {
+      *est = true;
+    }
+  }
+}
+
 static int
 ll_ct_map_ent_has_aged(int tid, void *k, void *ita)
 {
@@ -2152,7 +2202,9 @@ ll_ct_map_ent_has_aged(int tid, void *k, void *ita)
       inet_ntop(AF_INET6, xkey.daddr, dstr, INET6_ADDRSTRLEN);
     }
 
-    if (curr_ns - adat->lts < CT_MISMATCH_FN_CPTO) {
+    ll_ct_get_state(&xkey, &axdat, &est, &to);
+
+    if (est && curr_ns - adat->lts < CT_MISMATCH_FN_CPTO) {
       return 0;
     }
 
@@ -2173,49 +2225,7 @@ ll_ct_map_ent_has_aged(int tid, void *k, void *ita)
   llb_fetch_map_stats_cached(LL_DP_CT_STATS_MAP, adat->ca.cidx, 1, &bytes, &pkts);
   llb_fetch_map_stats_cached(LL_DP_CT_STATS_MAP, axdat.ca.cidx, 1, &bytes, &pkts);
 
-  if (key->l4proto == IPPROTO_TCP) {
-    ct_tcp_pinf_t *ts = &dat->pi.t;
-
-    if (ts->state & CT_TCP_FIN_MASK ||
-        ts->state & CT_TCP_ERR ||
-        ts->state & CT_TCP_SYNC_MASK ||
-        ts->state == CT_TCP_CLOSED) {
-      to = CT_TCP_FN_CPTO;
-    } else if (ts->state == CT_TCP_EST) {
-      est = true;
-    }
-  } else if (key->l4proto == IPPROTO_UDP) {
-    ct_udp_pinf_t *us = &dat->pi.u;
- 
-    if (adat->ctd.pi.frag) {
-      to = CT_UDP_FN_CPTO;
-    } else if (us->state & (CT_UDP_UEST|CT_UDP_EST)) {
-      to = CT_UDP_EST_CPTO;
-      est = true;
-    } else {
-      to = CT_UDP_FN_CPTO;
-    }
-  } else if (key->l4proto == IPPROTO_ICMP ||
-             key->l4proto == IPPROTO_ICMPV6) {
-    ct_icmp_pinf_t *is = &dat->pi.i;
-    if (is->state == CT_ICMP_REPS) {
-      est = true;
-      to = CT_ICMP_EST_CPTO;
-    } else {
-      to = CT_ICMP_FN_CPTO;
-    }
-  } else if (key->l4proto == IPPROTO_SCTP) {
-    ct_sctp_pinf_t *ss = &dat->pi.s;
-
-    if (ss->state & CT_SCTP_FIN_MASK ||
-        ss->state & CT_SCTP_ERR ||
-        (ss->state & CT_SCTP_INIT_MASK && ss->state != CT_SCTP_EST) ||
-        ss->state == CT_SCTP_CLOSED) {
-      to = CT_SCTP_FN_CPTO;
-    } else if (ss->state == CT_SCTP_EST) {
-      est = true;
-    }
-  }
+  ll_ct_get_state(key, adat, &est, &to);
 
   if (curr_ns < latest_ns) return 0;
 

@@ -578,8 +578,7 @@ typedef enum {
 typedef struct {
   __u32 nh;
   __u32 odst;
-  __u32 pdst;
-  __u32 psrc;
+  __u32 osrc;
   __be32 mh_host[LLB_MAX_MHOSTS+1];
 } ct_sctp_pinfd_t;
 
@@ -644,7 +643,8 @@ struct mf_xfrm_inf
   uint8_t wprio;
   uint8_t nv6;
   uint8_t dsr;
-  uint8_t mhon;
+  uint8_t mhon:4;
+  uint8_t mhs:4;
   uint16_t nat_xport;
   uint32_t nat_xip[4];
   uint32_t nat_rip[4];
