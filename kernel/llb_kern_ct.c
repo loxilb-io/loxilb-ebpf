@@ -1406,6 +1406,7 @@ dp_ct_est(struct xfi *xf,
     if (tdat->xi.mhon && xf->pm.dir == CT_DIR_IN) {
       __be32 primary_src = 0;
       __be32 primary_ep = 0;
+      __be32 secondary_ep = 0;
       __be32 mhvip = 0;
       ct_sctp_pinfd_t *pss = &ss->sctp_cts[CT_DIR_IN];
       //ct_sctp_pinfd_t *pxss = &ss->sctp_cts[CT_DIR_OUT];
@@ -1431,17 +1432,22 @@ dp_ct_est(struct xfi *xf,
           if (tdat->pi.pmhh[j] && pss->mh_host[i]) {
             mhvip = tdat->pi.pmhh[j];
             primary_src = pss->mh_host[i];
+            if (tpxss->mh_host[i]) {
+              secondary_ep = tpxss->mh_host[i];
+            } else {
+              secondary_ep = primary_ep;
+            }
 
             key->saddr[0] = pss->mh_host[i];
             key->daddr[0] = mhvip;
 
             adat->ctd.xi.nat_rip[0] = mhvip;
             adat->nat_act.rip[0] = mhvip;
-            adat->ctd.xi.nat_xip[0] = primary_ep;
-            adat->nat_act.xip[0] = primary_ep;
+            adat->ctd.xi.nat_xip[0] = secondary_ep;
+            adat->nat_act.xip[0] = secondary_ep;
 
             xkey->daddr[0] = mhvip;
-            xkey->saddr[0] = primary_ep;
+            xkey->saddr[0] = secondary_ep;
             axdat->ctd.xi.nat_xip[0] = mhvip;
             axdat->nat_act.xip[0] = mhvip;
 
@@ -1462,17 +1468,22 @@ dp_ct_est(struct xfi *xf,
         if (tdat->pi.pmhh[j] && pss->mh_host[i]) {
           mhvip = tdat->pi.pmhh[j];
           primary_src = pss->mh_host[i];
+          if (tpxss->mh_host[i]) {
+            secondary_ep = tpxss->mh_host[i];
+          } else {
+            secondary_ep = primary_ep;
+          }
 
           key->saddr[0] = pss->mh_host[i];
           key->daddr[0] = mhvip;
 
           adat->ctd.xi.nat_rip[0] = mhvip;
           adat->nat_act.rip[0] = mhvip;
-          adat->ctd.xi.nat_xip[0] = primary_ep;
-          adat->nat_act.xip[0] = primary_ep;
+          adat->ctd.xi.nat_xip[0] = secondary_ep;
+          adat->nat_act.xip[0] = secondary_ep;
 
           xkey->daddr[0] = mhvip;
-          xkey->saddr[0] = primary_ep;
+          xkey->saddr[0] = secondary_ep;
           axdat->ctd.xi.nat_xip[0] = mhvip;
           axdat->nat_act.xip[0] = mhvip;
 
