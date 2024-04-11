@@ -847,25 +847,31 @@ dp_ct_sctp_sm(void *ctx, struct xfi *xf,
     pss->osrc = xf->l34m.saddr[0];
 
     nh = 1;
-    for (i = 0; i < LLB_MAX_MPHOSTS; i++) {
+    for (i = 0; i < LLB_MAX_SCTP_CHUNKS_INIT; i++) {
+      if (sz >= 512) {
+        break;
+      }
+      pm = DP_TC_PTR(DP_ADD_PTR(pm, sz));
+      if (pm + 1 > dend) {
+        break;
+      }
+
       if (pm->type == bpf_htons(SCTP_IPV4_ADDR_PARAM)) {
         __be32 *ip = DP_TC_PTR(DP_ADD_PTR(pm, sizeof(*pm)));
         if (ip + 1 > dend) {
           break;
         }
 
-        if (i < LLB_MAX_MHOSTS && *ip != pss->osrc) {
-          if (nh < LLB_MAX_MHOSTS) {
-            pss->mh_host[nh] = *ip;
-            pss->nh++;
-            nh++;
-          }
+        if (nh <= LLB_MAX_MHOSTS && *ip != pss->osrc) {
+          pss->mh_host[nh] = *ip;
+          pss->nh++;
+          nh++;
         }
 
         if (!atdat->nat_act.nv6) {
           /* Checksum to be taken care of at a later stage */
-          if (i < LLB_MAX_MHOSTS && atdat->ctd.pi.pmhh[i] != 0) {
-            *ip = atdat->ctd.pi.pmhh[i];
+          if (nh <= LLB_MAX_MHOSTS && atdat->ctd.pi.pmhh[nh] != 0) {
+            *ip = atdat->ctd.pi.pmhh[nh];
           } else if (atdat->ctd.pi.pmhh[0] != 0) {
             *ip = atdat->ctd.pi.pmhh[0];
           } else if (atdat->nat_act.rip[0] != 0) {
@@ -875,13 +881,7 @@ dp_ct_sctp_sm(void *ctx, struct xfi *xf,
       }
 
       sz = bpf_ntohs(pm->len);
-      if (sz >= 512) {
-        break;
-      }
-      pm = DP_TC_PTR(DP_ADD_PTR(pm, sz));
-      if (pm + 1 > dend) {
-        break;
-      }
+      sz = (sz + 3) & ~0x3;
     }
 
 add_nph0:
@@ -1002,25 +1002,32 @@ add_nph0:
     pxss->osrc = xf->l34m.saddr[0];
 
     nh = 1;
-    for (i = 0; i < LLB_MAX_MPHOSTS; i++) {
+    sz = 0;
+    for (i = 0; i < LLB_MAX_SCTP_CHUNKS_INIT; i++) {
+      if (sz >= 512) {
+        break;
+      }
+      pm = DP_TC_PTR(DP_ADD_PTR(pm, sz));
+      if (pm + 1 > dend) {
+        break;
+      }
+
       if (pm->type == bpf_htons(SCTP_IPV4_ADDR_PARAM)) {
         __be32 *ip = DP_TC_PTR(DP_ADD_PTR(pm, sizeof(*pm)));
         if (ip + 1 > dend) {
           break;
         }
 
-        if (i < LLB_MAX_MHOSTS && *ip != pxss->osrc) {
-          if (nh < LLB_MAX_MHOSTS) {
-            pxss->mh_host[nh] = *ip;
-            pxss->nh++;
-            nh++;
-          }
+        if (nh <= LLB_MAX_MHOSTS && *ip != pxss->osrc) {
+          pxss->mh_host[nh] = *ip;
+          pxss->nh++;
+          nh++;
         }
 
         if (!axtdat->nat_act.nv6) {
           /* Checksum to be taken care of a later stage */
-          if (i < LLB_MAX_MHOSTS && axtdat->ctd.pi.pmhh[i] != 0) {
-            *ip = axtdat->ctd.pi.pmhh[i];
+          if (nh <= LLB_MAX_MHOSTS && axtdat->ctd.pi.pmhh[nh] != 0) {
+            *ip = axtdat->ctd.pi.pmhh[nh];
           } else if (axtdat->ctd.pi.pmhh[0] != 0) {
             *ip = axtdat->ctd.pi.pmhh[0];
           } else if (axtdat->nat_act.xip[0] != 0) {
@@ -1030,15 +1037,7 @@ add_nph0:
       }
 
       sz = bpf_ntohs(pm->len);
-
-      /* Keep the verifier happy */
-      if (sz >= 512) {
-        break;
-      }
-      pm = DP_TC_PTR(DP_ADD_PTR(pm, sz));
-      if (pm + 1 > dend) {
-        break;
-      }
+      sz = (sz + 3) & ~0x3;
     }
 
 add_nph1:
