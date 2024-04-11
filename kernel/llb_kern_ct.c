@@ -1360,8 +1360,7 @@ dp_ct_est(struct xfi *xf,
   struct dp_ct_tact *adat, *axdat;
   ct_sctp_pinf_t *ss;
   ct_sctp_pinf_t *tss;
-  int i,j;
-  int k;
+  int i, j, k;
 
   k = 0;
   adat = bpf_map_lookup_elem(&xctk, &k);
@@ -1423,6 +1422,8 @@ dp_ct_est(struct xfi *xf,
         break;
       }
 
+      adat->ctd.xi.mhon = 0;
+      axdat->ctd.xi.mhon = 0;
       adat->ctd.xi.mhs = 1;
       axdat->ctd.xi.mhs = 1;
 
@@ -1740,6 +1741,8 @@ dp_ct_in(void *ctx, struct xfi *xf)
         } else {
           dp_ct_est(xf, &xkey, &key, axtdat, atdat);
         }
+        atdat->ctd.xi.mhon = 0;
+        axtdat->ctd.xi.mhon = 0;
       } else {
         atdat->ca.act_type = DP_SET_NOP;
         axtdat->ca.act_type = DP_SET_NOP;
