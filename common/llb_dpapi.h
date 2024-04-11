@@ -44,7 +44,7 @@
 #define LLB_MAX_NXFRMS        (16)
 #define LLB_CRC32C_ENTRIES    (256)
 #define LLB_MAX_MHOSTS        (3)
-#define LLB_MAX_SCTP_CHUNKS_INIT (16)
+#define LLB_MAX_SCTP_CHUNKS_INIT (8)
 #define LLB_RWR_MAP_ENTRIES   (1024)
 
 #define LLB_DP_SUNP_PGM_ID2    (6)

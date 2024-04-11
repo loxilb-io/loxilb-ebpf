@@ -775,7 +775,7 @@ dp_ct_sctp_sm(void *ctx, struct xfi *xf,
   struct sctp_cookie *ck;
   struct sctp_param  *pm;
   int i = 0;
-  int nh = 0;
+  uint32_t nh = 0;
 
   if (s + 1 > dend) {
     LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLCT_ERR);
@@ -870,8 +870,8 @@ dp_ct_sctp_sm(void *ctx, struct xfi *xf,
 
         if (!atdat->nat_act.nv6) {
           /* Checksum to be taken care of at a later stage */
-          if (nh <= LLB_MAX_MHOSTS && atdat->ctd.pi.pmhh[nh] != 0) {
-            *ip = atdat->ctd.pi.pmhh[nh];
+          if (nh-1 < LLB_MAX_MHOSTS && atdat->ctd.pi.pmhh[nh-1] != 0) {
+            *ip = atdat->ctd.pi.pmhh[nh-1];
           } else if (atdat->ctd.pi.pmhh[0] != 0) {
             *ip = atdat->ctd.pi.pmhh[0];
           } else if (atdat->nat_act.rip[0] != 0) {
@@ -1001,8 +1001,8 @@ add_nph0:
     pxss->odst = xf->l34m.daddr[0];
     pxss->osrc = xf->l34m.saddr[0];
 
-    nh = 1;
     sz = 0;
+    nh = 1;
     for (i = 0; i < LLB_MAX_SCTP_CHUNKS_INIT; i++) {
       if (sz >= 512) {
         break;
@@ -1026,8 +1026,8 @@ add_nph0:
 
         if (!axtdat->nat_act.nv6) {
           /* Checksum to be taken care of a later stage */
-          if (nh <= LLB_MAX_MHOSTS && axtdat->ctd.pi.pmhh[nh] != 0) {
-            *ip = axtdat->ctd.pi.pmhh[nh];
+          if (nh - 1 < LLB_MAX_MHOSTS && axtdat->ctd.pi.pmhh[nh-1] != 0) {
+            *ip = axtdat->ctd.pi.pmhh[nh-1];
           } else if (axtdat->ctd.pi.pmhh[0] != 0) {
             *ip = axtdat->ctd.pi.pmhh[0];
           } else if (axtdat->nat_act.xip[0] != 0) {
