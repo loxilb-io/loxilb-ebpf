@@ -166,7 +166,8 @@ struct dp_pi_mdi {
     __u8             il3_off;
     __u8             il4_off;
     __u8             itcp_flags;
-    __u8             l4fin:2;
+    __u8             l4fin:1;
+    __u8             dbg:1;
     __u8             goct:1;
     __u8             nfc:1;
     __u8             pten:2;
