@@ -755,6 +755,7 @@ struct dp_nat_key {
 struct dp_nat_tacts {
   struct dp_cmn_act ca;
   uint64_t ito;
+  uint64_t pto;
   struct bpf_spin_lock lock;
   uint16_t nxfrm;
   uint8_t cdis;
