@@ -61,7 +61,8 @@ dp_sel_nat_ep(void *ctx, struct xfi *xf, struct dp_nat_tacts *act)
       }
     }
   } else if (act->sel_type == NAT_LB_SEL_RR_PERSIST) {
-    sel = (xf->l34m.saddr4 & 0xff) ^  ((xf->l34m.saddr4 >> 24) & 0xff);
+    __u64 tfc = bpf_ktime_get_ns() / NAT_LB_PERSIST_TIMEOUT ;
+    sel = (xf->l34m.saddr4 & 0xff) ^  ((xf->l34m.saddr4 >> 24) & 0xff) ^ tfc;
     sel %= act->nxfrm;
   } else if (act->sel_type == NAT_LB_SEL_LC) {
     struct dp_nat_epacts *epa;
