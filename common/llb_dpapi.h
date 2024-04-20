@@ -764,6 +764,8 @@ struct dp_nat_tacts {
   uint16_t sel_type;
   uint32_t pmhh[LLB_MAX_MHOSTS];
   struct mf_xfrm_inf nxfrms[LLB_MAX_NXFRMS];
+  uint64_t lts;
+  uint64_t base_to;
 };
 
 struct dp_nat_epacts {

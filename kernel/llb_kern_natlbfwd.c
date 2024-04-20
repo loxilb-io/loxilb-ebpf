@@ -61,14 +61,25 @@ dp_sel_nat_ep(void *ctx, struct xfi *xf, struct dp_nat_tacts *act)
       }
     }
   } else if (act->sel_type == NAT_LB_SEL_RR_PERSIST) {
-    __u64 tfc = bpf_ktime_get_ns();
+    __u64 now = bpf_ktime_get_ns();
+    __u64 base;
+    __u64 tfc = 0;
+
+    bpf_spin_lock(&act->lock);
+    if (act->base_to == 0 || now - act->lts > act->pto) {
+      act->base_to = (now/act->pto) * act->pto;
+    }
+    base = act->base_to;
     if (act->pto) {
-      tfc /= act->pto;
+      tfc = base/act->pto;
     } else {
-      tfc /= NAT_LB_PERSIST_TIMEOUT;
+      act->pto = NAT_LB_PERSIST_TIMEOUT;
+      tfc = base/NAT_LB_PERSIST_TIMEOUT;
     }
     sel = (xf->l34m.saddr4 & 0xff) ^  ((xf->l34m.saddr4 >> 24) & 0xff) ^ (tfc & 0xff);
     sel %= act->nxfrm;
+    act->lts = now;
+    bpf_spin_unlock(&act->lock);
   } else if (act->sel_type == NAT_LB_SEL_LC) {
     struct dp_nat_epacts *epa;
     __u32 key = rule_num;
