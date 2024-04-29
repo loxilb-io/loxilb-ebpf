@@ -34,12 +34,10 @@ dp_sel_nat_ep(void *ctx, struct xfi *xf, struct dp_nat_tacts *act)
     while (n < LLB_MAX_NXFRMS) {
       if (i >= 0 && i < LLB_MAX_NXFRMS) {
         nxfrm_act = &act->nxfrms[i];
-        if (nxfrm_act < act + 1) {
-          if (nxfrm_act->inactive == 0) { 
-            act->sel_hint = (i + 1) % act->nxfrm;
-            sel = i;
-            break;
-          }
+        if (nxfrm_act->inactive == 0) {
+          act->sel_hint = (i + 1) % act->nxfrm;
+          sel = i;
+          break;
         }
       }
       i++;
@@ -167,19 +165,17 @@ dp_do_nat(void *ctx, struct xfi *xf)
     if (sel >= 0 && sel < LLB_MAX_NXFRMS) {
       nxfrm_act = &act->nxfrms[sel];
 
-      if (nxfrm_act < act + 1) {
-        DP_XADDR_CP(xf->nm.nxip, nxfrm_act->nat_xip);
-        DP_XADDR_CP(xf->nm.nrip, nxfrm_act->nat_rip);
-        xf->nm.nxport = nxfrm_act->nat_xport;
-        xf->nm.nv6 = nxfrm_act->nv6 ? 1: 0;
-        xf->nm.sel_aid = sel;
-        xf->nm.ito = act->ito;
-        xf->pm.rule_id =  act->ca.cidx;
-        LL_DBG_PRINTK("[NAT] ACT %x", xf->pm.nf);
-        /* Special case related to host-dnat */
-        if (xf->l34m.saddr4 == xf->nm.nxip4 && xf->pm.nf == LLB_NAT_DST) {
-          xf->nm.nxip4 = 0;
-        }
+      DP_XADDR_CP(xf->nm.nxip, nxfrm_act->nat_xip);
+      DP_XADDR_CP(xf->nm.nrip, nxfrm_act->nat_rip);
+      xf->nm.nxport = nxfrm_act->nat_xport;
+      xf->nm.nv6 = nxfrm_act->nv6 ? 1: 0;
+      xf->nm.sel_aid = sel;
+      xf->nm.ito = act->ito;
+      xf->pm.rule_id =  act->ca.cidx;
+      LL_DBG_PRINTK("[NAT] ACT %x", xf->pm.nf);
+      /* Special case related to host-dnat */
+      if (xf->l34m.saddr4 == xf->nm.nxip4 && xf->pm.nf == LLB_NAT_DST) {
+        xf->nm.nxip4 = 0;
       }
     } else {
       xf->pm.nf = 0;
