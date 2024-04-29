@@ -789,7 +789,7 @@ dp_ct_sctp_sm(void *ctx, struct xfi *xf,
     return -1;
   }
 
-  poff = xf->pm.l4_off;
+  poff = xf->pm.l4_off + sizeof(*s);
 
   nstate = ss->state;
   bpf_spin_lock(&atdat->lock);
@@ -861,9 +861,7 @@ dp_ct_sctp_sm(void *ctx, struct xfi *xf,
       pm = DP_TC_PTR(DP_ADD_PTR(DP_PDATA(ctx), poff));
       dend = DP_TC_PTR(DP_PDATA_END(ctx));
       if (pm + 1 > dend) {
-        bpf_spin_unlock(&atdat->lock);
-        LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLCT_ERR);
-        return -1;
+        goto add_nph0;
       }
 
       if (pm->type == bpf_htons(SCTP_IPV4_ADDR_PARAM)) {
@@ -1020,9 +1018,7 @@ add_nph0:
       pm = DP_TC_PTR(DP_ADD_PTR(DP_PDATA(ctx), poff));
       dend = DP_TC_PTR(DP_PDATA_END(ctx));
       if (pm + 1 > dend) {
-        bpf_spin_unlock(&atdat->lock);
-        LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLCT_ERR);
-        return -1;
+        goto add_nph1;
       }
 
       if (pm->type == bpf_htons(SCTP_IPV4_ADDR_PARAM)) {
