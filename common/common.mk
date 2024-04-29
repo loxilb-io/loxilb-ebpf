@@ -11,7 +11,7 @@
 # as a space-separated list
 #
 LLC = llc
-CLANG := $(shell if [ -f /usr/bin/clang-13 ];then echo clang-13; else echo clang-10; fi;)
+CLANG := $(shell if [ -f /usr/bin/clang-10 ];then echo clang-10; else echo clang; fi;)
 CC ?= gcc
 BPFTOOL ?= bpftool
 
@@ -158,6 +158,7 @@ $(XDP_OBJ): %.o: %.c  Makefile $(COMMON_MK) $(KERN_USER_H) $(EXTRA_DEPS) $(XDP_D
 		-Werror \
 		-O2 -g -c -o ${@:.o=.o} $<
 	#$(LLC) -march=bpf -filetype=obj -o $@ ${@:.o=.ll}
+	@sudo mkdir -p /opt/loxilb/
 	sudo mv $@ /opt/loxilb/ 
 
 ## Remove debug in production
@@ -176,6 +177,7 @@ $(TC_OBJ): %.o: %.c  Makefile $(COMMON_MK) $(KERN_USER_H) $(EXTRA_DEPS) $(XDP_DE
 		-Werror \
 		-O2 -g -c -o ${@:.o=.o} $<
 	#$(LLC) -march=bpf -mattr=dwarfris -filetype=obj -o $@ ${@:.o=.o}
+	@sudo mkdir -p /opt/loxilb/
 	sudo mv $@ /opt/loxilb/ 
 	@#sudo pahole -J /opt/loxilb/$@
 
@@ -193,6 +195,7 @@ $(TC_EOBJ): %.o: %.c  Makefile $(COMMON_MK) $(KERN_USER_H) $(EXTRA_DEPS) $(XDP_D
 		-Werror \
 		-O2 -g -c -o ${@:.o=.o} $<
 	#$(LLC) -march=bpf -mattr=dwarfris -filetype=obj -o $@ ${@:.o=.o}
+	@sudo mkdir -p /opt/loxilb/
 	sudo mv $@ /opt/loxilb/
 	@#sudo pahole -J /opt/loxilb/$@
 
