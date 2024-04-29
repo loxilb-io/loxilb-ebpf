@@ -767,15 +767,15 @@ dp_ct_sctp_sm(void *ctx, struct xfi *xf,
   ct_sctp_pinfd_t *pxss = &ss->sctp_cts[CT_DIR_OUT];
   uint32_t nstate = 0;
   uint32_t npmhh = tdat->pi.npmhh;
-  uint16_t sz = 0;
   void *dend = DP_TC_PTR(DP_PDATA_END(ctx));
   struct sctphdr *s = DP_ADD_PTR(DP_PDATA(ctx), xf->pm.l4_off);
   struct sctp_dch *c;
   struct sctp_init_ch *ic;
   struct sctp_cookie *ck;
   struct sctp_param  *pm;
-  int i = 0;
+  uint16_t poff = 0;
   uint32_t nh = 0;
+  int i = 0;
 
   if (s + 1 > dend) {
     LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLCT_ERR);
@@ -788,6 +788,8 @@ dp_ct_sctp_sm(void *ctx, struct xfi *xf,
     LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLCT_ERR);
     return -1;
   }
+
+  poff = xf->pm.l4_off;
 
   nstate = ss->state;
   bpf_spin_lock(&atdat->lock);
@@ -828,6 +830,7 @@ dp_ct_sctp_sm(void *ctx, struct xfi *xf,
     if (ic + 1 > dend) {
       goto end;
     }
+    poff += sizeof(*c);
 
     ss->itag = ic->tag;
     nstate = CT_SCTP_INIT;
@@ -836,6 +839,7 @@ dp_ct_sctp_sm(void *ctx, struct xfi *xf,
     if (pm + 1 > dend) {
       goto add_nph0;
     } 
+    poff += sizeof(*ic);
 
     if (xf->l2m.dl_type != bpf_ntohs(ETH_P_IP) || !tdat->xi.nat_flags) {
       break;
@@ -848,12 +852,18 @@ dp_ct_sctp_sm(void *ctx, struct xfi *xf,
 
     nh = 1;
     for (i = 0; i < LLB_MAX_SCTP_CHUNKS_INIT; i++) {
-      if (sz >= 512) {
-        break;
+      uint16_t csz = 0;
+      if (poff >= 4096) {
+        bpf_spin_unlock(&atdat->lock);
+        LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLCT_ERR);
+        return -1;
       }
-      pm = DP_TC_PTR(DP_ADD_PTR(pm, sz));
+      pm = DP_TC_PTR(DP_ADD_PTR(DP_PDATA(ctx), poff));
+      dend = DP_TC_PTR(DP_PDATA_END(ctx));
       if (pm + 1 > dend) {
-        break;
+        bpf_spin_unlock(&atdat->lock);
+        LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLCT_ERR);
+        return -1;
       }
 
       if (pm->type == bpf_htons(SCTP_IPV4_ADDR_PARAM)) {
@@ -861,7 +871,6 @@ dp_ct_sctp_sm(void *ctx, struct xfi *xf,
         if (ip + 1 > dend) {
           break;
         }
-
         if (nh <= LLB_MAX_MHOSTS && *ip != pss->osrc) {
           pss->mh_host[nh] = *ip;
           pss->nh++;
@@ -880,8 +889,8 @@ dp_ct_sctp_sm(void *ctx, struct xfi *xf,
         }
       }
 
-      sz = bpf_ntohs(pm->len);
-      sz = (sz + 3) & ~0x3;
+      csz = bpf_ntohs(pm->len);
+      poff += (csz + 3) & ~0x3;
     }
 
 add_nph0:
@@ -889,14 +898,11 @@ add_nph0:
       int grow;
       int diff = npmhh - pss->nh + 1;
 
-      // FIXME - for testing only
-      //diff = LLB_MAX_MHOSTS;
-
       grow = ((diff)*(sizeof(*pm)+sizeof(__u32)));
-      sz = (((struct __sk_buff *)ctx)->len);
+      poff = (((struct __sk_buff *)ctx)->len);
 
       bpf_spin_unlock(&atdat->lock);
-      if (dp_pktbuf_expand_tail(ctx, grow+sz) < 0) {
+      if (dp_pktbuf_expand_tail(ctx, grow + poff) < 0) {
         LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLCT_ERR);
         bpf_spin_lock(&atdat->lock);
         break;
@@ -914,17 +920,17 @@ add_nph0:
         if (i >= LLB_MAX_MHOSTS) break;
 
         /* Keep the verifier happy */
-        if (sz > SCTP_MAX_INIT_ACK_SZ) {
+        if (poff > SCTP_MAX_INIT_ACK_SZ) {
           break;
         }
 
-        pm = DP_ADD_PTR(pm, sz);
+        pm = DP_ADD_PTR(pm, poff);
         if (pm + 1 > dend) {
           break;
         }
 
         pm->type = bpf_htons(SCTP_IPV4_ADDR_PARAM);
-        pm->len = bpf_htons(sizeof(*pm)+sizeof(__u32));
+        pm->len = bpf_htons(sizeof(*pm) + sizeof(__u32));
 
         __be32 *ip = DP_TC_PTR(DP_ADD_PTR(pm, sizeof(*pm)));
         if (ip + 1 > dend) {
@@ -942,7 +948,7 @@ add_nph0:
           }
         }
 
-        sz = sizeof(*pm)+sizeof(__u32);
+        poff = sizeof(*pm)+sizeof(__u32);
       }
 
       s = DP_ADD_PTR(DP_PDATA(ctx), xf->pm.l4_off);
@@ -955,8 +961,8 @@ add_nph0:
         break;
       }
 
-      sz = bpf_ntohs(c->len)+grow;
-      c->len = bpf_htons(sz);
+      poff = bpf_ntohs(c->len) + grow;
+      c->len = bpf_htons(poff);
       xf->pm.l3_adj = grow;
     }
     break;
@@ -972,6 +978,7 @@ add_nph0:
     if (ic + 1 > dend) {
       goto end;
     }
+    poff += sizeof(*c);
 
     if (c->type == SCTP_INIT_CHUNK) {
       ss->itag = ic->tag;
@@ -995,21 +1002,27 @@ add_nph0:
     if (pm + 1 > dend) {
       goto add_nph1;
     }
+    poff += sizeof(*ic);
 
     pxss->mh_host[0] = xf->l34m.saddr[0];
     pxss->nh = 1;
     pxss->odst = xf->l34m.daddr[0];
     pxss->osrc = xf->l34m.saddr[0];
 
-    sz = 0;
     nh = 1;
     for (i = 0; i < LLB_MAX_SCTP_CHUNKS_INIT; i++) {
-      if (sz >= 512) {
-        break;
+      uint16_t csz = 0;
+      if (poff >= 4096) {
+        bpf_spin_unlock(&atdat->lock);
+        LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLCT_ERR);
+        return -1;
       }
-      pm = DP_TC_PTR(DP_ADD_PTR(pm, sz));
+      pm = DP_TC_PTR(DP_ADD_PTR(DP_PDATA(ctx), poff));
+      dend = DP_TC_PTR(DP_PDATA_END(ctx));
       if (pm + 1 > dend) {
-        break;
+        bpf_spin_unlock(&atdat->lock);
+        LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLCT_ERR);
+        return -1;
       }
 
       if (pm->type == bpf_htons(SCTP_IPV4_ADDR_PARAM)) {
@@ -1036,8 +1049,8 @@ add_nph0:
         }
       }
 
-      sz = bpf_ntohs(pm->len);
-      sz = (sz + 3) & ~0x3;
+      csz = bpf_ntohs(pm->len);
+      poff += (csz + 3) & ~0x3;
     }
 
 add_nph1:
@@ -1045,14 +1058,11 @@ add_nph1:
       int grow;
       int diff = npmhh - pxss->nh + 1;
 
-      // FIXME - for testing only
-      //diff = LLB_MAX_MHOSTS;
-
       grow = ((diff)*(sizeof(*pm)+sizeof(__u32)));
-      sz = (((struct __sk_buff *)ctx)->len);
+      poff = (((struct __sk_buff *)ctx)->len);
 
       bpf_spin_unlock(&atdat->lock);
-      if (dp_pktbuf_expand_tail(ctx, grow+sz) < 0) {
+      if (dp_pktbuf_expand_tail(ctx, grow + poff) < 0) {
         LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLCT_ERR);
         bpf_spin_lock(&atdat->lock);
         break;
@@ -1070,11 +1080,11 @@ add_nph1:
         if (i >= LLB_MAX_MHOSTS) break;
 
         /* Keep the verifier happy */
-        if (sz > SCTP_MAX_INIT_ACK_SZ) {
+        if (poff > SCTP_MAX_INIT_ACK_SZ) {
           break;
         }
 
-        pm = DP_ADD_PTR(pm, sz);
+        pm = DP_ADD_PTR(pm, poff);
         if (pm + 1 > dend) {
           break;
         }
@@ -1096,7 +1106,7 @@ add_nph1:
           *ip = axtdat->nat_act.xip[0];
         }
 
-        sz = sizeof(*pm)+sizeof(__u32);
+        poff = sizeof(*pm)+sizeof(__u32);
       }
 
       s = DP_ADD_PTR(DP_PDATA(ctx), xf->pm.l4_off);
@@ -1109,8 +1119,8 @@ add_nph1:
         break;
       }
 
-      sz = bpf_ntohs(c->len)+grow;
-      c->len = bpf_htons(sz);
+      poff = bpf_ntohs(c->len) + grow;
+      c->len = bpf_htons(poff);
       xf->pm.l3_adj = grow;
     }
 
@@ -1177,11 +1187,11 @@ add_nph1:
 #ifdef HAVE_SCTPMH_HB_MANGLE
     if (pss->nh) {
       int grow;
-      sz = (((struct __sk_buff *)ctx)->len);
+      poff = (((struct __sk_buff *)ctx)->len);
       if (c->type == SCTP_HB_REQ) {
         grow = sizeof(__u32);
         bpf_spin_unlock(&atdat->lock);
-        if (dp_pktbuf_expand_tail(ctx, grow+sz) < 0) {
+        if (dp_pktbuf_expand_tail(ctx, grow + poff) < 0) {
           LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLCT_ERR);
           bpf_spin_lock(&atdat->lock);
           break;
@@ -1253,7 +1263,7 @@ add_nph1:
 
         grow = -4;
         bpf_spin_unlock(&atdat->lock);
-        if (dp_pktbuf_expand_tail(ctx, grow+sz) < 0) {
+        if (dp_pktbuf_expand_tail(ctx, grow + poff) < 0) {
           LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLCT_ERR);
           bpf_spin_lock(&atdat->lock);
           break;
