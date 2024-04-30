@@ -15,6 +15,7 @@ TC_TARGETS   := llb_ebpf_main
 TC_ETARGETS  := llb_ebpf_emain
 MON_TARGETS  := llb_kern_mon
 SOCK_TARGETS := llb_kern_sock
+SOCKMAP_TARGETS := llb_kern_sockmap
 USER_TARGETS := loxilb_libdp
 
 LLC ?= llc
