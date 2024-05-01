@@ -140,6 +140,9 @@ $(COMMON_H): %.h: %.c
 $(COMMON_OBJS): %.o: %.h
 	make -C $(COMMON_DIR)
 
+$(USER_OBJ): %: $(USER_C)
+	$(CC) $(CFLAGS) -c -o $@ $<
+
 $(USER_TARGETS): %: %.c  $(OBJECT_LIBBPF) Makefile $(COMMON_MK) $(COMMON_OBJS) $(KERN_USER_H) $(EXTRA_DEPS) %.skel.h
 	$(CC) -Wall $(CFLAGS) $(LDFLAGS) -o loxilb_dp_debug loxilb_dp_debug.c $(COMMON_OBJS) \
 	 $< $(LIBS)
