@@ -93,9 +93,8 @@ BPF_CFLAGS ?= -I$(LIBBPF_DIR)/build/usr/include/ -I../headers/ -I/usr/include/$(
 LIBS = $(OBJECT_LIBBPF) -lelf $(USER_LIBS) -lz -lpthread
 
 all: llvm-check $(USER_TARGETS) $(XDP_OBJ) $(TC_OBJ) $(TC_EOBJ) $(MON_OBJ) $(SOCK_OBJ) $(USER_TARGETS_LIB)
-#all: llvm-check $(XDP_OBJ) $(USER_TARGETS_LIB)
 
-.PHONY: clean $(CLANG) $(LLC) vmlinux
+.PHONY: clean $(CLANG) $(LLC)
 
 clean:
 	rm -rf $(LIBBPF_DIR)/build
@@ -103,6 +102,7 @@ clean:
 	$(MAKE) -C $(COMMON_DIR) clean
 	rm -f $(USER_TARGETS) $(XDP_OBJ) $(USER_OBJ) $(TC_OBJ) $(TC_EOBJ) $(MON_OBJ) $(MON_OBJ) $(SOCK_OBJ) $(USER_TARGETS_LIB)
 	rm -f loxilb_dp_debug 
+	rm -f vmlinux
 	rm -f $@
 	rm -f *.ll
 	rm -f *~
@@ -139,8 +139,8 @@ $(COMMON_OBJS): %.o: %.h
 	make -C $(COMMON_DIR)
 
 $(USER_TARGETS): %: %.c  $(OBJECT_LIBBPF) Makefile $(COMMON_MK) $(COMMON_OBJS) $(KERN_USER_H) $(EXTRA_DEPS) %.skel.h
-	$(CC) -Wall $(CFLAGS) $(LDFLAGS) -o loxilb_dp_debug loxilb_dp_debug.c $(COMMON_OBJS) \
-	 $< $(LIBS)
+	$(CC) -Wall $(CFLAGS) $(LDFLAGS) -o loxilb_dp_debug loxilb_dp_debug.c $(COMMON_OBJS) $< $(LIBS)
+	@touch $@
 
 $(USER_TARGETS_LIB): %: $(USER_OBJ) $(COMMON_OBJS)
 	$(AR) rcu $@ $^
@@ -157,9 +157,9 @@ $(XDP_OBJ): %.o: %.c  Makefile $(COMMON_MK) $(KERN_USER_H) $(EXTRA_DEPS) $(XDP_D
 		-Wno-compare-distinct-pointer-types \
 		-Werror \
 		-O2 -g -c -o ${@:.o=.o} $<
-	#$(LLC) -march=bpf -filetype=obj -o $@ ${@:.o=.ll}
+	@#$(LLC) -march=bpf -filetype=obj -o $@ ${@:.o=.ll}
 	@sudo mkdir -p /opt/loxilb/
-	sudo mv $@ /opt/loxilb/ 
+	@sudo cp $@ /opt/loxilb/
 
 ## Remove debug in production
 ## -DLL_XDP_DEBUG=1
@@ -176,9 +176,9 @@ $(TC_OBJ): %.o: %.c  Makefile $(COMMON_MK) $(KERN_USER_H) $(EXTRA_DEPS) $(XDP_DE
 		-Wno-compare-distinct-pointer-types \
 		-Werror \
 		-O2 -g -c -o ${@:.o=.o} $<
-	#$(LLC) -march=bpf -mattr=dwarfris -filetype=obj -o $@ ${@:.o=.o}
+	@#$(LLC) -march=bpf -mattr=dwarfris -filetype=obj -o $@ ${@:.o=.o}
 	@sudo mkdir -p /opt/loxilb/
-	sudo mv $@ /opt/loxilb/ 
+	@sudo cp $@ /opt/loxilb/
 	@#sudo pahole -J /opt/loxilb/$@
 
 $(TC_EOBJ): %.o: %.c  Makefile $(COMMON_MK) $(KERN_USER_H) $(EXTRA_DEPS) $(XDP_DEPS)
@@ -194,13 +194,14 @@ $(TC_EOBJ): %.o: %.c  Makefile $(COMMON_MK) $(KERN_USER_H) $(EXTRA_DEPS) $(XDP_D
 		-Wno-compare-distinct-pointer-types \
 		-Werror \
 		-O2 -g -c -o ${@:.o=.o} $<
-	#$(LLC) -march=bpf -mattr=dwarfris -filetype=obj -o $@ ${@:.o=.o}
+	@#$(LLC) -march=bpf -mattr=dwarfris -filetype=obj -o $@ ${@:.o=.o}
 	@sudo mkdir -p /opt/loxilb/
-	sudo mv $@ /opt/loxilb/
+	@sudo cp $@ /opt/loxilb/
 	@#sudo pahole -J /opt/loxilb/$@
 
-vmlinux:
+vmlinux: vmlinux.h
 	$(BPFTOOL) btf dump file /sys/kernel/btf/vmlinux format c > vmlinux.h
+	@touch $@
 
 $(MON_OBJ): %.o: %.c  Makefile $(COMMON_MK) $(KERN_USER_H) $(EXTRA_DEPS) $(XDP_DEPS) vmlinux
 	$(CLANG) \
@@ -211,7 +212,7 @@ $(MON_OBJ): %.o: %.c  Makefile $(COMMON_MK) $(KERN_USER_H) $(EXTRA_DEPS) $(XDP_D
 		$(BPF_CFLAGS) \
 		$(CLANG_BPF_SYS_INCLUDES) \
 		-O2 -g -c -o ${@:.o=.o} $<
-	#$(LLC) -march=bpf -mattr=dwarfris -filetype=obj -o $@ ${@:.o=.o}
+	@#$(LLC) -march=bpf -mattr=dwarfris -filetype=obj -o $@ ${@:.o=.o}
 	@sudo cp $@ /opt/loxilb/
 	@#sudo pahole -J /opt/loxilb/$@
 
@@ -224,7 +225,7 @@ $(SOCK_OBJ): %.o: %.c  Makefile $(COMMON_MK) $(KERN_USER_H) $(EXTRA_DEPS)
 		$(BPF_CFLAGS) \
 		$(CLANG_BPF_SYS_INCLUDES) \
 		-O2 -g -c -o ${@:.o=.o} $<
-	#$(LLC) -march=bpf -mattr=dwarfris -filetype=obj -o $@ ${@:.o=.o}
+	@#$(LLC) -march=bpf -mattr=dwarfris -filetype=obj -o $@ ${@:.o=.o}
 	@sudo cp $@ /opt/loxilb/
 	@#sudo pahole -J /opt/loxilb/$@
 
