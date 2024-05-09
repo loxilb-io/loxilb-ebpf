@@ -102,7 +102,7 @@ clean:
 	$(MAKE) -C $(COMMON_DIR) clean
 	rm -f $(USER_TARGETS) $(XDP_OBJ) $(USER_OBJ) $(TC_OBJ) $(TC_EOBJ) $(MON_OBJ) $(MON_OBJ) $(SOCK_OBJ) $(USER_TARGETS_LIB)
 	rm -f loxilb_dp_debug 
-	rm -f vmlinux
+	rm -f vmlinux vmlinux.h
 	rm -f $@
 	rm -f *.ll
 	rm -f *~
@@ -198,6 +198,9 @@ $(TC_EOBJ): %.o: %.c  Makefile $(COMMON_MK) $(KERN_USER_H) $(EXTRA_DEPS) $(XDP_D
 	@sudo mkdir -p /opt/loxilb/
 	@sudo cp $@ /opt/loxilb/
 	@#sudo pahole -J /opt/loxilb/$@
+
+vmlinux.h:
+	@touch $@
 
 vmlinux: vmlinux.h
 	$(BPFTOOL) btf dump file /sys/kernel/btf/vmlinux format c > vmlinux.h
