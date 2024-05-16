@@ -27,19 +27,19 @@ struct llb_sock_key {
 };
 
 struct {
-  __uint(type,        BPF_MAP_TYPE_SOCKMAP);
+  __uint(type,        BPF_MAP_TYPE_SOCKHASH);
   __type(key,         int);
   __type(value,       int);
   __uint(max_entries, LLB_SOCK_MAP_SZ);
 } sock_proxy_map SEC(".maps");
 
-SEC("sock_parser")
+SEC("sk_skb/stream_parser")
 int llb_sock_parser(struct __sk_buff *skb)
 {
   return skb->len;
 }
 
-SEC("sock_verdict")
+SEC("sk_skb/stream_verdict")
 int llb_sock_verdict(struct __sk_buff *skb)
 {
   struct llb_sock_key key = { .dip = skb->remote_ip4,
@@ -52,7 +52,7 @@ int llb_sock_verdict(struct __sk_buff *skb)
   return bpf_sk_redirect_hash(skb, &sock_proxy_map,  &key, 0);
 }
 
-SEC("sock_ops")
+SEC("sockops")
 int llb_setup_sockmap(struct bpf_sock_ops *bpf_sops)
 {
 	int etype, err;
@@ -71,8 +71,7 @@ int llb_setup_sockmap(struct bpf_sock_ops *bpf_sops)
 		__u32 lport = bpf_sops->local_port;
 
 		if (bpf_sops->local_port == 9090) {
-			bpf_sock_map_update(bpf_sops, &sock_proxy_map, &key,
-						  BPF_NOEXIST);
+			bpf_sock_hash_update(bpf_sops, &sock_proxy_map, &key, BPF_NOEXIST);
 		}
 		break;
   }
@@ -80,7 +79,7 @@ int llb_setup_sockmap(struct bpf_sock_ops *bpf_sops)
      __u32 rport = bpf_sops->remote_port;
 
     if (bpf_sops->remote_port == 9090) {
-      bpf_sock_map_update(bpf_sops, &sock_proxy_map, &key, BPF_NOEXIST);
+      bpf_sock_hash_update(bpf_sops, &sock_proxy_map, &key, BPF_NOEXIST);
     }
     break;
   }

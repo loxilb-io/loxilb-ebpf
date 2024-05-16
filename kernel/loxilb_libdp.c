@@ -93,6 +93,9 @@ typedef struct llb_dp_struct
   int have_ptrace;
   int have_loader;
   int have_sockrwr;
+  int have_sockmap;
+  struct llb_kern_mon *monp;
+  struct llb_kern_sockmap *smp;
   const char *cgroup_dfl_path;
   int cgfd;
   int egr_hooks;
@@ -683,7 +686,7 @@ err:
   return -1;
 }
 
-void
+static void
 llb_unload_kern_sock(void)
 {
   if (xh->cgfd > 0) {
@@ -717,6 +720,8 @@ llb_setup_kern_mon(void)
       goto cleanup;
   }
 
+  xh->monp = prog;
+
   // Setup Perf buffer to process events from kernel
   struct perf_buffer_opts pb_opts = { .sz = sizeof(struct perf_buffer_opts) } ;
 
@@ -739,6 +744,15 @@ cleanup:
 
 }
 
+static void
+llb_unload_kern_mon(void)
+{
+  if (xh->have_mtrace) {
+    llb_kern_mon__detach(xh->monp);
+    llb_kern_mon__destroy(xh->monp);
+  }
+}
+
 #else
 
 static void
@@ -754,7 +768,22 @@ llb_setup_kern_mon(void)
 {
   return 0;
 }
+
+static void
+llb_unload_kern_mon(void)
+{
+}
+
 #endif
+
+static void
+llb_unload_kern_sockmap(void)
+{
+  if (xh->have_sockmap) {
+    llb_kern_sockmap__detach(xh->smp);
+    llb_kern_sockmap__destroy(xh->smp);
+  }
+}
 
 static int
 llb_setup_kern_sockmap(void)
@@ -762,7 +791,7 @@ llb_setup_kern_sockmap(void)
   struct llb_kern_sockmap *prog;
   int err;
 
-  // Open and load eBPF Program
+  /* Open and load eBPF program */
   prog = llb_kern_sockmap__open();
   if (!prog) {
       log_error("Failed to open and load BPF skeleton");
@@ -774,12 +803,14 @@ llb_setup_kern_sockmap(void)
       goto cleanup;
   }
 
-  // Attach the various kProbes
+  /* Attach it */
   err = llb_kern_sockmap__attach(prog);
   if (err) {
       log_error("Failed to attach BPF skeleton");
       goto cleanup;
   }
+
+  xh->smp = prog;
 
   return 0;
 
@@ -1284,6 +1315,13 @@ llb_xh_init(llb_dp_struct_t *xh)
 
   if (xh->have_sockrwr) {
     if (llb_setup_kern_sock(xh->cgroup_dfl_path) != 0) {
+      assert(0);
+    }
+  }
+
+  xh->have_sockmap = 1;
+  if (xh->have_sockmap) {
+    if (llb_setup_kern_sockmap() != 0) {
       assert(0);
     }
   }
@@ -2850,4 +2888,12 @@ loxilb_main(struct ebpfcfg *cfg)
 
   llb_xh_init(xh);
   return 0;
+}
+
+void
+llb_unload_kern_all(void)
+{
+  llb_unload_kern_mon();
+  llb_unload_kern_sock();
+  llb_unload_kern_sockmap();
 }
