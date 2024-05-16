@@ -35,6 +35,7 @@
 #include "loxilb_libdp.h"
 #include "llb_kern_mon.h"
 #include "loxilb_libdp.skel.h"
+#include "loxilb_libdp.skel1.h"
 #include "../common/pdi.h"
 #include "../common/common_frame.h"
 
@@ -754,6 +755,40 @@ llb_setup_kern_mon(void)
   return 0;
 }
 #endif
+
+static int
+llb_setup_kern_sockmap(void)
+{
+  struct llb_kern_sockmap *prog;
+  int err;
+
+  // Open and load eBPF Program
+  prog = llb_kern_sockmap__open();
+  if (!prog) {
+      log_error("Failed to open and load BPF skeleton");
+      return 1;
+  }
+  err = llb_kern_sockmap__load(prog);
+  if (err) {
+      log_error("Failed to load and verify BPF skeleton");
+      goto cleanup;
+  }
+
+  // Attach the various kProbes
+  err = llb_kern_sockmap__attach(prog);
+  if (err) {
+      log_error("Failed to attach BPF skeleton");
+      goto cleanup;
+  }
+
+  return 0;
+
+cleanup:
+  llb_kern_sockmap__destroy(prog);
+  return err < 0 ? -err : 0;
+
+}
+
 
 static int 
 llb_objmap2fd(struct bpf_object *bpf_obj,

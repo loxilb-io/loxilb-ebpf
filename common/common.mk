@@ -105,6 +105,7 @@ clean:
 	rm -f $(USER_TARGETS) $(XDP_OBJ) $(USER_OBJ) $(TC_OBJ) $(TC_EOBJ) $(MON_OBJ) $(MON_OBJ) $(SOCK_OBJ) $(USER_TARGETS_LIB)
 	rm -f loxilb_dp_debug 
 	rm -f vmlinux vmlinux.h
+	rm -f *skel*.h
 	rm -f $@
 	rm -f *.ll
 	rm -f *~
@@ -140,7 +141,7 @@ $(COMMON_H): %.h: %.c
 $(COMMON_OBJS): %.o: %.h
 	make -C $(COMMON_DIR)
 
-$(USER_TARGETS): %: %.c  $(OBJECT_LIBBPF) Makefile $(COMMON_MK) $(COMMON_OBJS) $(KERN_USER_H) $(EXTRA_DEPS) %.skel.h
+$(USER_TARGETS): %: %.c  $(OBJECT_LIBBPF) Makefile $(COMMON_MK) $(COMMON_OBJS) $(KERN_USER_H) $(EXTRA_DEPS) %.skel.h %.skel1.h
 	$(CC) -Wall $(CFLAGS) $(LDFLAGS) -o loxilb_dp_debug loxilb_dp_debug.c $(COMMON_OBJS) $< $(LIBS)
 	@touch $@
 
@@ -234,7 +235,7 @@ $(SOCK_OBJ): %.o: %.c  Makefile $(COMMON_MK) $(KERN_USER_H) $(EXTRA_DEPS)
 	@sudo cp $@ /opt/loxilb/
 	@#sudo pahole -J /opt/loxilb/$@
 
-$(SM_OBJ): %.o: %.c  Makefile $(COMMON_MK) $(KERN_USER_H) $(EXTRA_DEPS) 
+$(SM_OBJ): %.o: %.c  Makefile $(COMMON_MK) $(KERN_USER_H) $(EXTRA_DEPS) vmlinux
 	$(CLANG) \
 		-target bpf \
 		-D __BPF_TRACING__ \
@@ -246,6 +247,11 @@ $(SM_OBJ): %.o: %.c  Makefile $(COMMON_MK) $(KERN_USER_H) $(EXTRA_DEPS)
 
 # Generate BPF skeletons
 %.skel.h: $(MON_OBJ)
+	$(call msg,GEN-SKEL,$@)
+	$(BPFTOOL) gen skeleton $< > $@
+
+# Generate BPF skeletons
+%.skel1.h: $(SM_OBJ)
 	$(call msg,GEN-SKEL,$@)
 	$(BPFTOOL) gen skeleton $< > $@
 
