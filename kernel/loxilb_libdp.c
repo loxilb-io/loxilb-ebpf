@@ -96,6 +96,7 @@ typedef struct llb_dp_struct
   struct llb_kern_mon *monp;
   const char *cgroup_dfl_path;
   int cgfd;
+  int smfd;
   int egr_hooks;
   int nodenum;
   llb_dp_map_t maps[LL_DP_MAX_MAP];
@@ -169,8 +170,8 @@ libbpf_print_fn(enum libbpf_print_level level,
                 va_list args)
 {
   /* Ignore debug-level libbpf logs */
-  if (level == LIBBPF_DEBUG)
-    return 0;
+//  if (level == LIBBPF_DEBUG)
+//    return 0;
   return vfprintf(stderr, format, args);
 }
 
@@ -681,7 +682,7 @@ llb_setup_kern_sock(const char *cgroup_path)
     xh->cgfd = cgfd;
   }
 
-  log_info("loxilb kern-sock attached (%d)\n", map_fd);
+  log_info("loxilb kern-sock attached (%d)", map_fd);
   return 0;
 err1:
   bpf_prog_detach(cgfd, BPF_CGROUP_INET4_CONNECT);
@@ -785,6 +786,10 @@ static void
 llb_unload_kern_sockmap(void)
 {
   if (xh->have_sockmap) {
+    if (xh->smfd > 0) {
+      bpf_prog_detach(xh->smfd, BPF_SK_MSG_VERDICT);
+      log_debug("deattached sockdir");
+    }
     if (xh->cgfd > 0) {
       bpf_prog_detach(xh->cgfd, BPF_CGROUP_SOCK_OPS);
       log_debug("deattached sockops");
@@ -795,10 +800,14 @@ llb_unload_kern_sockmap(void)
 static int
 llb_setup_kern_sockmap(const char *cgroup_path)
 {
-l struct bpf_map *map;
+  struct bpf_program *prog;
+  struct bpf_map *map;
+  struct bpf_map *map2;
   struct bpf_object *bpf_obj;
+  struct bpf_object *bpf_obj2;
   int cgfd = -1;
   int pfd;
+  int pfd2;
 
   if (xh->cgfd <= 0) {
     cgfd = cgroup_create_get(cgroup_path);
@@ -814,6 +823,7 @@ l struct bpf_map *map;
       log_error("sockmap: load failed");
       goto err;
     }
+
   } else {
     cgfd = xh->cgfd;
   }
@@ -834,12 +844,51 @@ l struct bpf_map *map;
     goto err1;
   }
 
+  bpf_obj2 = bpf_object__open(LLB_SOCK_DIR_IMG_BPF);
+  map2 = bpf_object__find_map_by_name(bpf_obj2, "sock_proxy_map");
+  if (map2 == NULL) {
+    log_error("sockdir: find map failed");
+    goto err;
+  }
+
+  if (bpf_map__reuse_fd(map2, map_fd)) {
+    log_error("sockdir: reusefd failed");
+    goto err1;
+  }
+
+  if (bpf_object__load(bpf_obj2)) {
+    log_error("sockdir: obj load failed");
+    goto err1;
+  }
+
+  map_fd = bpf_map__fd(map2);
+  if (map_fd < 0) {
+    log_error("sockdir: map get failed");
+    goto err1;
+  }
+
+#if 0
+  if (bpf_prog_load(LLB_SOCK_DIR_IMG_BPF, BPF_PROG_TYPE_SK_MSG, &bpf_obj2, &pfd2)) {
+    log_error("sockdir: load failed");
+    goto err;
+  }
+#endif
+
+  bpf_object__for_each_program(prog, bpf_obj2) {
+    pfd2 = bpf_program__fd(prog);
+    if (bpf_prog_attach(pfd2, map_fd, BPF_SK_MSG_VERDICT, 0)) {
+      log_error("sockdir: failed to attach\n");
+      goto err1;
+    }
+  }
+
   xh->maps[LL_DP_SOCK_PROXY_MAP].map_fd = map_fd;
   if (xh->cgfd <= 0) {
     xh->cgfd = cgfd;
   }
+  xh->smfd = map_fd;
 
-  log_info("loxilb kern-sock-map attached (%d)\n", map_fd);
+  log_info("loxilb kern-sock-map attached (%d)", map_fd);
   return 0;
 err1:
   bpf_prog_detach(cgfd, BPF_CGROUP_SOCK_OPS);

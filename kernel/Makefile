@@ -19,6 +19,7 @@ USER_TARGETS := loxilb_libdp
 SOCK_TARGETS       := llb_kern_sock
 SOCKMAP_TARGETS    := llb_kern_sockmap
 SOCKSTREAM_TARGETS := llb_kern_sockstream
+SOCKDIR_TARGETS    := llb_kern_sockdirect
 
 LLC ?= llc
 CLANG ?= clang

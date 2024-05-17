@@ -14,6 +14,7 @@
 #define LLB_FP_IMG_BPF_EGR    "/opt/loxilb/llb_ebpf_emain.o"
 #define LLB_SOCK_ADDR_IMG_BPF "/opt/loxilb/llb_kern_sock.o"
 #define LLB_SOCK_MAP_IMG_BPF  "/opt/loxilb/llb_kern_sockmap.o"
+#define LLB_SOCK_DIR_IMG_BPF  "/opt/loxilb/llb_kern_sockdirect.o"
 #define LLB_DB_MAP_PDIR       "/opt/loxilb/dp/bpf"
 
 #define LLB_MAX_LB_NODES      (2)
