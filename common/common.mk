@@ -21,12 +21,14 @@ TC_EC = ${TC_ETARGETS:=.c}
 MON_C = ${MON_TARGETS:=.c}
 SOCK_C = ${SOCK_TARGETS:=.c}
 SM_C = ${SOCKMAP_TARGETS:=.c}
+STREAM_C = ${SOCKSTREAM_TARGETS:=.c}
 XDP_OBJ = ${XDP_C:.c=.o}
 TC_OBJ = ${TC_C:.c=.o}
 TC_EOBJ = ${TC_EC:.c=.o}
 MON_OBJ = ${MON_C:.c=.o}
 SOCK_OBJ = ${SOCK_C:.c=.o}
 SM_OBJ = ${SM_C:.c=.o}
+STREAM_OBJ = ${STREAM_C:.c=.o}
 USER_C := ${USER_TARGETS:=.c}
 USER_OBJ := ${USER_C:.c=.o}
 USER_TARGETS_LIB := libloxilbdp.a
@@ -94,7 +96,7 @@ BPF_CFLAGS ?= -I$(LIBBPF_DIR)/build/usr/include/ -I../headers/ -I/usr/include/$(
 
 LIBS = $(OBJECT_LIBBPF) -lelf $(USER_LIBS) -lz -lpthread
 
-all: llvm-check $(USER_TARGETS) $(XDP_OBJ) $(TC_OBJ) $(TC_EOBJ) $(MON_OBJ) $(SOCK_OBJ) $(SM_OBJ) $(USER_TARGETS_LIB)
+all: llvm-check $(USER_TARGETS) $(XDP_OBJ) $(TC_OBJ) $(TC_EOBJ) $(MON_OBJ) $(SOCK_OBJ) $(SM_OBJ) $(STREAM_OBJ) $(USER_TARGETS_LIB)
 
 .PHONY: clean $(CLANG) $(LLC)
 
@@ -102,7 +104,7 @@ clean:
 	rm -rf $(LIBBPF_DIR)/build
 	$(MAKE) -C $(LIBBPF_DIR) clean
 	$(MAKE) -C $(COMMON_DIR) clean
-	rm -f $(USER_TARGETS) $(XDP_OBJ) $(USER_OBJ) $(TC_OBJ) $(TC_EOBJ) $(MON_OBJ) $(MON_OBJ) $(SOCK_OBJ) $(USER_TARGETS_LIB)
+	rm -f $(USER_TARGETS) $(XDP_OBJ) $(USER_OBJ) $(TC_OBJ) $(TC_EOBJ) $(MON_OBJ) $(MON_OBJ) $(SOCK_OBJ) $(SM_OBJ) $(STREAM_OBJ) $(USER_TARGETS_LIB)
 	rm -f loxilb_dp_debug 
 	rm -f vmlinux vmlinux.h
 	rm -f *skel*.h
@@ -141,7 +143,7 @@ $(COMMON_H): %.h: %.c
 $(COMMON_OBJS): %.o: %.h
 	make -C $(COMMON_DIR)
 
-$(USER_TARGETS): %: %.c  $(OBJECT_LIBBPF) Makefile $(COMMON_MK) $(COMMON_OBJS) $(KERN_USER_H) $(EXTRA_DEPS) %.skel.h %.skel1.h
+$(USER_TARGETS): %: %.c  $(OBJECT_LIBBPF) Makefile $(COMMON_MK) $(COMMON_OBJS) $(KERN_USER_H) $(EXTRA_DEPS) %.skel.h
 	$(CC) -Wall $(CFLAGS) $(LDFLAGS) -o loxilb_dp_debug loxilb_dp_debug.c $(COMMON_OBJS) $< $(LIBS)
 	@touch $@
 
@@ -245,13 +247,18 @@ $(SM_OBJ): %.o: %.c  Makefile $(COMMON_MK) $(KERN_USER_H) $(EXTRA_DEPS) vmlinux
 		-O2 -g -c -o ${@:.o=.o} $<
 	@sudo cp $@ /opt/loxilb/
 
-# Generate BPF skeletons
-%.skel.h: $(MON_OBJ)
-	$(call msg,GEN-SKEL,$@)
-	$(BPFTOOL) gen skeleton $< > $@
+$(STREAM_OBJ): %.o: %.c  Makefile $(COMMON_MK) $(KERN_USER_H) $(EXTRA_DEPS)
+	$(CLANG) \
+		-target bpf \
+		-D __BPF_TRACING__ \
+		-D__TARGET_ARCH_$(ARCH) \
+		$(BPF_CFLAGS) \
+		$(CLANG_BPF_SYS_INCLUDES) \
+		-O2 -g -c -o ${@:.o=.o} $<
+	@sudo cp $@ /opt/loxilb/
 
 # Generate BPF skeletons
-%.skel1.h: $(SM_OBJ)
+%.skel.h: $(MON_OBJ)
 	$(call msg,GEN-SKEL,$@)
 	$(BPFTOOL) gen skeleton $< > $@
 

@@ -13,6 +13,7 @@
 #define LLB_FP_IMG_BPF        "/opt/loxilb/llb_ebpf_main.o"
 #define LLB_FP_IMG_BPF_EGR    "/opt/loxilb/llb_ebpf_emain.o"
 #define LLB_SOCK_ADDR_IMG_BPF "/opt/loxilb/llb_kern_sock.o"
+#define LLB_SOCK_MAP_IMG_BPF  "/opt/loxilb/llb_kern_sockmap.o"
 #define LLB_DB_MAP_PDIR       "/opt/loxilb/dp/bpf"
 
 #define LLB_MAX_LB_NODES      (2)
@@ -46,6 +47,7 @@
 #define LLB_MAX_MHOSTS        (3)
 #define LLB_MAX_SCTP_CHUNKS_INIT (8)
 #define LLB_RWR_MAP_ENTRIES   (1024)
+#define LLB_SOCK_MAP_SZ       (1024)
 
 #define LLB_DP_SUNP_PGM_ID2    (6)
 #define LLB_DP_CRC_PGM_ID2     (5)
@@ -134,6 +136,7 @@ enum llb_dp_tid {
   LL_DP_CP_PERF_RING,
   LL_DP_NAT_EP_MAP,
   LL_DP_SOCK_RWR_MAP,
+  LL_DP_SOCK_PROXY_MAP,
   LL_DP_MAX_MAP
 };
 
@@ -800,6 +803,14 @@ struct dp_ct_ctrtact {
   __u32 start;
   __u32 counter;
   __u32 entries;
+};
+
+struct llb_sockmap_key {
+  __be32 dip;
+  __be32 sip;
+  __be16 dport;
+  __be16 sport;
+  __be32 res;
 };
 
 struct ll_dp_pmdi {
