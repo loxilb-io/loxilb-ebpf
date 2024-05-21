@@ -25,7 +25,6 @@ int llb_setup_sockmap(struct bpf_sock_ops *bpf_sops)
                                  .sip = bpf_sops->local_ip4,
                                  .dport = bpf_sops->remote_port >> 16,
                                  .sport = bpf_htonl(bpf_sops->local_port) >> 16,
-                                 .res = 0
                                };
 
   etype = bpf_sops->op;
@@ -35,12 +34,20 @@ int llb_setup_sockmap(struct bpf_sock_ops *bpf_sops)
     bpf_printk("passive:lport %lu ", bpf_ntohs(key.sport));
 
 		if (key.sport == bpf_htons(9090)) {
+      key.dip = 0;
+      key.sip = 0;
+      key.dport = 0;
+
 			bpf_sock_hash_update(bpf_sops, &sock_proxy_map, &key, BPF_NOEXIST);
 		}
 		break;
   }
 	case BPF_SOCK_OPS_ACTIVE_ESTABLISHED_CB: {
-    bpf_printk("passive:dport %lu ", bpf_ntohs(key.dport));
+      key.dip = 0;
+      key.sip = 0;
+      key.sport = 0;
+
+    bpf_printk("active:dport %lu ", bpf_ntohs(key.dport));
 
     if (key.dport == bpf_htons(9090)) {
       bpf_sock_hash_update(bpf_sops, &sock_proxy_map, &key, BPF_NOEXIST);

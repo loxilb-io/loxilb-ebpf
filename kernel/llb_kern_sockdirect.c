@@ -24,11 +24,19 @@ int llb_sockmap_dir(struct sk_msg_md *mmd)
                                  .sip = mmd->remote_ip4,
                                  .dport = bpf_htonl(mmd->local_port) >> 16,
                                  .sport = mmd->remote_port >> 16,
-                                 .res = 0
                                };
 
+  if (key.sport == bpf_htons(9090)) {
+    key.dip = 0;
+    key.sip = 0;
+    key.dport = 0;
+  } else if (key.dport == bpf_htons(9090)) {
+    key.dip = 0;
+    key.sip = 0;
+    key.sport = 0;
+  }
 
-  bpf_printk("sport %lu dport %lu", bpf_ntohs(key.sport), bpf_ntohs(key.dport));
+  bpf_printk("sockdir: sport %lu dport %lu", bpf_ntohs(key.sport), bpf_ntohs(key.dport));
   if (key.sport == bpf_htons(9090) ||
       key.dport == bpf_htons(9090)) { 
     bpf_msg_redirect_hash(mmd, &sock_proxy_map, &key, BPF_F_INGRESS);

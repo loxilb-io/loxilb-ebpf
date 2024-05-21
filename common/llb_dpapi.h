@@ -15,6 +15,7 @@
 #define LLB_SOCK_ADDR_IMG_BPF "/opt/loxilb/llb_kern_sock.o"
 #define LLB_SOCK_MAP_IMG_BPF  "/opt/loxilb/llb_kern_sockmap.o"
 #define LLB_SOCK_DIR_IMG_BPF  "/opt/loxilb/llb_kern_sockdirect.o"
+#define LLB_SOCK_SP_IMG_BPF   "/opt/loxilb/llb_kern_sockstream.o"
 #define LLB_DB_MAP_PDIR       "/opt/loxilb/dp/bpf"
 
 #define LLB_MAX_LB_NODES      (2)
@@ -48,7 +49,8 @@
 #define LLB_MAX_MHOSTS        (3)
 #define LLB_MAX_SCTP_CHUNKS_INIT (8)
 #define LLB_RWR_MAP_ENTRIES   (1024)
-#define LLB_SOCK_MAP_SZ       (1024)
+#define LLB_SOCK_MAP_SZ       (17*1024)
+#define LLB_SOCKID_MAP_SZ     (17*1024)
 
 #define LLB_DP_SUNP_PGM_ID2    (6)
 #define LLB_DP_CRC_PGM_ID2     (5)
@@ -809,9 +811,19 @@ struct dp_ct_ctrtact {
 struct llb_sockmap_key {
   __be32 dip;
   __be32 sip;
-  __be16 dport;
-  __be16 sport;
-  __be32 res;
+  __be32 dport;
+  __be32 sport;
+};
+
+struct sock_str_key {
+  __u32 xip;
+  __u16 xport;
+  __u16 res;
+};
+
+struct sock_str_val {
+  __u32 start;
+  __u32 num;
 };
 
 struct ll_dp_pmdi {
