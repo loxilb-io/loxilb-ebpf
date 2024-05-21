@@ -20,6 +20,7 @@
 #include <pthread.h>
 #include <netdb.h>
 #include <poll.h>
+#include <bpf.h>
 #include <ifaddrs.h>
 #include <sys/time.h>
 #include <sys/resource.h>
@@ -27,8 +28,11 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <linux/types.h>
 #include "log.h"
 #include "sockproxy.h"
+#include "common_pdi.h"
+#include "llb_dpapi.h"
 
 #define SP_MAX_ACCEPT_QSZ 2048
 #define SP_MAX_POLLFD_QSZ 8192

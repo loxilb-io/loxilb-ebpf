@@ -6,13 +6,6 @@
 #ifndef __SOCKPROXY_H__
 #define __SOCKPROXY_H__
 
-struct llb_sockmap_key {
-  uint32_t dip;
-  uint32_t sip;
-  uint32_t dport;
-  uint32_t sport;
-};
-
 struct proxy_ent {
   uint32_t xip;
   uint16_t xport;
