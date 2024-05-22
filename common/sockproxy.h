@@ -23,10 +23,12 @@ struct proxy_val {
   struct proxy_ent eps[MAX_PROXY_EP];
 };
 
+typedef int (*sockmap_cb_t)(struct llb_sockmap_key *key, int fd, int doadd);
+
 int sockproxy_find_endpoint(uint32_t xip, uint16_t xport, uint32_t *epip, uint16_t *epport);
 int sockproxy_add_entry(struct proxy_ent *new_ent, struct proxy_val *val);
 int sockproxy_delete_entry(struct proxy_ent *ent);
 void sockproxy_dump_entry(void);
-int sockproxy_main();
+int sockproxy_main(sockmap_cb_t cb);
 
 #endif

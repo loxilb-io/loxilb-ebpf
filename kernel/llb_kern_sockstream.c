@@ -25,6 +25,7 @@ struct {
 } sock_proxy_map2 SEC(".maps");
 #else
 #define sock_proxy_map2 sock_proxy_map
+#include "../common/llb_sockmap.h"
 #endif
 
 SEC("sk_skb/stream_parser")
@@ -39,12 +40,15 @@ int llb_sock_verdict(struct __sk_buff *skb)
   struct llb_sockmap_key key = { .dip = skb->remote_ip4,
                                  .sip = skb->local_ip4,
                                  .dport = skb->remote_port,
-                                 .sport = bpf_ntohl(skb->local_port)
+                                 .sport = bpf_htonl(skb->local_port)
                                 };
 
-  bpf_printk("sockstream: family %d", skb->family);
-  bpf_printk("sockstream: dip 0x%lx sip 0x%lx", bpf_ntohl(skb->remote_ip4), bpf_ntohl(skb->local_ip4));
-  bpf_printk("sockstream: dportt %lu sport %lu", bpf_ntohl(skb->remote_port), (skb->local_port));
+  if (skb->family != AF_INET) {
+    return SK_PASS;
+  }
+
+  bpf_printk("sockstream: dip 0x%lx sip 0x%lx", key.dip, key.sip);
+  bpf_printk("sockstream: dport 0x%lx sport 0x%lx", key.dport, key.sport);
 
   return bpf_sk_redirect_hash(skb, &sock_proxy_map2,  &key, 0);
 }

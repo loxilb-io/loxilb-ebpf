@@ -37,6 +37,7 @@
 #include "loxilb_libdp.skel.h"
 #include "../common/pdi.h"
 #include "../common/common_frame.h"
+#include "../common/sockproxy.h"
 
 #ifndef PATH_MAX
 #define PATH_MAX  4096
@@ -787,8 +788,13 @@ llb_unload_kern_sockmap(void)
 {
   if (xh->have_sockmap) {
     if (xh->smfd > 0) {
+#ifdef HAVE_SOCKMAP_SKMSG
       bpf_prog_detach(xh->smfd, BPF_SK_MSG_VERDICT);
-      log_debug("deattached sockdir");
+#else
+      bpf_prog_detach(xh->smfd, BPF_SK_SKB_STREAM_VERDICT);
+      bpf_prog_detach(xh->smfd, BPF_SK_SKB_STREAM_PARSER);
+#endif
+      log_debug("deattached sockmap");
     }
     if (xh->cgfd > 0) {
       bpf_prog_detach(xh->cgfd, BPF_CGROUP_SOCK_OPS);
@@ -797,18 +803,169 @@ llb_unload_kern_sockmap(void)
   }
 }
 
+#ifdef HAVE_SOCKMAP_SKMSG
+static int
+llb_setup_kern_sockmap_skmsg_helper(int map_fd)
+{
+  struct bpf_program *prog;
+  struct bpf_map *map2;
+  struct bpf_object *bpf_obj2;
+  int pfd2;
+
+  bpf_obj2 = bpf_object__open(LLB_SOCK_DIR_IMG_BPF);
+  map2 = bpf_object__find_map_by_name(bpf_obj2, "sock_proxy_map");
+  if (map2 == NULL) {
+    log_error("sockdir: find map failed");
+    goto err;
+  }
+
+  if (bpf_map__reuse_fd(map2, map_fd)) {
+    log_error("sockdir: reusefd failed");
+    goto err;
+  }
+
+  if (bpf_object__load(bpf_obj2)) {
+    log_error("sockdir: obj load failed");
+    goto err;
+  }
+
+  map_fd = bpf_map__fd(map2);
+  if (map_fd < 0) {
+    log_error("sockdir: map get failed");
+    goto err;
+  }
+
+#if 0
+  if (bpf_prog_load(LLB_SOCK_DIR_IMG_BPF, BPF_PROG_TYPE_SK_MSG, &bpf_obj2, &pfd2)) {
+    log_error("sockdir: load failed");
+    goto err;
+  }
+#endif
+
+  bpf_object__for_each_program(prog, bpf_obj2) {
+    pfd2 = bpf_program__fd(prog);
+    if (bpf_prog_attach(pfd2, map_fd, BPF_SK_MSG_VERDICT, 0)) {
+      log_error("sockdir: failed to attach\n");
+      goto err1;
+    }
+  }
+  return map_fd;
+
+err1:
+  bpf_object__for_each_program(prog, bpf_obj2) {
+    pfd2 = bpf_program__fd(prog);
+    bpf_prog_detach(map_fd, BPF_SK_MSG_VERDICT);
+  }
+err:
+  return -1;
+}
+
+#else
+
+static int
+llb_setup_kern_sockmap_strparser_helper(int sockmap_fd)
+{
+  struct bpf_program *prog;
+  struct bpf_map *map2;
+  struct bpf_object *bpf_obj2;
+  int map_fd;
+  int pfd2;
+
+  bpf_obj2 = bpf_object__open(LLB_SOCK_SP_IMG_BPF);
+#ifdef HAVE_SOCKOPS
+  map2 = bpf_object__find_map_by_name(bpf_obj2, "sock_proxy_map");
+#else
+  map2 = bpf_object__find_map_by_name(bpf_obj2, "sock_proxy_map2");
+#endif
+  if (map2 == NULL) {
+    log_error("sockstream: find map failed");
+    goto err;
+  }
+
+#ifdef HAVE_SOCKOPS
+  if (bpf_map__reuse_fd(map2, sockmap_fd)) {
+    log_error("sockdir: reusefd failed");
+    goto err;
+  }
+#endif
+
+  if (bpf_object__load(bpf_obj2)) {
+    log_error("sockstream: obj load failed");
+    goto err;
+  }
+
+  map_fd = bpf_map__fd(map2);
+  if (map_fd < 0) {
+    log_error("sockstream: map get failed");
+    goto err;
+  }
+
+#if 0
+  if (bpf_prog_load(LLB_SOCK_DIR_IMG_BPF, BPF_PROG_TYPE_SK_MSG, &bpf_obj2, &pfd2)) {
+    log_error("sockdir: load failed");
+    goto err;
+  }
+#endif
+
+  bpf_object__for_each_program(prog, bpf_obj2) {
+    pfd2 = bpf_program__fd(prog);
+    if (!strcmp(bpf_program__name(prog), "llb_sock_parser")) {
+      if (bpf_prog_attach(pfd2, map_fd, BPF_SK_SKB_STREAM_PARSER, 0)) {
+        log_error("sockstream: failed to attach stream parser pgm\n");
+        goto err1;
+      }
+    } else if (!strcmp(bpf_program__name(prog), "llb_sock_verdict")) {
+      if (bpf_prog_attach(pfd2, map_fd, BPF_SK_SKB_STREAM_VERDICT, 0)) {
+        log_error("sockstream: failed to attach stream verdict pgm\n");
+        goto err1;
+      }
+    }
+  }
+  return map_fd;
+
+err1:
+  bpf_object__for_each_program(prog, bpf_obj2) {
+    if (!strcmp(bpf_program__name(prog), "llb_sock_parser")) {
+      bpf_prog_detach(map_fd, BPF_SK_SKB_STREAM_PARSER);
+    } else if (!strcmp(bpf_program__name(prog), "llb_sock_verdict")) {
+      bpf_prog_detach(map_fd, BPF_SK_SKB_STREAM_VERDICT);
+    }
+  }
+err:
+  return -1;
+}
+#endif
+
+static int
+llb_sockmap_op(struct llb_sockmap_key *key, int fd, int doadd)
+{
+  if (xh->smfd <= 0) {
+    assert(0);
+  }
+
+  //log_debug("sockstream: dip 0x%lx sip 0x%lx\n", key->dip, key->sip);
+  //log_debug("sockstream: dport 0x%lx sport 0x%lx\n", key->dport, key->sport);
+
+  if (doadd) {
+    return bpf_map_update_elem(xh->smfd, key, &fd, BPF_ANY);
+  } else {
+    return bpf_map_delete_elem(xh->smfd, key);
+  }
+}
+
 static int
 llb_setup_kern_sockmap(const char *cgroup_path)
 {
-  struct bpf_program *prog;
+#ifdef HAVE_SOCKOPS
   struct bpf_map *map;
-  struct bpf_map *map2;
   struct bpf_object *bpf_obj;
-  struct bpf_object *bpf_obj2;
-  int cgfd = -1;
   int pfd;
-  int pfd2;
+#endif
+  int cgfd = -1;
+  int map_fd = -1;
+  int map_fd2 = -1;
 
+#ifdef HAVE_SOCKOPS 
   if (xh->cgfd <= 0) {
     cgfd = cgroup_create_get(cgroup_path);
     if (cgfd < 0) {
@@ -838,62 +995,43 @@ llb_setup_kern_sockmap(const char *cgroup_path)
     goto err;
   }
 
-  int map_fd = bpf_map__fd(map);
+  map_fd = bpf_map__fd(map);
   if (map_fd < 0) {
     log_error("sock_proxy_map get failed\n");
     goto err1;
   }
+#endif
 
-  bpf_obj2 = bpf_object__open(LLB_SOCK_DIR_IMG_BPF);
-  map2 = bpf_object__find_map_by_name(bpf_obj2, "sock_proxy_map");
-  if (map2 == NULL) {
-    log_error("sockdir: find map failed");
-    goto err;
-  }
-
-  if (bpf_map__reuse_fd(map2, map_fd)) {
-    log_error("sockdir: reusefd failed");
+#ifdef HAVE_SOCKMAP_SKMSG
+  map_fd2 = llb_setup_kern_sockmap_skmsg_helper(map_fd);
+  if (map_fd2 < 0) {
+    log_error("sockmap: skmsg helper load failed");
     goto err1;
   }
-
-  if (bpf_object__load(bpf_obj2)) {
-    log_error("sockdir: obj load failed");
+#else
+  map_fd2 = llb_setup_kern_sockmap_strparser_helper(map_fd);
+  if (map_fd2 < 0) {
+    log_error("sockmap: skstream helper load failed");
     goto err1;
-  }
-
-  map_fd = bpf_map__fd(map2);
-  if (map_fd < 0) {
-    log_error("sockdir: map get failed");
-    goto err1;
-  }
-
-#if 0
-  if (bpf_prog_load(LLB_SOCK_DIR_IMG_BPF, BPF_PROG_TYPE_SK_MSG, &bpf_obj2, &pfd2)) {
-    log_error("sockdir: load failed");
-    goto err;
   }
 #endif
 
-  bpf_object__for_each_program(prog, bpf_obj2) {
-    pfd2 = bpf_program__fd(prog);
-    if (bpf_prog_attach(pfd2, map_fd, BPF_SK_MSG_VERDICT, 0)) {
-      log_error("sockdir: failed to attach\n");
-      goto err1;
-    }
-  }
-
-  xh->maps[LL_DP_SOCK_PROXY_MAP].map_fd = map_fd;
+  xh->maps[LL_DP_SOCK_PROXY_MAP].map_fd = map_fd2;
   if (xh->cgfd <= 0) {
     xh->cgfd = cgfd;
   }
-  xh->smfd = map_fd;
+  xh->smfd = map_fd2;
 
-  log_info("loxilb kern-sock-map attached (%d)", map_fd);
+  log_info("loxilb kern-sock-map attached (%d)", map_fd2);
   return 0;
 err1:
   bpf_prog_detach(cgfd, BPF_CGROUP_SOCK_OPS);
+#ifdef HAVE_SOCKOPS
 err:
-  close(cgfd);
+#endif
+  if (xh->have_sockrwr == 0 && cgfd > 0) {
+    close(cgfd);
+  }
   return -1;
 }
 
@@ -1406,6 +1544,10 @@ llb_xh_init(llb_dp_struct_t *xh)
   }
 
   init_throttler(&xh->cpt, 50);
+
+  if (sockproxy_main(llb_sockmap_op)) {
+    assert(0);
+  }
 
   return;
 }
@@ -2961,11 +3103,8 @@ loxilb_main(struct ebpfcfg *cfg)
       xh->cgroup_dfl_path = CGROUP_PATH;
     }
 
-    // FIXME - For test
-    if (xh->have_sockrwr != 0) {
-      xh->have_sockrwr = 0;
-      xh->have_sockmap = 1;
-    }
+    // FIXME - Experimental
+    xh->have_sockmap = 1;
     xh->nodenum = cfg->nodenum;
     xh->egr_hooks = cfg->egr_hooks;
     xh->logfp = fp;

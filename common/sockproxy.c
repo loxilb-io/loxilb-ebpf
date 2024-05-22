@@ -51,7 +51,7 @@ struct proxy_struct {
   pthread_rwlock_t lock;
   pthread_t proxy_thr;
   struct proxy_map_ent *head;
-  int (*sockmap_cb)(int id, int fd);
+  int (*sockmap_cb)(struct llb_sockmap_key *key, int fd, int doadd);
 };
 
 #define PROXY_LOCK()    pthread_rwlock_wrlock(&proxy_struct->lock)
@@ -71,13 +71,13 @@ proxy_skmap_key_from_fd(int fd, struct llb_sockmap_key *skmap_key)
     return -1;
   }
   skmap_key->sip = sin_addr.sin_addr.s_addr;
-  skmap_key->sport = sin_addr.sin_port;
+  skmap_key->sport = sin_addr.sin_port << 16;
 
   if (getpeername(fd, (struct sockaddr*)&sin_addr, &sin_len)) {
     return -1;
   }
   skmap_key->dip = sin_addr.sin_addr.s_addr;
-  skmap_key->dport = sin_addr.sin_port;
+  skmap_key->dport = sin_addr.sin_port << 16;
 
   return 0;
 }
@@ -214,19 +214,19 @@ proxy_looper(void *arg)
         }
 
         log_debug("accept() from %s:%u --> %s:%u",
-               inet_ntoa(*(struct in_addr *)(&key.sip)), key.sport,
-               inet_ntoa(*(struct in_addr *)&key.dip), key.dport);
+               inet_ntoa(*(struct in_addr *)(&key.sip)), key.sport >> 16,
+               inet_ntoa(*(struct in_addr *)&key.dip), key.dport >> 16);
 
-        if (sockproxy_find_endpoint(key.sip, key.sport, &epip, &epport)) {
+        if (sockproxy_find_endpoint(key.sip, key.sport >> 16, &epip, &epport)) {
           log_error("No EP for %s:%u --> %s:%u",
-                 inet_ntoa(*(struct in_addr *)(&key.sip)), key.sport,
-                 inet_ntoa(*(struct in_addr *)&key.dip), key.dport);
+                 inet_ntoa(*(struct in_addr *)(&key.sip)), key.sport >> 16,
+                 inet_ntoa(*(struct in_addr *)&key.dip), key.dport >> 16);
           close(new_sd);
           continue;
         }
         log_debug("EP for %s:%u --> %s:%u ## %s:%u",
-               inet_ntoa(*(struct in_addr *)(&key.sip)), key.sport,
-               inet_ntoa(*(struct in_addr *)&key.dip), key.dport,
+               inet_ntoa(*(struct in_addr *)(&key.sip)), key.sport >> 16,
+               inet_ntoa(*(struct in_addr *)&key.dip), key.dport >> 16,
                inet_ntoa(*(struct in_addr *)(&epip)), ntohs(epport));
 
         memset(&epaddr, 0, sizeof(epaddr));
@@ -254,8 +254,11 @@ proxy_looper(void *arg)
         }
 
         log_debug("connect() %s:%u --> %s:%u",
-               inet_ntoa(*(struct in_addr *)(&rkey.sip)), rkey.sport,
-               inet_ntoa(*(struct in_addr *)&rkey.dip), rkey.dport);
+               inet_ntoa(*(struct in_addr *)(&rkey.sip)), rkey.sport >> 16,
+               inet_ntoa(*(struct in_addr *)&rkey.dip), rkey.dport >> 16);
+
+        proxy_struct->sockmap_cb(&rkey, new_sd, 1);
+        proxy_struct->sockmap_cb(&key, ep_cfd, 1);
 
         fd_pairs[new_sd] = ep_cfd;
         fds[n_fds].fd = new_sd;
@@ -456,17 +459,14 @@ sockproxy_dump_entry(void)
 }
 
 int
-sockproxy_main()
+sockproxy_selftests()
 {
   struct proxy_ent key = { 0 };
   struct proxy_val val = { 0 };
   struct proxy_ent key2 = { 0 };
   int n = 0;
 
-  proxy_struct = calloc(sizeof(struct proxy_struct), 1);
-  assert(0);
-
-  key.xip = inet_addr("127.0.0.1");
+  key.xip = inet_addr("172.17.0.2");
   key.xport = htons(22222);
 
   val.eps[0].xip = inet_addr("127.0.0.1");
@@ -482,14 +482,26 @@ sockproxy_main()
   sockproxy_delete_entry(&key2);
   sockproxy_dump_entry();
 
-  pthread_create(&proxy_struct->proxy_thr, NULL, proxy_looper, NULL);
-
-  while(1) {
+  while(0) {
     sleep(1);
     n++;
     if (n > 10) {
-      //sockproxy_delete_entry(&key);
+      sockproxy_delete_entry(&key);
     }
   }
 
+}
+
+int
+sockproxy_main(sockmap_cb_t sockmap_cb)
+{
+  proxy_struct = calloc(sizeof(struct proxy_struct), 1);
+  if (proxy_struct == NULL) {
+    assert(0);
+  }
+  proxy_struct->sockmap_cb = sockmap_cb;
+
+  sockproxy_selftests();
+
+  pthread_create(&proxy_struct->proxy_thr, NULL, proxy_looper, NULL);
 }
