@@ -368,6 +368,39 @@ sockproxy_find_endpoint(uint32_t xip, uint16_t xport, uint32_t *epip, uint16_t *
   return -1;
 }
 
+static int
+sockproxy_delete_entry__(struct proxy_ent *ent)
+{
+  struct proxy_map_ent *prev = NULL;
+  struct proxy_map_ent *node;
+
+  node = proxy_struct->head;
+
+  while (node) {
+
+    if (cmp_proxy_ent(&node->key, ent)) {
+      break;
+    }
+    prev = node;
+    node = node->next;
+  }
+
+  if (node) {
+    if (prev) {
+      prev->next = node->next;
+    } else {
+      proxy_struct->head = node->next;
+    }
+
+    if (node->val.main_fd > 0) {
+      close(node->val.main_fd);
+    }
+    free(node);
+  }
+
+  return 0;
+}
+
 int
 sockproxy_add_entry(struct proxy_ent *new_ent, struct proxy_val *val)
 {
@@ -407,40 +440,12 @@ sockproxy_add_entry(struct proxy_ent *new_ent, struct proxy_val *val)
 int
 sockproxy_delete_entry(struct proxy_ent *ent)
 {
-  struct proxy_map_ent *prev = NULL;
-  struct proxy_map_ent *node; 
-
+  int ret = 0;
   PROXY_LOCK();
-  node = proxy_struct->head;
-
-  while (node) {
-
-    if (cmp_proxy_ent(&node->key, ent)) {
-      break;
-    }
-    prev = node;
-    node = node->next;
-  }
-
-  
-  if (node) {
-    if (prev) {
-      prev->next = node->next;
-    } else {
-      proxy_struct->head = node->next;
-    }
-
-    if (node->val.main_fd > 0) {
-      close(node->val.main_fd);
-    }
-    free(node);
-  }
-
-
+  ret = sockproxy_delete_entry__(ent);
   PROXY_UNLOCK();
 
-  
-  return 0;
+  return ret;
 }
 
 void
@@ -490,6 +495,7 @@ sockproxy_selftests()
     }
   }
 
+  return 0;
 }
 
 int
@@ -500,8 +506,7 @@ sockproxy_main(sockmap_cb_t sockmap_cb)
     assert(0);
   }
   proxy_struct->sockmap_cb = sockmap_cb;
-
-  sockproxy_selftests();
-
   pthread_create(&proxy_struct->proxy_thr, NULL, proxy_looper, NULL);
+
+  return 0;
 }

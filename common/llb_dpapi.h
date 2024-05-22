@@ -169,7 +169,8 @@ enum {
   DP_SET_ADD_GTP         = 22,
   DP_SET_NEIGH_IPIP      = 23,
   DP_SET_RM_IPIP         = 24,
-  DP_SET_NACT_SESS       = 25
+  DP_SET_NACT_SESS       = 25,
+  DP_SET_FULLPROXY       = 26
 };
 
 struct dp_cmn_act {

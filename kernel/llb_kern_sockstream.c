@@ -15,6 +15,7 @@
 
 #include "../common/common_pdi.h"
 #include "../common/llb_dpapi.h"
+#include "../common/llb_dp_mdi.h"
 
 #ifndef HAVE_SOCKOPS
 struct {
@@ -47,8 +48,8 @@ int llb_sock_verdict(struct __sk_buff *skb)
     return SK_PASS;
   }
 
-  bpf_printk("sockstream: dip 0x%lx sip 0x%lx", key.dip, key.sip);
-  bpf_printk("sockstream: dport 0x%lx sport 0x%lx", key.dport, key.sport);
+  LL_DBG_PRINTK("sockstream: dip 0x%lx sip 0x%lx", key.dip, key.sip);
+  LL_DBG_PRINTK("sockstream: dport 0x%lx sport 0x%lx", key.dport, key.sport);
 
   return bpf_sk_redirect_hash(skb, &sock_proxy_map2,  &key, 0);
 }
