@@ -2113,7 +2113,6 @@ llb_add_map_elem(int tbl, void *k, void *v)
         nk->l4proto == IPPROTO_TCP && nk->v6 == 0) {
       llb_conv_nat2proxy(k, v, &pk, &pv);
       ret = sockproxy_add_entry(&pk, &pv);
-      sockproxy_dump_entry();
       goto out;
     }
   }
@@ -2242,6 +2241,15 @@ llb_del_map_elem(int tbl, void *k)
 
   /* Need some pre-processing for certain maps */
   if (tbl == LL_DP_NAT_MAP) {
+    struct dp_nat_key *nk = k;
+    struct proxy_ent pk = { 0 };
+    struct proxy_val pv = { 0 };
+
+    if (nk->l4proto == IPPROTO_TCP && nk->v6 == 0) {
+      llb_conv_nat2proxy(nk, &t, &pk, &pv);
+      sockproxy_delete_entry(&pk);
+    }
+
     ret = bpf_map_lookup_elem(llb_map2fd(tbl), k, &t);
     if (ret != 0) {
       XH_UNLOCK();
@@ -2260,18 +2268,7 @@ llb_del_map_elem(int tbl, void *k)
 
   /* Need some post-processing for certain maps */
   if (tbl == LL_DP_NAT_MAP) {
-    struct dp_nat_key *nk = k;
-    struct proxy_ent pk = { 0 };
-    struct proxy_val pv = { 0 };
-
     llb_del_map_elem_nat_post_proc(k, &t);
-
-    if (t.ca.act_type == DP_SET_FULLPROXY &&
-        nk->l4proto == IPPROTO_TCP && nk->v6 == 0) {
-      llb_conv_nat2proxy(nk, &t, &pk, &pv);
-      ret = sockproxy_delete_entry(&pk);
-      sockproxy_dump_entry();
-    }
   }
 
   XH_UNLOCK();

@@ -396,7 +396,11 @@ sockproxy_delete_entry__(struct proxy_ent *ent)
       close(node->val.main_fd);
     }
     free(node);
+  } else {
+    return -EINVAL;
   }
+
+  log_info("sockproxy : %s:%u deleted", inet_ntoa(*(struct in_addr *)&ent->xip), ntohs(ent->xport));
 
   return 0;
 }
@@ -413,6 +417,7 @@ sockproxy_add_entry(struct proxy_ent *new_ent, struct proxy_val *val)
 
     if (cmp_proxy_ent(&ent->key, new_ent) &&  cmp_proxy_val(&ent->val, val)) {
       PROXY_UNLOCK();
+      log_info("sockproxy : %s:%u exists", inet_ntoa(*(struct in_addr *)&node->key.xip), ntohs(node->key.xport));
       return -EEXIST;
     }
     ent = ent->next;
@@ -433,6 +438,8 @@ sockproxy_add_entry(struct proxy_ent *new_ent, struct proxy_val *val)
   proxy_struct->head = node;
 
   PROXY_UNLOCK();
+
+  log_info("sockproxy : %s:%u added", inet_ntoa(*(struct in_addr *)&node->key.xip), ntohs(node->key.xport));
   
   return 0;
 }
@@ -457,7 +464,7 @@ sockproxy_dump_entry(void)
   log_info("sockproxy dump:");
 
   while (node) {
-    log_info("%d: key 0x%lx:%u", i, (long unsigned int)node->key.xip, (unsigned int)node->key.xport);
+    log_info("entry (%d) %s:%u ", i, inet_ntoa(*(struct in_addr *)&node->key.xip), ntohs(node->key.xport));
     node = node->next;
     i++;
   }
