@@ -29,6 +29,8 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <linux/types.h>
+#include <linux/tls.h>
+#include <linux/tcp.h>
 #include "log.h"
 #include "sockproxy.h"
 #include "common_pdi.h"
@@ -78,6 +80,53 @@ proxy_skmap_key_from_fd(int fd, struct llb_sockmap_key *skmap_key)
   }
   skmap_key->dip = sin_addr.sin_addr.s_addr;
   skmap_key->dport = sin_addr.sin_port << 16;
+
+  return 0;
+}
+
+static int
+proxy_sock_init_ktls(int fd)
+{
+  int so_buf = 6553500;
+  int err;
+  struct tls12_crypto_info_aes_gcm_128 tls_tx = { 0 };
+  struct tls12_crypto_info_aes_gcm_128 tls_rx = { 0 };
+
+  tls_tx.info.version = TLS_1_2_VERSION;
+  tls_tx.info.cipher_type = TLS_CIPHER_AES_GCM_128;
+
+  tls_rx.info.version = TLS_1_2_VERSION;
+  tls_rx.info.cipher_type = TLS_CIPHER_AES_GCM_128;
+
+  err = setsockopt(fd, 6, TCP_ULP, "tls", sizeof("tls"));
+  if (err) {
+    log_error("setsockopt: TCP_ULP failed error %d\n", err);
+    return -EINVAL;
+  }
+
+  err = setsockopt(fd, SOL_TLS, TLS_TX, (void *)&tls_tx, sizeof(tls_tx));
+  if (err) {
+    log_error("setsockopt: TLS_TX failed error %d\n", err);
+    return -EINVAL;
+  }
+
+  err = setsockopt(fd, SOL_TLS, TLS_RX, (void *)&tls_rx, sizeof(tls_rx));
+  if (err) {
+    log_error("setsockopt: TLS_RX failed error %d\n", err);
+    return -EINVAL;
+  }
+
+  err = setsockopt(fd, SOL_SOCKET, SO_SNDBUF, &so_buf, sizeof(so_buf));
+  if (err) {
+    log_error("setsockopt: SO_SNDBUF failed error %d\n", err);
+    return -EINVAL;
+  }
+
+  err = setsockopt(fd, SOL_SOCKET, SO_RCVBUF, &so_buf, sizeof(so_buf));
+  if (err) {
+    log_error("setsockopt: SO_RCVBUF failed error %d\n", err);
+    return -EINVAL;
+  }
 
   return 0;
 }
@@ -148,6 +197,7 @@ proxy_looper(void *arg)
   struct proxy_map_ent *node;
   uint32_t epip;
   uint16_t epport;
+  uint8_t buffer[4096];
 
   accept_to = SP_ACCEPT_TIMEO_MS;
   timeo = SP_FD_TIMEO_MS;
@@ -207,6 +257,15 @@ proxy_looper(void *arg)
           }
           continue;
         }
+
+#if 1
+        if (proxy_sock_init_ktls(new_sd)) {
+          log_error("tls failed");
+          close(new_sd);
+          continue;
+        }
+#endif
+
         if (proxy_skmap_key_from_fd(new_sd, &key)) {
           log_error("cant get skmap key from fd");
           close(new_sd);
@@ -257,12 +316,13 @@ proxy_looper(void *arg)
                inet_ntoa(*(struct in_addr *)(&rkey.sip)), rkey.sport >> 16,
                inet_ntoa(*(struct in_addr *)&rkey.dip), rkey.dport >> 16);
 
-        proxy_struct->sockmap_cb(&rkey, new_sd, 1);
-        proxy_struct->sockmap_cb(&key, ep_cfd, 1);
+        //proxy_struct->sockmap_cb(&rkey, new_sd, 1);
+        //proxy_struct->sockmap_cb(&key, ep_cfd, 1);
+        proxy_struct->sockmap_cb(&key, new_sd, 1);
 
         fd_pairs[new_sd] = ep_cfd;
         fds[n_fds].fd = new_sd;
-        fds[n_fds].events = POLLRDHUP;
+        fds[n_fds].events = POLLRDHUP;//|POLLIN;
         n_fds++;
       } else if (afds[i].revents & (POLLRDHUP | POLLHUP | POLLERR | POLLNVAL)) {
         close(afds[i].fd);
@@ -286,7 +346,29 @@ proxy_looper(void *arg)
         close(fds[i].fd);
         fds[i].fd = -1;
       }
+#if 0
+      if (fds[i].revents & (POLLIN)) {
+          for (i = 0; i < 1024; i++) {
+            rc = recv(fds[i].fd, buffer, sizeof(buffer), 0);
+            if (rc < 0) {
+              if (errno == EWOULDBLOCK) {
+                break;
+              }
+              perror("");
+              //if (fds[i].fd > 0 && fds[i].fd < SP_MAX_FDPAIR_SZ && fd_pairs[fds[i].fd] > 0) {
+              //  close(fd_pairs[fds[i].fd]);
+              //  fd_pairs[fds[i].fd] = -1;
+              //}
+              //close(fds[i].fd);
+              //fds[i].fd = -1;
+              break;
+            } else {
+              printf("RCVD DATA %d", rc); 
+            }
+          }
+      }
     }
+#endif
 
     for (i = 0; i < n_fds; i++) {
       if (fds[i].fd == -1) {
