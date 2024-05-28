@@ -258,14 +258,6 @@ proxy_looper(void *arg)
           continue;
         }
 
-#if 1
-        if (proxy_sock_init_ktls(new_sd)) {
-          log_error("tls failed");
-          close(new_sd);
-          continue;
-        }
-#endif
-
         if (proxy_skmap_key_from_fd(new_sd, &key)) {
           log_error("cant get skmap key from fd");
           close(new_sd);
@@ -283,6 +275,7 @@ proxy_looper(void *arg)
           close(new_sd);
           continue;
         }
+
         log_debug("EP for %s:%u --> %s:%u ## %s:%u",
                inet_ntoa(*(struct in_addr *)(&key.sip)), key.sport >> 16,
                inet_ntoa(*(struct in_addr *)&key.dip), key.dport >> 16,
@@ -316,14 +309,27 @@ proxy_looper(void *arg)
                inet_ntoa(*(struct in_addr *)(&rkey.sip)), rkey.sport >> 16,
                inet_ntoa(*(struct in_addr *)&rkey.dip), rkey.dport >> 16);
 
-        //proxy_struct->sockmap_cb(&rkey, new_sd, 1);
-        //proxy_struct->sockmap_cb(&key, ep_cfd, 1);
-        proxy_struct->sockmap_cb(&key, new_sd, 1);
+        proxy_struct->sockmap_cb(&rkey, new_sd, 1);
+        proxy_struct->sockmap_cb(&key, ep_cfd, 1);
+
+#ifdef HAVE_SOCKMAP_KTLS
+        if (proxy_sock_init_ktls(new_sd)) {
+          log_error("tls failed");
+          close(new_sd);
+          continue;
+        }
+#endif
 
         fd_pairs[new_sd] = ep_cfd;
         fds[n_fds].fd = new_sd;
-        fds[n_fds].events = POLLRDHUP;//|POLLIN;
+        fds[n_fds].events = POLLRDHUP|POLLIN;
         n_fds++;
+
+        fd_pairs[ep_cfd] = new_sd;
+        fds[n_fds].fd = ep_cfd;
+        fds[n_fds].events = POLLRDHUP|POLLIN;
+        n_fds++;
+
       } else if (afds[i].revents & (POLLRDHUP | POLLHUP | POLLERR | POLLNVAL)) {
         close(afds[i].fd);
         afds[i].fd = -1;
@@ -346,9 +352,8 @@ proxy_looper(void *arg)
         close(fds[i].fd);
         fds[i].fd = -1;
       }
-#if 0
       if (fds[i].revents & (POLLIN)) {
-          for (i = 0; i < 1024; i++) {
+          for (j = 0; j < 1024; j++) {
             rc = recv(fds[i].fd, buffer, sizeof(buffer), 0);
             if (rc < 0) {
               if (errno == EWOULDBLOCK) {
@@ -363,12 +368,11 @@ proxy_looper(void *arg)
               //fds[i].fd = -1;
               break;
             } else {
-              printf("RCVD DATA %d", rc); 
+              printf("RCVD DATA %d\n", rc);
             }
           }
       }
     }
-#endif
 
     for (i = 0; i < n_fds; i++) {
       if (fds[i].fd == -1) {
