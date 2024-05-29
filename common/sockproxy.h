@@ -6,6 +6,20 @@
 #ifndef __SOCKPROXY_H__
 #define __SOCKPROXY_H__
 
+struct proxy_cache {
+  void *cache;
+  uint16_t off;
+  size_t len;
+  struct proxy_cache *next;
+  uint8_t data[0];
+};
+
+struct proxy_fd_ent {
+  int fd;
+  int rfd;
+  struct proxy_cache *cache_head;
+};
+
 struct proxy_ent {
   uint32_t xip;
   uint16_t xport;

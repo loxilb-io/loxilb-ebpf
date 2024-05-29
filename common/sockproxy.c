@@ -63,6 +63,120 @@ struct proxy_struct {
 struct proxy_struct *proxy_struct;
 
 static int
+add_proxy_cache(struct proxy_fd_ent *ent, uint8_t *cache, size_t len)
+{
+  struct proxy_cache *new;
+  struct proxy_cache *curr = ent->cache_head;
+  struct proxy_cache **prev = &ent->cache_head;
+
+  new  = calloc(1, sizeof(struct proxy_cache)+len);
+  assert(new);
+  new->cache = new->data;
+  memcpy(new->cache, cache, len);
+  new->off = 0;;
+  new->len = len;
+
+  while (curr) {
+    prev = &curr->next;
+    curr = curr->next;
+  }
+
+  if (prev) {
+    *prev = new;
+  }
+
+  return 0;
+}
+
+static void
+destroy_proxy_cache(struct proxy_fd_ent *ent)
+{
+  struct proxy_cache *curr = ent->cache_head;
+  struct proxy_cache *next;
+
+  while (curr) {
+    next = curr->next;
+    free(curr);
+    curr = next;
+  }
+  ent->cache_head = NULL;
+}
+
+static void
+display_proxy_cache(struct proxy_fd_ent *ent)
+{
+  int i = 0;
+  struct proxy_cache *curr = ent->cache_head;
+  struct proxy_cache *next;
+
+  while (curr) {
+    printf("%d:curr %p\n", i, curr);
+    curr = curr->next;
+    i++;
+  }
+}
+
+static int
+xmit_proxy_cache(struct proxy_fd_ent *ent)
+{
+  struct proxy_cache *curr = ent->cache_head;
+  struct proxy_cache *tmp = NULL;
+  int n = 0;
+
+  while (curr) {
+    n = send(ent->fd, (uint8_t *)(curr->cache) + curr->off, curr->len, 0);
+    if (n != curr->len) {
+      if (n >= 0) {
+        /* errno == EAGAIN || errno == EWOULDBLOCK */
+        curr->off += n;
+        curr->len -= n;
+        printf("partial send\n");
+        continue;
+      } else /*if (n < 0)*/ {
+        printf("Failed to send\n");
+        return -1;
+      }
+    }
+
+    tmp = curr;
+
+    curr = curr->next;
+    ent->cache_head = curr;
+
+    if (tmp)
+      free(tmp);
+
+  }
+  ent->cache_head = NULL;
+  return 0;
+}
+
+static int
+try_xmit_proxy(struct proxy_fd_ent *ent, void *msg, size_t len)
+{
+  int n;
+
+  xmit_proxy_cache(ent);
+
+  n = send(ent->rfd, msg, len, 0);
+  if (n != len) {
+    if (n >= 0) {
+      add_proxy_cache(&ent, (uint8_t *)(msg) + n, len - n);
+      return 0;
+    } else /*if (n < 0)*/ {
+      if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) {
+        add_proxy_cache(&ent, msg, len);
+        return 0;
+      }
+      printf("Failed to send\n");
+      return -1;
+    }
+  }
+
+  return 0;
+}
+
+static int
 proxy_skmap_key_from_fd(int fd, struct llb_sockmap_key *skmap_key)
 {
   struct sockaddr_in sin_addr;
@@ -192,7 +306,8 @@ proxy_looper(void *arg)
   struct pollfd afds[SP_MAX_ACCEPT_QSZ];
   struct pollfd fds[SP_MAX_POLLFD_QSZ];
   int new_afds[SP_MAX_NEWFD_QSZ];
-  int fd_pairs[SP_MAX_FDPAIR_SZ];
+  //int fd_pairs[SP_MAX_FDPAIR_SZ];
+  struct proxy_fd_ent fd_pairs[SP_MAX_FDPAIR_SZ];
   struct sockaddr_in epaddr;
   struct proxy_map_ent *node;
   uint32_t epip;
@@ -309,9 +424,10 @@ proxy_looper(void *arg)
                inet_ntoa(*(struct in_addr *)(&rkey.sip)), rkey.sport >> 16,
                inet_ntoa(*(struct in_addr *)&rkey.dip), rkey.dport >> 16);
 
-        proxy_struct->sockmap_cb(&rkey, new_sd, 1);
-        proxy_struct->sockmap_cb(&key, ep_cfd, 1);
+        //proxy_struct->sockmap_cb(&rkey, new_sd, 1);
+        //proxy_struct->sockmap_cb(&key, ep_cfd, 1);
 
+//#define HAVE_SOCKMAP_KTLS
 #ifdef HAVE_SOCKMAP_KTLS
         if (proxy_sock_init_ktls(new_sd)) {
           log_error("tls failed");
@@ -320,14 +436,16 @@ proxy_looper(void *arg)
         }
 #endif
 
-        fd_pairs[new_sd] = ep_cfd;
+        fd_pairs[new_sd].fd = new_sd;
+        fd_pairs[new_sd].rfd = ep_cfd;
         fds[n_fds].fd = new_sd;
-        fds[n_fds].events = POLLRDHUP|POLLIN;
+        fds[n_fds].events = POLLRDHUP|POLLIN|POLLOUT;
         n_fds++;
 
-        fd_pairs[ep_cfd] = new_sd;
+        fd_pairs[ep_cfd].fd = ep_cfd;
+        fd_pairs[ep_cfd].rfd = new_sd;
         fds[n_fds].fd = ep_cfd;
-        fds[n_fds].events = POLLRDHUP|POLLIN;
+        fds[n_fds].events = POLLRDHUP|POLLIN|POLLOUT;
         n_fds++;
 
       } else if (afds[i].revents & (POLLRDHUP | POLLHUP | POLLERR | POLLNVAL)) {
@@ -345,32 +463,37 @@ proxy_looper(void *arg)
     for (i = 0; i < curr_sz; i++) {
       if (fds[i].revents & (POLLRDHUP | POLLHUP | POLLERR | POLLNVAL)) {
         log_debug("HUP for sock %d", fds[i].fd);
-        if (fds[i].fd > 0 && fds[i].fd < SP_MAX_FDPAIR_SZ && fd_pairs[fds[i].fd] > 0) {
-          close(fd_pairs[fds[i].fd]);
-          fd_pairs[fds[i].fd] = -1;
+        if (fds[i].fd > 0 && fds[i].fd < SP_MAX_FDPAIR_SZ && fd_pairs[fds[i].fd].rfd > 0) {
+          close(fd_pairs[fds[i].fd].rfd);
+          fd_pairs[fds[i].fd].rfd = -1;
+          fd_pairs[fds[i].fd].fd = -1;
+          destroy_proxy_cache(&fd_pairs[fds[i].fd]);
         }
         close(fds[i].fd);
         fds[i].fd = -1;
       }
       if (fds[i].revents & (POLLIN)) {
-          for (j = 0; j < 1024; j++) {
-            rc = recv(fds[i].fd, buffer, sizeof(buffer), 0);
-            if (rc < 0) {
-              if (errno == EWOULDBLOCK) {
-                break;
-              }
-              perror("");
-              //if (fds[i].fd > 0 && fds[i].fd < SP_MAX_FDPAIR_SZ && fd_pairs[fds[i].fd] > 0) {
-              //  close(fd_pairs[fds[i].fd]);
-              //  fd_pairs[fds[i].fd] = -1;
-              //}
-              //close(fds[i].fd);
-              //fds[i].fd = -1;
+        for (j = 0; j < 1024; j++) {
+          rc = recv(fds[i].fd, buffer, sizeof(buffer), 0);
+          if (rc < 0) {
+            if (errno == EWOULDBLOCK) {
               break;
-            } else {
-              printf("RCVD DATA %d\n", rc);
             }
+            perror("");
+            //if (fds[i].fd > 0 && fds[i].fd < SP_MAX_FDPAIR_SZ && fd_pairs[fds[i].fd] > 0) {
+            //  close(fd_pairs[fds[i].fd]);
+            //  fd_pairs[fds[i].fd] = -1;
+            //}
+            //close(fds[i].fd);
+            //fds[i].fd = -1;
+            break;
+          } else {
+            try_xmit_proxy(&fd_pairs[fds[i].fd], buffer, rc);
           }
+        }
+      }
+      if (fds[i].revents & (POLLOUT)) {
+        xmit_proxy_cache(&fd_pairs[fds[i].fd]);
       }
     }
 
@@ -383,7 +506,6 @@ proxy_looper(void *arg)
         n_fds--;
       }
     }
-
 
     for (i = 0; i < n_afds; i++) {
       if (afds[i].fd == -1) {
