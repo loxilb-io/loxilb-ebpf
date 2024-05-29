@@ -2046,6 +2046,7 @@ llb_conv_nat2proxy(void *k, void *v, struct proxy_ent *pent, struct proxy_val *p
 
   pent->xip = nat_key->daddr[0];
   pent->xport = nat_key->dport;
+  pent->protocol = nat_key->l4proto;
 
   for (i = 0; i < LLB_MAX_NXFRMS && i < MAX_PROXY_EP; i++) {
     struct mf_xfrm_inf *mf = &dat->nxfrms[i];
@@ -2055,6 +2056,7 @@ llb_conv_nat2proxy(void *k, void *v, struct proxy_ent *pent, struct proxy_val *p
 
     proxy_ep->xip = mf->nat_xip[0];
     proxy_ep->xport = mf->nat_xport;
+    proxy_ep->protocol = nat_key->l4proto;
 
     j++;
   }

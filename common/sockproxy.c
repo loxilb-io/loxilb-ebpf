@@ -27,6 +27,7 @@
 
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <netinet/sctp.h>
 #include <arpa/inet.h>
 #include <linux/types.h>
 #include <linux/tls.h>
@@ -246,12 +247,23 @@ proxy_sock_init_ktls(int fd)
 }
 
 static int
-proxy_sock_setup(int fd, uint32_t server, uint16_t port)
+proxy_server_setup(int fd, uint32_t server, uint16_t port, uint8_t protocol)
 {
   struct sockaddr_in addr;
-  int rc;
-  int on = 1;
-  int flags;
+  struct sctp_initmsg im;
+  int rc, on = 1, flags;
+
+  if (protocol == IPPROTO_SCTP) {
+    memset(&im, 0, sizeof(im));
+    im.sinit_num_ostreams = 10;
+    im.sinit_max_instreams = 10;
+    im.sinit_max_attempts = 4;
+    rc = setsockopt(fd, IPPROTO_SCTP, SCTP_INITMSG, &im, sizeof(im));
+    if (rc < 0) {
+      close(fd);
+      return -1;
+    }
+  }
 
   rc = setsockopt(fd, SOL_SOCKET,  SO_REUSEADDR, (char *)&on, sizeof(on));
   if (rc < 0) {
@@ -275,20 +287,69 @@ proxy_sock_setup(int fd, uint32_t server, uint16_t port)
   addr.sin_addr.s_addr = server;
   rc = bind(fd, (struct sockaddr *)&addr, sizeof(addr));
   if (rc < 0) {
-    perror("");
+    perror("bind");
     close(fd);
     return -1; 
   }
 
   rc = listen(fd, 32);
   if (rc < 0) {
-    perror("");
+    perror("listen");
     close(fd);
     return -1;
   }
 
   log_info("sock-proxy setup done");
   return 0;
+}
+
+static int
+proxy_endpoint_setup(uint32_t epip, uint16_t epport, uint8_t protocol)
+{
+  int fd;
+  struct sockaddr_in epaddr;
+
+  memset(&epaddr, 0, sizeof(epaddr));
+  epaddr.sin_family = AF_INET;
+  epaddr.sin_port = epport;
+  epaddr.sin_addr.s_addr = epip;
+
+  fd = socket(AF_INET, SOCK_STREAM, protocol);
+  if (fd < 0) {
+    return -1;
+  }
+
+  if (connect(fd, (struct sockaddr*)&epaddr, sizeof(epaddr)) != 0) {
+    log_error("connect failed %s:%u", inet_ntoa(*(struct in_addr *)(&epip)), ntohs(epport));
+    close(fd);
+    return -1;
+  }
+
+  return fd;
+}
+
+static int
+proxy_sock_init(uint32_t IP, uint16_t port, uint8_t protocol)
+{
+  int listen_sd;
+
+  switch (protocol) {
+  case IPPROTO_TCP:
+  case IPPROTO_SCTP:
+    listen_sd = socket(AF_INET, SOCK_STREAM, protocol);
+    break;
+  default:
+    return -1;
+  }
+
+  if (listen_sd > 0) {
+    if (!proxy_server_setup(listen_sd, IP, port, protocol)) {
+      return listen_sd;
+    }
+    close(listen_sd); 
+  }
+
+  return -1;
 }
 
 static void *
@@ -305,7 +366,8 @@ proxy_looper(void *arg)
   int n_fds = 0;
   struct pollfd afds[SP_MAX_ACCEPT_QSZ];
   struct pollfd fds[SP_MAX_POLLFD_QSZ];
-  int new_afds[SP_MAX_NEWFD_QSZ];
+  //int new_afds[SP_MAX_NEWFD_QSZ];
+  struct proxy_fd_ent new_afds[SP_MAX_NEWFD_QSZ];
   //int fd_pairs[SP_MAX_FDPAIR_SZ];
   struct proxy_fd_ent fd_pairs[SP_MAX_FDPAIR_SZ];
   struct sockaddr_in epaddr;
@@ -313,6 +375,7 @@ proxy_looper(void *arg)
   uint32_t epip;
   uint16_t epport;
   uint8_t buffer[4096];
+  uint8_t epprotocol;
 
   accept_to = SP_ACCEPT_TIMEO_MS;
   timeo = SP_FD_TIMEO_MS;
@@ -329,13 +392,15 @@ proxy_looper(void *arg)
     node = proxy_struct->head;
     while (node) {
       if (node->val.main_fd <= 0) {
-        listen_sd = socket(AF_INET, SOCK_STREAM, 0);
+        listen_sd = proxy_sock_init(node->key.xip, node->key.xport, node->key.protocol);
         if (listen_sd > 0) {
-          proxy_sock_setup(listen_sd, node->key.xip, node->key.xport);
           if (n_new < SP_MAX_NEWFD_QSZ-1) {
-            new_afds[n_new++] = listen_sd;
+            new_afds[n_new].fd = listen_sd;
+            new_afds[n_new].protocol = node->key.protocol;
+            n_new++;
             node->val.main_fd = listen_sd;
           } else {
+            close(listen_sd);
             break;
           }
         }
@@ -349,7 +414,7 @@ proxy_looper(void *arg)
         log_error("No space in accept poll_fd");
         break;
       }
-      afds[n_afds].fd = new_afds[i];
+      afds[n_afds].fd = new_afds[i].fd;
       afds[n_afds].events = POLLIN|POLLRDHUP;
       log_debug("n_afd %d fd %d", afds[n_afds].fd, n_afds);
       n_afds++;
@@ -357,7 +422,7 @@ proxy_looper(void *arg)
 
     rc = poll(afds, n_afds, accept_to);
     if (rc < 0) {
-      perror("");
+      perror("poll");
       assert(0);
       continue;
     }
@@ -365,7 +430,7 @@ proxy_looper(void *arg)
     curr_sz = n_afds;
     for (i = 0; i < curr_sz; i++) {
       if (afds[i].revents == POLLIN) {
-        new_sd = accept(listen_sd, NULL, NULL);
+        new_sd = accept(afds[i].fd, NULL, NULL);
         if (new_sd < 0) {
           if (errno != EWOULDBLOCK) {
             log_error("accept failed");
@@ -380,35 +445,29 @@ proxy_looper(void *arg)
         }
 
         log_debug("accept() from %s:%u --> %s:%u",
-               inet_ntoa(*(struct in_addr *)(&key.sip)), key.sport >> 16,
-               inet_ntoa(*(struct in_addr *)&key.dip), key.dport >> 16);
+               inet_ntoa(*(struct in_addr *)&key.dip), (key.dport >> 16),
+               inet_ntoa(*(struct in_addr *)(&key.sip)), (key.sport >> 16));
 
-        if (sockproxy_find_endpoint(key.sip, key.sport >> 16, &epip, &epport)) {
+        if (sockproxy_find_endpoint(key.sip, key.sport >> 16, &epip, &epport, &epprotocol)) {
           log_error("No EP for %s:%u --> %s:%u",
-                 inet_ntoa(*(struct in_addr *)(&key.sip)), key.sport >> 16,
-                 inet_ntoa(*(struct in_addr *)&key.dip), key.dport >> 16);
+                 inet_ntoa(*(struct in_addr *)(&key.sip)), (key.sport >> 16),
+                 inet_ntoa(*(struct in_addr *)&key.dip), (key.dport >> 16));
           close(new_sd);
           continue;
         }
 
         log_debug("EP for %s:%u --> %s:%u ## %s:%u",
-               inet_ntoa(*(struct in_addr *)(&key.sip)), key.sport >> 16,
-               inet_ntoa(*(struct in_addr *)&key.dip), key.dport >> 16,
-               inet_ntoa(*(struct in_addr *)(&epip)), ntohs(epport));
+               inet_ntoa(*(struct in_addr *)&key.dip), (key.dport >> 16),
+               inet_ntoa(*(struct in_addr *)(&key.sip)), (key.sport >> 16),
+               inet_ntoa(*(struct in_addr *)(&epip)), (epport));
 
         memset(&epaddr, 0, sizeof(epaddr));
         epaddr.sin_family = AF_INET;
         epaddr.sin_port = epport;
         epaddr.sin_addr.s_addr = epip;
 
-        ep_cfd = socket(AF_INET, SOCK_STREAM, 0);
+        ep_cfd = proxy_endpoint_setup(epip, epport, epprotocol);
         if (ep_cfd < 0) {
-          close(new_sd);
-          continue;
-        }
-
-        if (connect(ep_cfd, (struct sockaddr*)&epaddr, sizeof(epaddr)) != 0) {
-          log_error("connect failed %s:%u", inet_ntoa(*(struct in_addr *)(&epip)), ntohs(epport));
           close(new_sd);
           continue;
         }
@@ -424,8 +483,8 @@ proxy_looper(void *arg)
                inet_ntoa(*(struct in_addr *)(&rkey.sip)), rkey.sport >> 16,
                inet_ntoa(*(struct in_addr *)&rkey.dip), rkey.dport >> 16);
 
-        //proxy_struct->sockmap_cb(&rkey, new_sd, 1);
-        //proxy_struct->sockmap_cb(&key, ep_cfd, 1);
+        proxy_struct->sockmap_cb(&rkey, new_sd, 1);
+        proxy_struct->sockmap_cb(&key, ep_cfd, 1);
 
 //#define HAVE_SOCKMAP_KTLS
 #ifdef HAVE_SOCKMAP_KTLS
@@ -479,7 +538,7 @@ proxy_looper(void *arg)
             if (errno == EWOULDBLOCK) {
               break;
             }
-            perror("");
+            perror("pollin");
             //if (fds[i].fd > 0 && fds[i].fd < SP_MAX_FDPAIR_SZ && fd_pairs[fds[i].fd] > 0) {
             //  close(fd_pairs[fds[i].fd]);
             //  fd_pairs[fds[i].fd] = -1;
@@ -493,6 +552,7 @@ proxy_looper(void *arg)
         }
       }
       if (fds[i].revents & (POLLOUT)) {
+        printf("XMIT Ready");
         xmit_proxy_cache(&fd_pairs[fds[i].fd]);
       }
     }
@@ -524,7 +584,8 @@ static bool
 cmp_proxy_ent(struct proxy_ent *e1, struct proxy_ent *e2)
 {
   if (e1->xip == e2->xip &&
-      e1->xport == e2->xport) {
+      e1->xport == e2->xport &&
+      e1->protocol == e2->protocol) {
     return true;
   }
   return false;
@@ -543,7 +604,7 @@ cmp_proxy_val(struct proxy_val *v1, struct proxy_val *v2)
 }
 
 int
-sockproxy_find_endpoint(uint32_t xip, uint16_t xport, uint32_t *epip, uint16_t *epport)
+sockproxy_find_endpoint(uint32_t xip, uint16_t xport, uint32_t *epip, uint16_t *epport, uint8_t *protocol)
 {
   int sel = 0;
   struct proxy_ent ent = { 0 };
@@ -551,6 +612,7 @@ sockproxy_find_endpoint(uint32_t xip, uint16_t xport, uint32_t *epip, uint16_t *
    
   ent.xip = xip;
   ent.xport = xport;
+  ent.protocol = 6;
 
   PROXY_LOCK();
 
@@ -565,6 +627,7 @@ sockproxy_find_endpoint(uint32_t xip, uint16_t xport, uint32_t *epip, uint16_t *
       if (sel >= MAX_PROXY_EP) break;
       *epip = node->val.eps[sel].xip; 
       *epport = node->val.eps[sel].xport; 
+      *protocol = node->val.eps[sel].protocol;
       //printf("epid 0x%x: 0x%u\n", node->val.eps[sel].xip, node->val.eps[sel].xport);
       PROXY_UNLOCK();
       return 0;

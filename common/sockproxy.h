@@ -17,13 +17,16 @@ struct proxy_cache {
 struct proxy_fd_ent {
   int fd;
   int rfd;
+  int mode;
+  int protocol;
   struct proxy_cache *cache_head;
 };
 
 struct proxy_ent {
   uint32_t xip;
   uint16_t xport;
-  uint16_t inv;
+  uint8_t inv;
+  uint8_t protocol;
 };
 
 #define MAX_PROXY_EP 16
@@ -39,7 +42,7 @@ struct proxy_val {
 
 typedef int (*sockmap_cb_t)(struct llb_sockmap_key *key, int fd, int doadd);
 
-int sockproxy_find_endpoint(uint32_t xip, uint16_t xport, uint32_t *epip, uint16_t *epport);
+int sockproxy_find_endpoint(uint32_t xip, uint16_t xport, uint32_t *epip, uint16_t *epport, uint8_t *protocol);
 int sockproxy_add_entry(struct proxy_ent *new_ent, struct proxy_val *val);
 int sockproxy_delete_entry(struct proxy_ent *ent);
 void sockproxy_dump_entry(void);
