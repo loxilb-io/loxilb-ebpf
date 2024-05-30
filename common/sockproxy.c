@@ -329,8 +329,12 @@ proxy_server_setup(int fd, uint32_t server, uint16_t port, uint8_t protocol)
 static int
 proxy_endpoint_setup(uint32_t epip, uint16_t epport, uint8_t protocol)
 {
-  int fd;
+  int fd, rc;
   struct sockaddr_in epaddr;
+  fd_set wrdy, errors;
+  struct timeval tv = { .tv_sec  = 0,
+                        .tv_usec = 500000
+                      };
 
   memset(&epaddr, 0, sizeof(epaddr));
   epaddr.sin_family = AF_INET;
@@ -342,12 +346,41 @@ proxy_endpoint_setup(uint32_t epip, uint16_t epport, uint8_t protocol)
     return -1;
   }
 
-  //proxy_sock_setnb(fd);
+  proxy_sock_setnb(fd);
 
-  if (connect(fd, (struct sockaddr*)&epaddr, sizeof(epaddr)) != 0) {
-    log_error("connect failed %s:%u", inet_ntoa(*(struct in_addr *)(&epip)), ntohs(epport));
-    close(fd);
-    return -1;
+  if (connect(fd, (struct sockaddr*)&epaddr, sizeof(epaddr)) < 0) {
+    if (errno != EINPROGRESS) {
+      log_error("connect failed %s:%u", inet_ntoa(*(struct in_addr *)(&epip)), ntohs(epport));
+      close(fd);
+      return -1;
+    }
+
+    FD_ZERO(&wrdy);
+    FD_SET(fd, &wrdy);
+
+    FD_ZERO(&errors);
+    FD_SET(fd, &errors);
+
+    rc = select(fd + 1, NULL, &wrdy, &errors, &tv);
+    if (rc <= 0) {
+      log_error("connect select %s:%u(%s)", inet_ntoa(*(struct in_addr *)(&epip)), ntohs(epport), strerror(errno));
+      close(fd);
+      return -1;
+    }
+
+    if (rc == 0) {
+      log_error("connect %s:%u(timedout)", inet_ntoa(*(struct in_addr *)(&epip)), ntohs(epport));
+      close(fd);
+      return -1;
+    }
+
+    if (FD_ISSET(fd, &errors)) {
+      log_error("connect %s:%u(errors)", inet_ntoa(*(struct in_addr *)(&epip)), ntohs(epport));
+      close(fd);
+      return -1;
+    }
+
+    return fd;
   }
 
   return fd;
