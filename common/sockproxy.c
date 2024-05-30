@@ -46,24 +46,24 @@
 #define SP_MSG_BUSY_THRESHOLD 1
 #define SP_SOCK_MSG_LEN 4096
 
-struct proxy_map_ent {
+typedef struct proxy_map_ent {
   struct proxy_ent key;
   struct proxy_val val;
   struct proxy_map_ent *next;
-};
+} proxy_map_ent_t;
 
-struct proxy_struct {
+typedef struct proxy_struct {
   pthread_rwlock_t lock;
   pthread_t proxy_thr;
-  struct proxy_map_ent *head;
+  proxy_map_ent_t *head;
   sockmap_cb_t sockmap_cb;
-};
+} proxy_struct_t;
 
 #define PROXY_LOCK()    pthread_rwlock_wrlock(&proxy_struct->lock)
 #define PROXY_RDLOCK()  pthread_rwlock_rdlock(&proxy_struct->lock)
 #define PROXY_UNLOCK()  pthread_rwlock_unlock(&proxy_struct->lock)
 
-struct proxy_struct *proxy_struct;
+proxy_struct_t *proxy_struct;
 
 static bool
 cmp_proxy_ent(struct proxy_ent *e1, struct proxy_ent *e2)
@@ -422,8 +422,8 @@ sockproxy_setup_endpoint(uint32_t xip, uint16_t xport, uint8_t protocol,
   uint32_t epip;
   uint16_t epport;
   uint8_t epprotocol;
-  struct proxy_ent ent = { 0 };
-  struct proxy_map_ent *node = proxy_struct->head;
+  proxy_ent_t ent = { 0 };
+  proxy_map_ent_t *node = proxy_struct->head;
 
   ent.xip = xip;
   ent.xport = xport;
@@ -518,9 +518,9 @@ proxy_looper(void *arg)
   int rc, timeo, i, j, epprotocol, n_msg;
   struct pollfd afds[SP_MAX_ACCEPT_QSZ];
   struct pollfd fds[SP_MAX_POLLFD_QSZ];
-  struct proxy_fd_ent new_afds[SP_MAX_NEWFD_QSZ];
-  struct proxy_fd_ent fd_pairs[SP_MAX_FDPAIR_SZ];
-  struct proxy_map_ent *node;
+  proxy_fd_ent_t new_afds[SP_MAX_NEWFD_QSZ];
+  proxy_fd_ent_t fd_pairs[SP_MAX_FDPAIR_SZ];
+  proxy_map_ent_t *node;
   char addrpb1[INET6_ADDRSTRLEN];
   char addrpb2[INET6_ADDRSTRLEN];
   int ep_cfds[MAX_PROXY_EP];
@@ -765,8 +765,8 @@ sockproxy_find_endpoint(uint32_t xip, uint16_t xport, uint8_t protocol,
                         uint32_t *epip, uint16_t *epport, uint8_t *epprotocol)
 {
   int sel = 0;
-  struct proxy_ent ent = { 0 };
-  struct proxy_map_ent *node = proxy_struct->head;
+  proxy_ent_t ent = { 0 };
+  proxy_map_ent_t *node = proxy_struct->head;
    
   ent.xip = xip;
   ent.xport = xport;
@@ -799,7 +799,7 @@ sockproxy_find_endpoint(uint32_t xip, uint16_t xport, uint8_t protocol,
 }
 
 static int
-sockproxy_delete_entry__(struct proxy_ent *ent)
+sockproxy_delete_entry__(proxy_ent_t *ent)
 {
   struct proxy_map_ent *prev = NULL;
   struct proxy_map_ent *node;
@@ -836,10 +836,10 @@ sockproxy_delete_entry__(struct proxy_ent *ent)
 }
 
 int
-sockproxy_add_entry(struct proxy_ent *new_ent, struct proxy_val *val)
+sockproxy_add_entry(proxy_ent_t *new_ent, proxy_val_t *val)
 {
-  struct proxy_map_ent *node;
-  struct proxy_map_ent *ent = proxy_struct->head;
+  proxy_map_ent_t *node;
+  proxy_map_ent_t *ent = proxy_struct->head;
 
   PROXY_LOCK();
 
@@ -876,7 +876,7 @@ sockproxy_add_entry(struct proxy_ent *new_ent, struct proxy_val *val)
 }
 
 int
-sockproxy_delete_entry(struct proxy_ent *ent)
+sockproxy_delete_entry(proxy_ent_t *ent)
 {
   int ret = 0;
   PROXY_LOCK();
@@ -889,7 +889,7 @@ sockproxy_delete_entry(struct proxy_ent *ent)
 void
 sockproxy_dump_entry(void)
 {
-  struct proxy_map_ent *node = proxy_struct->head;
+  proxy_map_ent_t *node = proxy_struct->head;
   int i = 0;
 
   log_info("sockproxy dump:");
@@ -904,9 +904,9 @@ sockproxy_dump_entry(void)
 int
 sockproxy_selftests()
 {
-  struct proxy_ent key = { 0 };
-  struct proxy_val val = { 0 };
-  struct proxy_ent key2 = { 0 };
+  proxy_ent_t key = { 0 };
+  proxy_val_t val = { 0 };
+  proxy_ent_t key2 = { 0 };
   int n = 0;
 
   key.xip = inet_addr("172.17.0.2");
@@ -939,7 +939,7 @@ sockproxy_selftests()
 int
 sockproxy_main(sockmap_cb_t sockmap_cb)
 {
-  proxy_struct = calloc(sizeof(struct proxy_struct), 1);
+  proxy_struct = calloc(sizeof(proxy_struct_t), 1);
   if (proxy_struct == NULL) {
     assert(0);
   }
