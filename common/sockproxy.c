@@ -44,6 +44,7 @@
 #define SP_ACCEPT_TIMEO_MS 500
 #define SP_FD_TIMEO_MS 500
 #define SP_MSG_BUSY_THRESHOLD 1
+#define SP_SOCK_MSG_LEN 4096
 
 struct proxy_map_ent {
   struct proxy_ent key;
@@ -63,6 +64,29 @@ struct proxy_struct {
 #define PROXY_UNLOCK()  pthread_rwlock_unlock(&proxy_struct->lock)
 
 struct proxy_struct *proxy_struct;
+
+static bool
+cmp_proxy_ent(struct proxy_ent *e1, struct proxy_ent *e2)
+{
+  if (e1->xip == e2->xip &&
+      e1->xport == e2->xport &&
+      e1->protocol == e2->protocol) {
+    return true;
+  }
+  return false;
+}
+
+static bool
+cmp_proxy_val(struct proxy_val *v1, struct proxy_val *v2)
+{
+  int i;
+  for (i = 0; i < MAX_PROXY_EP; i++) {
+    if (!cmp_proxy_ent(&v1->eps[i], &v2->eps[i])) {
+      return false;
+    }
+  }
+  return true;
+}
 
 static int
 add_proxy_cache(struct proxy_fd_ent *ent, uint8_t *cache, size_t len)
@@ -153,19 +177,21 @@ xmit_proxy_cache(struct proxy_fd_ent *ent)
 }
 
 static int
-try_xmit_proxy(struct proxy_fd_ent *ent, void *msg, size_t len)
+try_xmit_proxy(struct proxy_fd_ent *ent, void *msg, size_t len, int sel)
 {
   int n;
 
   xmit_proxy_cache(ent);
 
-  n = send(ent->rfd, msg, len, MSG_DONTWAIT);
+  n = send(ent->rfd[sel], msg, len, MSG_DONTWAIT);
   if (n != len) {
     if (n >= 0) {
+      log_debug("Failed to send full %d\n", n);
       add_proxy_cache(ent, (uint8_t *)(msg) + n, len - n);
       return 0;
     } else /*if (n < 0)*/ {
       if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) {
+        log_debug("Failed to send any %d\n", n);
         add_proxy_cache(ent, msg, len);
         return 0;
       }
@@ -327,7 +353,7 @@ proxy_server_setup(int fd, uint32_t server, uint16_t port, uint8_t protocol)
 }
 
 static int
-proxy_endpoint_setup(uint32_t epip, uint16_t epport, uint8_t protocol)
+sockproxy_setup_endpoint_connect(uint32_t epip, uint16_t epport, uint8_t protocol)
 {
   int fd, rc;
   struct sockaddr_in epaddr;
@@ -387,6 +413,74 @@ proxy_endpoint_setup(uint32_t epip, uint16_t epport, uint8_t protocol)
 }
 
 static int
+sockproxy_setup_endpoint(uint32_t xip, uint16_t xport, uint8_t protocol,
+                         int *fds, int *fdsz)
+{
+  int sel = 0;
+  uint32_t epip;
+  uint16_t epport;
+  uint8_t epprotocol;
+  struct proxy_ent ent = { 0 };
+  struct proxy_map_ent *node = proxy_struct->head;
+
+  ent.xip = xip;
+  ent.xport = xport;
+  ent.protocol = protocol;
+
+  PROXY_LOCK();
+
+  while (node) {
+
+    if (cmp_proxy_ent(&node->key, &ent)) {
+      if (!node->val.n_eps || node->val.n_eps >= MAX_PROXY_EP) {
+        PROXY_UNLOCK();
+        return -1;
+      }
+
+      if (node->val.sel_type == PROXY_SEL_DFL) {
+        sel = node->val.ep_sel % node->val.n_eps;
+        if (sel >= MAX_PROXY_EP) break;
+        epip = node->val.eps[sel].xip;
+        epport = node->val.eps[sel].xport;
+        epprotocol = node->val.eps[sel].protocol;
+        node->val.ep_sel++;
+        PROXY_UNLOCK();
+        fds[0] = sockproxy_setup_endpoint_connect(epip, epport, (uint8_t)epprotocol);
+        if (fds[0] < 0) {
+          return -1;
+        }
+
+        *fdsz = 1;
+
+        return 0;
+      } else if (node->val.sel_type == PROXY_SEL_ALL) {
+        int ep = 0;
+
+        for (ep = 0; ep < node->val.n_eps; ep++) {
+          epip = node->val.eps[ep].xip;
+          epport = node->val.eps[ep].xport;
+          epprotocol = node->val.eps[ep].protocol;
+          fds[sel] = sockproxy_setup_endpoint_connect(epip, epport, (uint8_t)epprotocol);
+          if (fds[sel] > 0) {
+            sel++;
+          }
+        }
+
+        PROXY_UNLOCK();
+        if (sel) {
+          return 0;
+        }
+        return -1;
+      }
+    }
+    node = node->next;
+  }
+
+  PROXY_UNLOCK();
+  return -1;
+}
+
+static int
 proxy_sock_init(uint32_t IP, uint16_t port, uint8_t protocol)
 {
   int listen_sd;
@@ -416,31 +510,30 @@ proxy_looper(void *arg)
   struct llb_sockmap_key key = { 0 };
   struct llb_sockmap_key rkey = { 0 };
   int listen_sd = -1, new_sd = -1;
-  int ep_cfd = -1, n_new = 0, accept_to;
+  int n_eps = 0, n_new = 0, accept_to;
   int n_afds = 0, curr_sz = 0, n_fds = 0;
   int rc, timeo, i, j, epprotocol, n_msg;
   struct pollfd afds[SP_MAX_ACCEPT_QSZ];
   struct pollfd fds[SP_MAX_POLLFD_QSZ];
   struct proxy_fd_ent new_afds[SP_MAX_NEWFD_QSZ];
   struct proxy_fd_ent fd_pairs[SP_MAX_FDPAIR_SZ];
-  struct sockaddr_in epaddr;
   struct proxy_map_ent *node;
   char addrpb1[INET6_ADDRSTRLEN];
   char addrpb2[INET6_ADDRSTRLEN];
-  char addrpb3[INET6_ADDRSTRLEN];
-  uint32_t epip;
-  uint16_t epport;
+  int ep_cfds[MAX_PROXY_EP];
   uint8_t *buffer;
 
+  accept_to = SP_ACCEPT_TIMEO_MS;
   timeo = SP_FD_TIMEO_MS;
 
   memset(fd_pairs, 0 , sizeof(fd_pairs));
   memset(afds, 0 , sizeof(afds));
   memset(fds, 0 , sizeof(fds));
 
-  buffer = malloc(4096) ;
+  buffer = malloc(SP_SOCK_MSG_LEN) ;
   assert(buffer);
 
+restart:
   while (1) {
     n_new = 0;
     n_msg = 0;
@@ -488,6 +581,7 @@ proxy_looper(void *arg)
     curr_sz = n_afds;
     for (i = 0; i < curr_sz; i++) {
       int protocol;
+
       if (afds[i].revents == POLLIN) {
         new_sd = accept(afds[i].fd, NULL, NULL);
         if (new_sd < 0) {
@@ -509,67 +603,70 @@ proxy_looper(void *arg)
         log_debug("new accept() from %s:%u -> %s:%u",
                addrpb1, ntohs((key.dport >> 16)), addrpb2, ntohs(key.sport >> 16));
 
-        if (sockproxy_find_endpoint(key.sip, key.sport >> 16, (uint8_t)(protocol), &epip, &epport, (uint8_t *)&epprotocol)) {
+        n_eps = 0;
+        memset(ep_cfds, 0, sizeof(ep_cfds));
+
+        if (sockproxy_setup_endpoint(key.sip, key.sport >> 16, (uint8_t)(protocol), ep_cfds, &n_eps)) {
           log_error("no endpoint for %s:%u --> %s:%u",
               addrpb1, ntohs((key.dport >> 16)), addrpb2, ntohs(key.sport >> 16));
           close(new_sd);
           continue;
         }
 
-        inet_ntop(AF_INET, (struct in_addr *)&epip, addrpb3, INET_ADDRSTRLEN);
-        log_debug("selected ep { %s:%u -> %s:%u } --> {%s:%u}",
-              addrpb1, ntohs((key.dport >> 16)), addrpb2, ntohs(key.sport >> 16), addrpb3, ntohs(epport));
-
-        memset(&epaddr, 0, sizeof(epaddr));
-        epaddr.sin_family = AF_INET;
-        epaddr.sin_port = epport;
-        epaddr.sin_addr.s_addr = epip;
-
-        ep_cfd = proxy_endpoint_setup(epip, epport, (uint8_t)epprotocol);
-        if (ep_cfd < 0) {
-          close(new_sd);
-          continue;
-        }
-
-        if (proxy_skmap_key_from_fd(ep_cfd, &rkey, &epprotocol)) {
-          log_error("cant get skmap key from ep_cfd");
-          close(new_sd);
-          close(ep_cfd);
-          continue;
-        }
-
-        inet_ntop(AF_INET, (struct in_addr *)&rkey.dip, addrpb1, INET_ADDRSTRLEN);
-        inet_ntop(AF_INET, (struct in_addr *)&rkey.sip, addrpb2, INET_ADDRSTRLEN);
-        log_debug("connected %s:%u --> %s:%u|%d",
-             addrpb1, ntohs((rkey.dport >> 16)),  addrpb2, ntohs((rkey.sport >> 16)), protocol);
-
-        if (protocol == IPPROTO_TCP && epprotocol == IPPROTO_TCP) {
-          if (proxy_struct->sockmap_cb) {
-            proxy_struct->sockmap_cb(&rkey, new_sd, 1);
-            proxy_struct->sockmap_cb(&key, ep_cfd, 1);
+        for (j = 0; j < n_eps; j++) {
+          int ep_cfd = ep_cfds[j];
+          if (ep_cfd < 0) {
+            assert(0);
           }
-        }
 
+          if (proxy_skmap_key_from_fd(ep_cfd, &rkey, &epprotocol)) {
+            log_error("cant get skmap key from ep_cfd");
+            for (j = 0; j < new_sd; j++) {
+              close(ep_cfds[j]);
+            }
+
+            close(new_sd);
+            goto restart;
+          }
+
+          inet_ntop(AF_INET, (struct in_addr *)&rkey.dip, addrpb1, INET_ADDRSTRLEN);
+          inet_ntop(AF_INET, (struct in_addr *)&rkey.sip, addrpb2, INET_ADDRSTRLEN);
+          log_debug("connected %s:%u --> %s:%u|%d",
+               addrpb1, ntohs((rkey.dport >> 16)),  addrpb2, ntohs((rkey.sport >> 16)), protocol);
+
+          if (protocol == IPPROTO_TCP && epprotocol == IPPROTO_TCP && n_eps == 1) {
+            if (proxy_struct->sockmap_cb) {
+              proxy_struct->sockmap_cb(&rkey, new_sd, 1);
+              proxy_struct->sockmap_cb(&key, ep_cfd, 1);
+            }
 #ifdef HAVE_SOCKMAP_KTLS
-        if (proxy_sock_init_ktls(new_sd)) {
-          log_error("tls failed");
-          close(new_sd);
-          continue;
-        }
+            if (proxy_sock_init_ktls(new_sd)) {
+              log_error("tls failed");
+              for (j = 0; j < new_sd; j++) {
+                close(ep_cfds[j]);
+              }
+              close(new_sd);
+              goto restart;
+            }
 #endif
+          }
 
-        fd_pairs[new_sd].fd = new_sd;
-        fd_pairs[new_sd].rfd = ep_cfd;
-        fds[n_fds].fd = new_sd;
-        fds[n_fds].events = POLLRDHUP|POLLIN|POLLOUT;
-        n_fds++;
+          if (j == 0) {
+            fd_pairs[new_sd].fd = new_sd;
+            fds[n_fds].fd = new_sd;
+            fds[n_fds].events = POLLRDHUP|POLLIN|POLLOUT;
+            n_fds++;
+          }
+          fd_pairs[new_sd].rfd[j] = ep_cfd;
+          fd_pairs[new_sd].n_rfd++;
 
-        fd_pairs[ep_cfd].fd = ep_cfd;
-        fd_pairs[ep_cfd].rfd = new_sd;
-        fds[n_fds].fd = ep_cfd;
-        fds[n_fds].events = POLLRDHUP|POLLIN|POLLOUT;
-        n_fds++;
-
+          fd_pairs[ep_cfd].fd = ep_cfd;
+          fd_pairs[ep_cfd].rfd[0] = new_sd;
+          fd_pairs[ep_cfd].n_rfd++;
+          fds[n_fds].fd = ep_cfd;
+          fds[n_fds].events = POLLRDHUP|POLLIN|POLLOUT;
+          n_fds++;
+        }
       } else if (afds[i].revents & (POLLRDHUP | POLLHUP | POLLERR | POLLNVAL)) {
         close(afds[i].fd);
         afds[i].fd = -1;
@@ -585,9 +682,17 @@ proxy_looper(void *arg)
     for (i = 0; i < curr_sz; i++) {
       if (fds[i].revents & (POLLRDHUP | POLLHUP | POLLERR | POLLNVAL)) {
         log_debug("hup for sock %d", fds[i].fd);
-        if (fds[i].fd > 0 && fds[i].fd < SP_MAX_FDPAIR_SZ && fd_pairs[fds[i].fd].rfd > 0) {
-          close(fd_pairs[fds[i].fd].rfd);
-          fd_pairs[fds[i].fd].rfd = -1;
+        if (fds[i].fd > 0 && fds[i].fd < SP_MAX_FDPAIR_SZ) {
+          for (j = 0; j < fd_pairs[fds[i].fd].n_rfd; j++) {
+            if (fd_pairs[fds[i].fd].rfd[j] > 0) {
+              close(fd_pairs[fds[i].fd].rfd[j]);
+              if (fd_pairs[fds[i].fd].rfd[j] < SP_MAX_FDPAIR_SZ) {
+                destroy_proxy_cache(&fd_pairs[fd_pairs[fds[i].fd].rfd[j]]);
+              }
+              fd_pairs[fds[i].fd].rfd[j] = -1;
+            }
+          }
+          fd_pairs[fds[i].fd].n_rfd = 0;
           fd_pairs[fds[i].fd].fd = -1;
           destroy_proxy_cache(&fd_pairs[fds[i].fd]);
         }
@@ -596,7 +701,7 @@ proxy_looper(void *arg)
       }
       if (fds[i].revents & (POLLIN)) {
         for (j = 0; j < 1024; j++) {
-          rc = recv(fds[i].fd, buffer, sizeof(buffer), MSG_DONTWAIT);
+          rc = recv(fds[i].fd, buffer, SP_SOCK_MSG_LEN, MSG_DONTWAIT);
           if (rc < 0) {
             if (errno == EWOULDBLOCK || errno == EAGAIN) {
               break;
@@ -610,13 +715,15 @@ proxy_looper(void *arg)
             //fds[i].fd = -1;
             break;
           } else {
-            try_xmit_proxy(&fd_pairs[fds[i].fd], buffer, rc);
+            try_xmit_proxy(&fd_pairs[fds[i].fd], buffer, rc, 0);
             n_msg++;
           }
         }
       }
       if (fds[i].revents & (POLLOUT)) {
+        //printf("pollout\n");
         xmit_proxy_cache(&fd_pairs[fds[i].fd]);
+        //printf("pollout--\n");
       }
     }
 
@@ -643,29 +750,6 @@ proxy_looper(void *arg)
       usleep(250*1000);
     }
   }
-}
-
-static bool
-cmp_proxy_ent(struct proxy_ent *e1, struct proxy_ent *e2)
-{
-  if (e1->xip == e2->xip &&
-      e1->xport == e2->xport &&
-      e1->protocol == e2->protocol) {
-    return true;
-  }
-  return false;
-}
-
-static bool
-cmp_proxy_val(struct proxy_val *v1, struct proxy_val *v2)
-{
-  int i;
-  for (i = 0; i < MAX_PROXY_EP; i++) {
-    if (!cmp_proxy_ent(&v1->eps[i], &v2->eps[i])) {
-      return false;
-    }
-  }
-  return true;
 }
 
 int

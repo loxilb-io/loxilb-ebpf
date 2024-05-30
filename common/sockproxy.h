@@ -14,9 +14,12 @@ struct proxy_cache {
   uint8_t data[0];
 };
 
+#define MAX_PROXY_EP 16
+
 struct proxy_fd_ent {
   int fd;
-  int rfd;
+  int rfd[MAX_PROXY_EP];
+  int n_rfd;
   int mode;
   int protocol;
   struct proxy_cache *cache_head;
@@ -29,10 +32,10 @@ struct proxy_ent {
   uint8_t protocol;
 };
 
-#define MAX_PROXY_EP 16
-
 struct proxy_val {
   uint32_t _id;
+#define PROXY_SEL_DFL 0
+#define PROXY_SEL_ALL 1
   int sel_type;
   int main_fd;
   int ep_sel;
