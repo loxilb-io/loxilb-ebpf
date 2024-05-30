@@ -1545,7 +1545,7 @@ llb_xh_init(llb_dp_struct_t *xh)
 
   init_throttler(&xh->cpt, 50);
 
-  if (sockproxy_main(llb_sockmap_op)) {
+  if (sockproxy_main(xh->have_sockmap ? llb_sockmap_op : NULL)) {
     assert(0);
   }
 
@@ -2112,7 +2112,7 @@ llb_add_map_elem(int tbl, void *k, void *v)
     struct proxy_val pv = { 0 };
 
     if (nv->ca.act_type == DP_SET_FULLPROXY &&
-        nk->l4proto == IPPROTO_TCP && nk->v6 == 0) {
+        (nk->l4proto == IPPROTO_TCP || nk->l4proto == IPPROTO_SCTP) && nk->v6 == 0) {
       llb_conv_nat2proxy(k, v, &pk, &pv);
       ret = sockproxy_add_entry(&pk, &pv);
       goto out;
@@ -2247,7 +2247,7 @@ llb_del_map_elem(int tbl, void *k)
     struct proxy_ent pk = { 0 };
     struct proxy_val pv = { 0 };
 
-    if (nk->l4proto == IPPROTO_TCP && nk->v6 == 0) {
+    if ((nk->l4proto == IPPROTO_TCP || nk->l4proto == IPPROTO_SCTP )&& nk->v6 == 0) {
       llb_conv_nat2proxy(nk, &t, &pk, &pv);
       sockproxy_delete_entry(&pk);
     }
@@ -3155,16 +3155,16 @@ loxilb_main(struct ebpfcfg *cfg)
     xh->have_loader = !cfg->no_loader;
     xh->have_mtrace = cfg->have_mtrace;
     xh->have_ptrace = cfg->have_ptrace;
+    xh->nodenum = cfg->nodenum;
+    xh->logfp = fp;
+
+    // FIXME - Experimental
     xh->have_sockrwr = cfg->have_sockrwr;
+    xh->have_sockmap = cfg->have_sockmap;
+    xh->egr_hooks = cfg->egr_hooks;
     if (xh->have_sockrwr != 0) {
       xh->cgroup_dfl_path = CGROUP_PATH;
     }
-
-    // FIXME - Experimental
-    xh->have_sockmap = 1;
-    xh->nodenum = cfg->nodenum;
-    xh->egr_hooks = cfg->egr_hooks;
-    xh->logfp = fp;
   }
 
   llb_xh_init(xh);
