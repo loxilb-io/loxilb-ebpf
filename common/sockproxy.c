@@ -149,16 +149,15 @@ xmit_proxy_cache(struct proxy_fd_ent *ent)
   int n = 0;
 
   while (curr) {
-    n = send(ent->fd, (uint8_t *)(curr->cache) + curr->off, curr->len, 0);
+    n = send(ent->fd, (uint8_t *)(curr->cache) + curr->off, curr->len, MSG_DONTWAIT|MSG_NOSIGNAL);
     if (n != curr->len) {
       if (n >= 0) {
         /* errno == EAGAIN || errno == EWOULDBLOCK */
         curr->off += n;
         curr->len -= n;
-        log_debug("partial send\n");
         continue;
       } else /*if (n < 0)*/ {
-        log_debug("Failed to send\n");
+        log_debug("Failed to send cache");
         return -1;
       }
     }
@@ -181,21 +180,24 @@ try_xmit_proxy(struct proxy_fd_ent *ent, void *msg, size_t len, int sel)
 {
   int n;
 
-  xmit_proxy_cache(ent);
+  n = xmit_proxy_cache(ent);
+  if (n < 0) {
+    add_proxy_cache(ent, msg, len);
+    return 0;
+  }
 
-  n = send(ent->rfd[sel], msg, len, MSG_DONTWAIT);
+  n = send(ent->rfd[sel], msg, len, MSG_DONTWAIT|MSG_NOSIGNAL);
   if (n != len) {
     if (n >= 0) {
-      log_debug("Failed to send full %d\n", n);
+      log_debug("Partial send %d", n);
       add_proxy_cache(ent, (uint8_t *)(msg) + n, len - n);
       return 0;
     } else /*if (n < 0)*/ {
       if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) {
-        log_debug("Failed to send any %d\n", n);
         add_proxy_cache(ent, msg, len);
         return 0;
       }
-      log_debug("Failed to send\n");
+      log_debug("Failed to send");
       return -1;
     }
   }
