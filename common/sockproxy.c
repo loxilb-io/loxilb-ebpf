@@ -306,8 +306,8 @@ proxy_server_setup(int fd, uint32_t server, uint16_t port, uint8_t protocol)
 
   if (protocol == IPPROTO_SCTP) {
     memset(&im, 0, sizeof(im));
-    im.sinit_num_ostreams = 10;
-    im.sinit_max_instreams = 10;
+    im.sinit_num_ostreams = 1;
+    im.sinit_max_instreams = 1;
     im.sinit_max_attempts = 4;
     rc = setsockopt(fd, IPPROTO_SCTP, SCTP_INITMSG, &im, sizeof(im));
     if (rc < 0) {
@@ -470,6 +470,7 @@ sockproxy_setup_endpoint(uint32_t xip, uint16_t xport, uint8_t protocol,
 
         PROXY_UNLOCK();
         if (sel) {
+          *fdsz = sel;
           return 0;
         }
         return -1;
@@ -717,7 +718,12 @@ restart:
             //fds[i].fd = -1;
             break;
           } else {
-            try_xmit_proxy(&fd_pairs[fds[i].fd], buffer, rc, 0);
+            int ep = 0;
+            if (fd_pairs[fds[i].fd].n_rfd) {
+              ep = n_msg % fd_pairs[fds[i].fd].n_rfd;
+              printf("ep ---- %d\n", ep);
+            }
+            try_xmit_proxy(&fd_pairs[fds[i].fd], buffer, rc, ep);
             n_msg++;
           }
         }
@@ -857,6 +863,7 @@ sockproxy_add_entry(struct proxy_ent *new_ent, struct proxy_val *val)
 
   val->main_fd = -1;
   memcpy(&node->val, val, sizeof(*val));
+  //node->val.sel_type = PROXY_SEL_ALL;
 
   node->next = proxy_struct->head;
   proxy_struct->head = node;
