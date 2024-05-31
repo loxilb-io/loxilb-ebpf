@@ -6,6 +6,11 @@
 #ifndef __SOCKPROXY_H__
 #define __SOCKPROXY_H__
 
+typedef enum {
+  PROXY_SOCK_LISTEN = 1,
+  PROXY_SOCK_ACTIVE,
+} proxy_socktype_t;
+
 struct proxy_cache {
   void *cache;
   uint16_t off;
@@ -21,8 +26,10 @@ struct proxy_fd_ent {
   int rfd[MAX_PROXY_EP];
   int n_rfd;
   int mode;
+  int lsel;
   int protocol;
-  struct proxy_cache *cache_head;
+  proxy_socktype_t stype;
+  proxy_cache_t *cache_head;
 };
 typedef struct proxy_fd_ent proxy_fd_ent_t;
 
@@ -47,11 +54,11 @@ struct proxy_val {
 typedef struct proxy_val proxy_val_t;
 
 typedef int (*sockmap_cb_t)(struct llb_sockmap_key *key, int fd, int doadd);
-int sockproxy_find_endpoint(uint32_t xip, uint16_t xport, uint8_t protocol,
-                            uint32_t *epip, uint16_t *epport, uint8_t *epprotocol);
-int sockproxy_add_entry(struct proxy_ent *new_ent, struct proxy_val *val);
-int sockproxy_delete_entry(struct proxy_ent *ent);
-void sockproxy_dump_entry(void);
-int sockproxy_main(sockmap_cb_t cb);
+int proxy_find_ep(uint32_t xip, uint16_t xport, uint8_t protocol,
+                  uint32_t *epip, uint16_t *epport, uint8_t *epprotocol);
+int proxy_add_entry(struct proxy_ent *new_ent, struct proxy_val *val);
+int proxy_delete_entry(struct proxy_ent *ent);
+void proxy_dump_entry(void);
+int proxy_main(sockmap_cb_t cb);
 
 #endif
