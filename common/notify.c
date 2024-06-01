@@ -23,10 +23,8 @@
 #include <ifaddrs.h>
 #include <sys/time.h>
 #include <sys/resource.h>
-
 #include <sys/socket.h>
 #include <netinet/in.h>
-#include <netinet/sctp.h>
 #include <arpa/inet.h>
 #include <linux/types.h>
 #include <linux/tls.h>
