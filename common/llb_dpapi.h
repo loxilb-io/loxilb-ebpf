@@ -13,6 +13,9 @@
 #define LLB_FP_IMG_BPF        "/opt/loxilb/llb_ebpf_main.o"
 #define LLB_FP_IMG_BPF_EGR    "/opt/loxilb/llb_ebpf_emain.o"
 #define LLB_SOCK_ADDR_IMG_BPF "/opt/loxilb/llb_kern_sock.o"
+#define LLB_SOCK_MAP_IMG_BPF  "/opt/loxilb/llb_kern_sockmap.o"
+#define LLB_SOCK_DIR_IMG_BPF  "/opt/loxilb/llb_kern_sockdirect.o"
+#define LLB_SOCK_SP_IMG_BPF   "/opt/loxilb/llb_kern_sockstream.o"
 #define LLB_DB_MAP_PDIR       "/opt/loxilb/dp/bpf"
 
 #define LLB_MAX_LB_NODES      (2)
@@ -46,6 +49,8 @@
 #define LLB_MAX_MHOSTS        (3)
 #define LLB_MAX_SCTP_CHUNKS_INIT (8)
 #define LLB_RWR_MAP_ENTRIES   (1024)
+#define LLB_SOCK_MAP_SZ       (17*1024)
+#define LLB_SOCKID_MAP_SZ     (17*1024)
 
 #define LLB_DP_SUNP_PGM_ID2    (6)
 #define LLB_DP_CRC_PGM_ID2     (5)
@@ -134,6 +139,7 @@ enum llb_dp_tid {
   LL_DP_CP_PERF_RING,
   LL_DP_NAT_EP_MAP,
   LL_DP_SOCK_RWR_MAP,
+  LL_DP_SOCK_PROXY_MAP,
   LL_DP_MAX_MAP
 };
 
@@ -163,7 +169,8 @@ enum {
   DP_SET_ADD_GTP         = 22,
   DP_SET_NEIGH_IPIP      = 23,
   DP_SET_RM_IPIP         = 24,
-  DP_SET_NACT_SESS       = 25
+  DP_SET_NACT_SESS       = 25,
+  DP_SET_FULLPROXY       = 26
 };
 
 struct dp_cmn_act {
@@ -802,6 +809,24 @@ struct dp_ct_ctrtact {
   __u32 entries;
 };
 
+struct llb_sockmap_key {
+  __be32 dip;
+  __be32 sip;
+  __be32 dport;
+  __be32 sport;
+};
+
+struct sock_str_key {
+  __u32 xip;
+  __u16 xport;
+  __u16 res;
+};
+
+struct sock_str_val {
+  __u32 start;
+  __u32 num;
+};
+
 struct ll_dp_pmdi {
   __u32 ifindex;
   __u16 dp_inport;
@@ -864,8 +889,7 @@ int llb_add_map_elem(int tbl, void *k, void *v);
 int llb_del_map_elem(int tbl, void *k);
 void llb_map_loop_and_delete(int tbl, dp_map_walker_t cb, dp_map_ita_t *it);
 int llb_dp_link_attach(const char *ifname, const char *psec, int mp_type, int unload);
-void llb_unload_kern_sock(void);
-void llb_unload_kern_mon(void);
+void llb_unload_kern_all(void);
 void llb_xh_lock(void);
 void llb_xh_unlock(void);
 

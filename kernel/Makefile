@@ -14,8 +14,12 @@ XDP_TARGETS  := llb_xdp_main
 TC_TARGETS   := llb_ebpf_main
 TC_ETARGETS  := llb_ebpf_emain
 MON_TARGETS  := llb_kern_mon
-SOCK_TARGETS := llb_kern_sock
 USER_TARGETS := loxilb_libdp
+
+SOCK_TARGETS       := llb_kern_sock
+SOCKMAP_TARGETS    := llb_kern_sockmap
+SOCKSTREAM_TARGETS := llb_kern_sockstream
+SOCKDIR_TARGETS    := llb_kern_sockdirect
 
 LLC ?= llc
 CLANG ?= clang
