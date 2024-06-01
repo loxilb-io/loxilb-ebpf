@@ -27,7 +27,6 @@
 
 #include <sys/socket.h>
 #include <netinet/in.h>
-#include <netinet/sctp.h>
 #include <arpa/inet.h>
 #include <linux/types.h>
 #include <linux/tls.h>
@@ -304,9 +303,10 @@ static int
 proxy_server_setup(int fd, uint32_t server, uint16_t port, uint8_t protocol)
 {
   struct sockaddr_in addr;
-  struct sctp_initmsg im;
   int rc, on = 1, flags;
 
+#if 0
+  struct sctp_initmsg im;
   if (protocol == IPPROTO_SCTP) {
     memset(&im, 0, sizeof(im));
     im.sinit_num_ostreams = 1;
@@ -318,6 +318,7 @@ proxy_server_setup(int fd, uint32_t server, uint16_t port, uint8_t protocol)
       return -1;
     }
   }
+#endif
 
   rc = setsockopt(fd, SOL_SOCKET,  SO_REUSEADDR, (char *)&on, sizeof(on));
   if (rc < 0) {
