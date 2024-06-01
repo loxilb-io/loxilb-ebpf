@@ -260,7 +260,8 @@ notify_run(void *ctx)
       NOTI_LOCK(nctx);
       ent = &nctx->earr[fd];
       if (ent->fd <= 0) {
-        assert(0); 
+        NOTI_UNLOCK(nctx);
+        continue;
       }
       priv = ent->priv;
       NOTI_UNLOCK(nctx);
@@ -270,7 +271,7 @@ notify_run(void *ctx)
       }
 
       if (type & (NOTI_TYPE_HUP|NOTI_TYPE_ERROR)) {
-        log_debug("Closed fd %d", fd);
+        log_debug("notify closed fd %d", fd);
         notify_delete_ent__(nctx, fd); 
       }
       if (type & NOTI_TYPE_IN) {

@@ -633,7 +633,7 @@ proxy_add_entry(proxy_ent_t *new_ent, proxy_val_t *val)
     return -1; 
   }
 
-  val->main_fd = lsd;
+  node->val.main_fd = lsd;
   fd_ctx = calloc(1, sizeof(*fd_ctx));
   assert(fd_ctx);
 
@@ -726,12 +726,14 @@ proxy_pdestroy(void *priv)
   if (pfe) {
     for (i = 0; i < pfe->n_rfd; i++) {
       if (pfe->rfd[i] > 0) {
+        log_debug("proxy destroy: rfd %d", pfe->rfd[i]);
         close(pfe->rfd[i]);
         pfe->rfd[i] = -1;
       }
     }
     /* Redundant */
     if (pfe->fd > 0) {
+      log_debug("proxy destroy: fd %d", pfe->fd);
       close(pfe->fd);
       pfe->fd = -1;
     }
