@@ -494,7 +494,7 @@ dp_ing_ct_main(void *ctx,  struct xfi *xf)
 
   val = dp_ct_in(ctx, xf);
   if (val < 0) {
-    return DP_PASS;
+    return DP_DROP;
   }
 
   xf->nm.ct_sts = LLB_PIPE_CT_INP;

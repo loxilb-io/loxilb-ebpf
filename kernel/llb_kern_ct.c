@@ -821,7 +821,7 @@ dp_ct_sctp_sm(void *ctx, struct xfi *xf,
       goto end;
     }
 
-    if (c->type != SCTP_INIT_CHUNK && dir != CT_DIR_IN) {
+    if (c->type != SCTP_INIT_CHUNK || dir != CT_DIR_IN) {
       nstate = CT_SCTP_ERR;
       goto end;
     }
@@ -966,8 +966,13 @@ add_nph0:
     break;
   case CT_SCTP_INIT:
 
-    if ((c->type != SCTP_INIT_CHUNK && dir != CT_DIR_IN) &&
-        (c->type != SCTP_INIT_CHUNK_ACK && dir != CT_DIR_OUT)) {
+    if (c->type != SCTP_INIT_CHUNK && c->type != SCTP_INIT_CHUNK_ACK) {
+      nstate = CT_SCTP_ERR;
+      goto end;
+    }
+
+    if ((c->type == SCTP_INIT_CHUNK && dir != CT_DIR_IN) ||
+        (c->type == SCTP_INIT_CHUNK_ACK && dir != CT_DIR_OUT)) {
       nstate = CT_SCTP_ERR;
       goto end;
     }
