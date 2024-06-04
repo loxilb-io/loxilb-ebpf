@@ -2065,6 +2065,11 @@ llb_conv_nat2proxy(void *k, void *v, struct proxy_ent *pent, struct proxy_val *p
     return -1;
   }
 
+  if (dat->sel_type == NAT_LB_SEL_N2) {
+    pval->proxy_mode = PROXY_MODE_ALL;
+    pval->select =  PROXY_SEL_N2;
+  }
+
   pval->n_eps = j;
   return 0;
 }

@@ -28,6 +28,8 @@ struct proxy_fd_ent {
   int mode;
   int lsel;
   int protocol;
+  int seltype;
+  int odir;
   proxy_socktype_t stype;
   proxy_cache_t *cache_head;
 };
@@ -43,9 +45,13 @@ typedef struct proxy_ent proxy_ent_t;
 
 struct proxy_val {
   uint32_t _id;
-#define PROXY_SEL_DFL 0
-#define PROXY_SEL_ALL 1
-  int sel_type;
+#define PROXY_MODE_DFL 0
+#define PROXY_MODE_ALL 1
+  int proxy_mode;
+#define PROXY_SEL_RR    0
+#define PROXY_SEL_HASH  1
+#define PROXY_SEL_N2    2
+  int select;
   int main_fd;
   int ep_sel;
   int n_eps;

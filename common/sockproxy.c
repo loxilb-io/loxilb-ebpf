@@ -36,6 +36,7 @@
 #include "llb_dpapi.h"
 #include "notify.h"
 #include "sockproxy.h"
+#include "ngap_helper.h"
 
 #define SP_MAX_ACCEPT_QSZ 2048
 #define SP_MAX_POLLFD_QSZ 8192
@@ -420,7 +421,7 @@ proxy_setup_ep_connect(uint32_t epip, uint16_t epport, uint8_t protocol)
 
 static int
 proxy_setup_ep(uint32_t xip, uint16_t xport, uint8_t protocol,
-               int *fds, int *fdsz)
+               int *fds, int *fdsz, int *seltype)
 {
   int sel = 0;
   uint32_t epip;
@@ -443,7 +444,7 @@ proxy_setup_ep(uint32_t xip, uint16_t xport, uint8_t protocol,
         return -1;
       }
 
-      if (node->val.sel_type == PROXY_SEL_DFL) {
+      if (node->val.proxy_mode == PROXY_MODE_DFL) {
         sel = node->val.ep_sel % node->val.n_eps;
         if (sel >= MAX_PROXY_EP) break;
         epip = node->val.eps[sel].xip;
@@ -456,10 +457,11 @@ proxy_setup_ep(uint32_t xip, uint16_t xport, uint8_t protocol,
           return -1;
         }
 
+        *seltype = 0;
         *fdsz = 1;
 
         return 0;
-      } else if (node->val.sel_type == PROXY_SEL_ALL) {
+      } else if (node->val.proxy_mode == PROXY_MODE_ALL) {
         int ep = 0;
 
         for (ep = 0; ep < node->val.n_eps; ep++) {
@@ -475,6 +477,7 @@ proxy_setup_ep(uint32_t xip, uint16_t xport, uint8_t protocol,
         PROXY_UNLOCK();
         if (sel) {
           *fdsz = sel;
+          *seltype = node->val.select;
           return 0;
         }
         return -1;
@@ -605,10 +608,11 @@ proxy_add_entry(proxy_ent_t *new_ent, proxy_val_t *val)
   PROXY_LOCK();
 
   while (ent) {
-
-    if (cmp_proxy_ent(&ent->key, new_ent) &&  cmp_proxy_val(&ent->val, val)) {
+    if (cmp_proxy_ent(&ent->key, new_ent) &&
+        cmp_proxy_val(&ent->val, val)) {
       PROXY_UNLOCK();
-      log_info("sockproxy : %s:%u exists", inet_ntoa(*(struct in_addr *)&ent->key.xip), ntohs(ent->key.xport));
+      log_info("sockproxy : %s:%u exists",
+        inet_ntoa(*(struct in_addr *)&ent->key.xip), ntohs(ent->key.xport));
       return -EEXIST;
     }
     ent = ent->next;
@@ -624,7 +628,6 @@ proxy_add_entry(proxy_ent_t *new_ent, proxy_val_t *val)
 
   val->main_fd = -1;
   memcpy(&node->val, val, sizeof(*val));
-  //node->val.sel_type = PROXY_SEL_ALL;
 
   lsd = proxy_sock_init(node->key.xip, node->key.xport, node->key.protocol);
   if (lsd <= 0) {
@@ -779,7 +782,7 @@ proxy_notifer(int fd, notify_type_t type, void *priv)
   struct llb_sockmap_key rkey = { 0 };
   int ep_cfds[MAX_PROXY_EP] = { 0 };
   uint8_t rcvbuf[SP_SOCK_MSG_LEN];
-  int j, n_eps = 0;
+  int j, n_eps = 0, seltype = 0;
   int epprotocol, protocol;
   proxy_fd_ent_t *pfe = priv;
   proxy_fd_ent_t *npfe1 = NULL;
@@ -811,7 +814,8 @@ restart:
         n_eps = 0;
         memset(ep_cfds, 0, sizeof(ep_cfds));
 
-        if (proxy_setup_ep(key.sip, key.sport >> 16, (uint8_t)(protocol), ep_cfds, &n_eps)) {
+        if (proxy_setup_ep(key.sip, key.sport >> 16, (uint8_t)(protocol),
+                           ep_cfds, &n_eps, &seltype)) {
           proxy_log("no endpoint", &key);
           close(new_sd);
           continue;
@@ -850,6 +854,7 @@ restart:
             assert(npfe1);
             npfe1->stype = PROXY_SOCK_ACTIVE;
             npfe1->fd = new_sd;
+            npfe1->seltype = seltype;
           }
 
           npfe2 = calloc(1, sizeof(*npfe2));
@@ -857,6 +862,8 @@ restart:
           npfe2->stype = PROXY_SOCK_ACTIVE;
           npfe2->fd = ep_cfd; 
           npfe2->rfd[0] = new_sd; 
+          npfe2->seltype = seltype;
+          npfe2->odir = 1;
           npfe2->n_rfd++;
 
           if (notify_add_ent(proxy_struct->ns, ep_cfd,
@@ -892,11 +899,16 @@ restart:
           } else {
             int ep = 0;
             if (pfe->n_rfd > 1) {
-              ep = pfe->lsel % pfe->n_rfd;
-              log_debug("ep ---- %d\n", ep);
-              pfe->lsel++;
+              if (pfe->seltype == PROXY_SEL_N2) {
+                ep = ngap_proto_epsel_helper(rcvbuf, rc, pfe->n_rfd);
+              } else {
+                ep = pfe->lsel % pfe->n_rfd;
+                pfe->lsel++;
+                proxy_try_epxmit(pfe, rcvbuf, rc, ep);
+              }
+            } else {
+              proxy_try_epxmit(pfe, rcvbuf, rc, ep);
             }
-            proxy_try_epxmit(pfe, rcvbuf, rc, ep);
           }
         }
       }

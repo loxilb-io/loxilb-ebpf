@@ -756,6 +756,7 @@ struct dp_nat_key {
 #define NAT_LB_SEL_PRIO 2
 #define NAT_LB_SEL_RR_PERSIST 3
 #define NAT_LB_SEL_LC 4
+#define NAT_LB_SEL_N2 5
 
 #define NAT_LB_PERSIST_TIMEOUT (10800000000000ULL)
 
