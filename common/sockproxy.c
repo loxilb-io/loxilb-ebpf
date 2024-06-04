@@ -193,11 +193,11 @@ proxy_try_epxmit(proxy_fd_ent_t *ent, void *msg, size_t len, int sel)
   if (n != len) {
     if (n >= 0) {
       //log_debug("Partial send %d", n);
-      proxy_add_xmitcache(ent, (uint8_t *)(msg) + n, len - n);
+      if (!sel) proxy_add_xmitcache(ent, (uint8_t *)(msg) + n, len - n);
       return 0;
     } else /*if (n < 0)*/ {
       if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) {
-        proxy_add_xmitcache(ent, msg, len);
+        if (!sel) proxy_add_xmitcache(ent, msg, len);
         return 0;
       }
       //log_debug("Failed to send");
@@ -901,11 +901,21 @@ restart:
             if (pfe->n_rfd > 1) {
               if (pfe->seltype == PROXY_SEL_N2) {
                 ep = ngap_proto_epsel_helper(rcvbuf, rc, pfe->n_rfd);
+                if (ep < 0 || ep > pfe->n_rfd) {
+                  void *nb = malloc(rc);
+                  for (int i = 1; i < pfe->n_rfd; i++) {
+                    if (nb != NULL) {
+                      proxy_try_epxmit(pfe, rcvbuf, rc, i);
+                    }
+                  }
+                  if (nb) free(nb);
+                  ep = 0;
+                }
               } else {
                 ep = pfe->lsel % pfe->n_rfd;
                 pfe->lsel++;
-                proxy_try_epxmit(pfe, rcvbuf, rc, ep);
               }
+              proxy_try_epxmit(pfe, rcvbuf, rc, ep);
             } else {
               proxy_try_epxmit(pfe, rcvbuf, rc, ep);
             }

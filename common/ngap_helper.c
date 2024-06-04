@@ -47,8 +47,8 @@ do {                                                              \
   }                                                               \
 } while(0)
 
-uint32_t
-ngap_proto_unmarshal_ueid(void *msg, size_t len)
+int
+ngap_proto_unmarshal_ueid(void *msg, size_t len, uint32_t *identifier)
 {
   struct NGAP_NGAP_PDU *pdu = NULL;
   NGAP_InitiatingMessage_t *im;
@@ -63,6 +63,8 @@ ngap_proto_unmarshal_ueid(void *msg, size_t len)
     return -EINVAL;
   }
 
+  *identifier = 0;
+
   switch (pdu->present) {
   case NGAP_NGAP_PDU_PR_initiatingMessage:
   case NGAP_NGAP_PDU_PR_successfulOutcome:
@@ -71,11 +73,13 @@ ngap_proto_unmarshal_ueid(void *msg, size_t len)
     switch (im->procedureCode) {
     case NGAP_ProcedureCode_id_NGSetup:
     case NGAP_ProcedureCode_id_NGReset:
-      return 0;
+      /* Non-NAS messages */
+      break;
     default: {
       NGAP_InitialUEMessage_t *iuem = &im->value.choice.InitialUEMessage;
       NGAP_InitialUEMessage_IEs_t *ies;
       IE_LOOP_FOR_ID(iuem, ies, id);
+      //log_debug("Procedure %d -- id 0x%x", im->procedureCode, id);
       break;
       }
     }
@@ -85,15 +89,24 @@ ngap_proto_unmarshal_ueid(void *msg, size_t len)
   }
 
   ASN_STRUCT_RESET(asn_DEF_NGAP_NGAP_PDU, pdu);
-  return id;
+  if (id == 0) {
+    return -1;
+  }
+  *identifier = id;
+  return 0;
 }
 
 int
 ngap_proto_epsel_helper(void *msg, size_t len, int max_ep)
 {
   uint32_t hash;
-  uint32_t id = ngap_proto_unmarshal_ueid(msg, len);
+  uint32_t id;
+
+  if (ngap_proto_unmarshal_ueid(msg, len, &id) < 0) {
+    return -1;
+  }
 
   hash = (id >> 16 & 0xffff) ^ (id & 0xffff);
+  log_debug("id = 0x%x hash = 0x%x", id, hash);
   return hash % max_ep;
 }
