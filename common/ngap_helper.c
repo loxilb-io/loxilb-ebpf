@@ -50,7 +50,8 @@ do {                                                              \
 int
 ngap_proto_unmarshal_ueid(void *msg, size_t len, uint32_t *identifier)
 {
-  struct NGAP_NGAP_PDU *pdu = NULL;
+  struct NGAP_NGAP_PDU m = { 0 };
+  struct NGAP_NGAP_PDU *pdu = &m;
   NGAP_InitiatingMessage_t *im;
   unsigned long id = 0;
   asn_dec_rval_t rc;
