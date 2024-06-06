@@ -41,6 +41,16 @@
 #define SP_SOCK_MSG_LEN 8192
 #define PROXY_NUM_BURST_RX 1024
 
+typedef struct proxy_ep_val {
+  int ep_cfd;
+  int ep_num;
+} proxy_ep_val_t;
+
+typedef struct proxy_ep_sel {
+  proxy_ep_val_t ep_cfds[MAX_PROXY_EP];
+  int n_eps;
+} proxy_ep_sel_t;
+
 typedef struct proxy_map_ent {
   struct proxy_ent key;
   struct proxy_val val;
@@ -164,6 +174,7 @@ proxy_xmit_cache(proxy_fd_ent_t *ent)
         curr->off += n;
         curr->len -= n;
         ent->ntb += n;
+        ent->ntp++;
         continue;
       } else /*if (n < 0)*/ {
         //log_debug("Failed to send cache");
@@ -205,6 +216,7 @@ proxy_try_epxmit(proxy_fd_ent_t *ent, void *msg, size_t len, int sel)
       //log_debug("Partial send %d", n);
       if (rfd_ent) {
         rfd_ent->ntb += n;
+        rfd_ent->ntp++;
       }
       if (!sel) proxy_add_xmitcache(ent, (uint8_t *)(msg) + n, len - n);
       return 0;
@@ -220,8 +232,8 @@ proxy_try_epxmit(proxy_fd_ent_t *ent, void *msg, size_t len, int sel)
 
   if (rfd_ent) {
     rfd_ent->ntb += n;
+    rfd_ent->ntp++;
   }
-
 
   return 0;
 }
@@ -439,7 +451,7 @@ proxy_setup_ep_connect(uint32_t epip, uint16_t epport, uint8_t protocol)
 
 static int
 proxy_setup_ep__(uint32_t xip, uint16_t xport, uint8_t protocol,
-                 int *fds, int *fdsz, int *seltype)
+                 proxy_ep_sel_t *ep_sel, int *seltype)
 {
   int sel = 0;
   uint32_t epip;
@@ -466,13 +478,14 @@ proxy_setup_ep__(uint32_t xip, uint16_t xport, uint8_t protocol,
         epport = node->val.eps[sel].xport;
         epprotocol = node->val.eps[sel].protocol;
         node->val.ep_sel++;
-        fds[0] = proxy_setup_ep_connect(epip, epport, (uint8_t)epprotocol);
-        if (fds[0] < 0) {
+        ep_sel->ep_cfds[0].ep_cfd = proxy_setup_ep_connect(epip, epport, (uint8_t)epprotocol);
+        if (ep_sel->ep_cfds[0].ep_cfd < 0) {
           return -1;
         }
 
         *seltype = 0;
-        *fdsz = 1;
+        ep_sel->ep_cfds[0].ep_num = sel;
+        ep_sel->n_eps = 1;
 
         return 0;
       } else if (node->val.proxy_mode == PROXY_MODE_ALL) {
@@ -482,14 +495,15 @@ proxy_setup_ep__(uint32_t xip, uint16_t xport, uint8_t protocol,
           epip = node->val.eps[ep].xip;
           epport = node->val.eps[ep].xport;
           epprotocol = node->val.eps[ep].protocol;
-          fds[sel] = proxy_setup_ep_connect(epip, epport, (uint8_t)epprotocol);
-          if (fds[sel] > 0) {
+          ep_sel->ep_cfds[sel].ep_cfd = proxy_setup_ep_connect(epip, epport, (uint8_t)epprotocol);
+          if (ep_sel->ep_cfds[sel].ep_cfd > 0) {
+            ep_sel->ep_cfds[sel].ep_num = sel;
             sel++;
           }
         }
 
         if (sel) {
-          *fdsz = sel;
+          ep_sel->n_eps = sel;
           *seltype = node->val.select;
           return 0;
         }
@@ -756,12 +770,17 @@ proxy_dump_entry(proxy_info_cb_t cb)
         if (!proxy_ct_from_fd(fd_ent->fd, &pct.ct_in, 0)) {
           pct.st_in.bytes = fd_ent->ntb;
           pct.st_in.bytes += fd_ent->nrb;
+          pct.st_in.packets = fd_ent->ntp;
+          pct.st_in.packets += fd_ent->nrp;
+
           if (!cb) proxy_ct_dump("dir", &pct.ct_in);
           for (j = 0; j < fd_ent->n_rfd; j++) {
             if (!proxy_ct_from_fd(fd_ent->rfd[j], &pct.ct_out, 1)) {
               if (!cb) proxy_ct_dump("rdir", &pct.ct_out);
               pct.st_out.bytes = fd_ent->rfd_ent[j]->ntb;
               pct.st_out.bytes += fd_ent->rfd_ent[j]->nrb;
+              pct.st_out.packets = fd_ent->rfd_ent[j]->ntp;
+              pct.st_out.packets += fd_ent->rfd_ent[j]->nrp;
               if (cb) {
                 cb(&pct);
               }
@@ -770,6 +789,42 @@ proxy_dump_entry(proxy_info_cb_t cb)
         }
       }
       fd_ent = fd_ent->next;
+    }
+    node = node->next;
+    i++;
+  }
+  PROXY_UNLOCK();
+}
+
+void
+proxy_get_entry_stats(uint32_t id, int epid, uint64_t *p, uint64_t *b)
+{
+  proxy_map_ent_t *node = proxy_struct->head;
+  proxy_fd_ent_t *fd_ent;
+  int i = 0;
+  int j = 0;
+
+  *p = 0;
+  *b = 0;
+
+  PROXY_LOCK();
+  while (node) {
+    if (node->val._id == id) {
+      fd_ent = node->val.fdlist;
+      while (fd_ent) {
+        if (fd_ent->odir == 0) {
+          for (j = 0; j < fd_ent->n_rfd; j++) {
+            if (fd_ent->rfd_ent[j]) {
+              if (epid == fd_ent->rfd_ent[j]->ep_num) {
+                *b += fd_ent->rfd_ent[j]->ntb;
+                *p += fd_ent->rfd_ent[j]->ntp;
+              }
+            }
+          }
+        }
+        fd_ent = fd_ent->next;
+      }
+      break;
     }
     node = node->next;
     i++;
@@ -837,14 +892,15 @@ proxy_pdestroy(void *priv)
 }
 
 static void
-proxy_destroy_eps(int sfd, int *ep_cfds, int n_eps)
+proxy_destroy_eps(int sfd, proxy_ep_sel_t *ep_sel)
 {
   int i = 0;
-  for (i = 0; i < n_eps; i++) {
-    if (ep_cfds[i] > 0) {
-      notify_delete_ent(proxy_struct->ns, ep_cfds[i]);
-      close(ep_cfds[i]);
-      ep_cfds[i] = -1;
+  for (i = 0; i < ep_sel->n_eps; i++) {
+    if (ep_sel->ep_cfds[i].ep_cfd > 0) {
+      notify_delete_ent(proxy_struct->ns, ep_sel->ep_cfds[i].ep_cfd);
+      close(ep_sel->ep_cfds[i].ep_cfd);
+      ep_sel->ep_cfds[i].ep_cfd = -1;
+      ep_sel->ep_cfds[i].ep_num = -1;
     }
     if (sfd > 0) {
       notify_delete_ent(proxy_struct->ns, sfd);
@@ -858,7 +914,7 @@ proxy_notifer(int fd, notify_type_t type, void *priv)
 {
   struct llb_sockmap_key key = { 0 };
   struct llb_sockmap_key rkey = { 0 };
-  int ep_cfds[MAX_PROXY_EP] = { 0 };
+  proxy_ep_sel_t ep_sel = { 0 };
   uint8_t rcvbuf[SP_SOCK_MSG_LEN];
   int j, n_eps = 0, seltype = 0;
   int epprotocol, protocol;
@@ -892,24 +948,27 @@ restart:
         proxy_log("new accept()", &key);
 
         n_eps = 0;
-        memset(ep_cfds, 0, sizeof(ep_cfds));
+        memset(&ep_sel, 0, sizeof(ep_sel));
 
         if (proxy_setup_ep__(key.sip, key.sport >> 16, (uint8_t)(protocol),
-                             ep_cfds, &n_eps, &seltype)) {
+                             &ep_sel, &seltype)) {
           proxy_log("no endpoint", &key);
           close(new_sd);
           continue;
         }
 
+        n_eps = ep_sel.n_eps;
+
         for (j = 0; j < n_eps; j++) {
-          int ep_cfd = ep_cfds[j];
+          int ep_cfd = ep_sel.ep_cfds[j].ep_cfd;
+          int ep_num = ep_sel.ep_cfds[j].ep_num;
           if (ep_cfd < 0) {
             assert(0);
           }
 
           if (proxy_skmap_key_from_fd(ep_cfd, &rkey, &epprotocol)) {
             log_error("skmap key from ep_cfd failed");
-            proxy_destroy_eps(new_sd, ep_cfds, n_eps);
+            proxy_destroy_eps(new_sd, &ep_sel);
             goto restart;
           }
 
@@ -923,7 +982,7 @@ restart:
 #ifdef HAVE_SOCKMAP_KTLS
             if (proxy_sock_init_ktls(new_sd)) {
               log_error("tls failed");
-              proxy_destroy_eps(new_sd, ep_cfds, n_eps);
+              proxy_destroy_eps(new_sd, &ep_sel);
               goto restart;
             }
 #endif
@@ -935,6 +994,7 @@ restart:
             npfe1->stype = PROXY_SOCK_ACTIVE;
             npfe1->fd = new_sd;
             npfe1->seltype = seltype;
+            npfe1->ep_num = -1;
             npfe1->head = ent;
             npfe1->next = ent->val.fdlist;
             ent->val.fdlist = npfe1;
@@ -947,6 +1007,7 @@ restart:
           npfe2->rfd[0] = new_sd; 
           npfe2->rfd_ent[0] = npfe1;
           npfe2->seltype = seltype;
+          npfe2->ep_num = ep_num;
           npfe2->odir = 1;
           npfe2->n_rfd++;
           npfe2->head = ent;
@@ -956,7 +1017,7 @@ restart:
           if (notify_add_ent(proxy_struct->ns, ep_cfd,
                NOTI_TYPE_IN|NOTI_TYPE_OUT|NOTI_TYPE_HUP, npfe2))  {
              free(npfe2);
-             proxy_destroy_eps(new_sd, ep_cfds, n_eps);
+             proxy_destroy_eps(new_sd, &ep_sel);
              log_error("failed to add epcfd %d", ep_cfd);
              goto restart;
           }
@@ -970,7 +1031,7 @@ restart:
             if (notify_add_ent(proxy_struct->ns, new_sd,
                 NOTI_TYPE_IN|NOTI_TYPE_OUT|NOTI_TYPE_HUP, npfe1))  {
               free(npfe1);
-              proxy_destroy_eps(new_sd, ep_cfds, n_eps);
+              proxy_destroy_eps(new_sd, &ep_sel);
               log_error("failed to add new_sd %d", new_sd);
               goto restart;
             }
@@ -987,6 +1048,7 @@ restart:
           } else {
             int ep = 0;
             pfe->nrb += rc;
+            pfe->nrp++;
             if (pfe->n_rfd > 1) {
               if (pfe->seltype == PROXY_SEL_N2) {
                 ep = ngap_proto_epsel_helper(rcvbuf, rc, pfe->n_rfd);

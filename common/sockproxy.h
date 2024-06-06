@@ -27,6 +27,7 @@ struct proxy_fd_ent {
   struct proxy_fd_ent *rfd_ent[MAX_PROXY_EP];
   int n_rfd;
   int mode;
+  int ep_num;
   int lsel;
   int protocol;
   int seltype;
@@ -36,7 +37,9 @@ struct proxy_fd_ent {
   struct proxy_fd_ent *next;
   void *head;
   uint64_t nrb;
+  uint64_t nrp;
   uint64_t ntb;
+  uint64_t ntp;
 };
 typedef struct proxy_fd_ent proxy_fd_ent_t;
 
@@ -72,6 +75,7 @@ int proxy_find_ep(uint32_t xip, uint16_t xport, uint8_t protocol,
 int proxy_add_entry(struct proxy_ent *new_ent, struct proxy_val *val);
 int proxy_delete_entry(struct proxy_ent *ent);
 void proxy_dump_entry(proxy_info_cb_t);
+void proxy_get_entry_stats(uint32_t id, int epid, uint64_t *p, uint64_t *b);
 int proxy_main(sockmap_cb_t cb);
 
 #endif
