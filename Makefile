@@ -6,6 +6,7 @@ export kerninstalldir
 KERN = $(wildcard kernel*)
 KERN_CLEAN = $(addsuffix _clean,$(KERN))
 KERN_INST = $(addsuffix _install,$(KERN))
+NGAP_PATH = proto/ngap/
 
 .PHONY: clean $(KERN) $(KERN_CLEAN) $(KERN_INST)
 
@@ -14,10 +15,12 @@ clean: $(KERN_CLEAN)
 install: $(KERN_INST)
 
 $(KERN):
+	$(MAKE) -C $(NGAP_PATH)
 	$(MAKE) -C $@
 
 $(KERN_CLEAN):
 	$(MAKE) -C $(subst _clean,,$@) clean
+	$(MAKE) -C $(NGAP_PATH) clean
 
 $(KERN_INST):
 	@sudo rm -fr $(kerninstalldir)
