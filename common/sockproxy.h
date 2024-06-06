@@ -24,6 +24,7 @@ struct proxy_fd_ent {
   int fd;
 #define MAX_PROXY_EP 16
   int rfd[MAX_PROXY_EP];
+  struct proxy_fd_ent *rfd_ent[MAX_PROXY_EP];
   int n_rfd;
   int mode;
   int lsel;
@@ -32,6 +33,10 @@ struct proxy_fd_ent {
   int odir;
   proxy_socktype_t stype;
   proxy_cache_t *cache_head;
+  struct proxy_fd_ent *next;
+  void *head;
+  uint64_t nrb;
+  uint64_t ntb;
 };
 typedef struct proxy_fd_ent proxy_fd_ent_t;
 
@@ -55,16 +60,18 @@ struct proxy_val {
   int main_fd;
   int ep_sel;
   int n_eps;
+  struct proxy_fd_ent *fdlist;
   proxy_ent_t eps[MAX_PROXY_EP];
 };
 typedef struct proxy_val proxy_val_t;
 
 typedef int (*sockmap_cb_t)(struct llb_sockmap_key *key, int fd, int doadd);
+typedef void (*proxy_info_cb_t)(struct dp_proxy_ct_ent *pct);
 int proxy_find_ep(uint32_t xip, uint16_t xport, uint8_t protocol,
                   uint32_t *epip, uint16_t *epport, uint8_t *epprotocol);
 int proxy_add_entry(struct proxy_ent *new_ent, struct proxy_val *val);
 int proxy_delete_entry(struct proxy_ent *ent);
-void proxy_dump_entry(void);
+void proxy_dump_entry(proxy_info_cb_t);
 int proxy_main(sockmap_cb_t cb);
 
 #endif

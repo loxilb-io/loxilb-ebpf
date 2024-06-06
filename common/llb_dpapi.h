@@ -723,6 +723,15 @@ struct dp_ct_key {
   __u8  v6;
 };
 
+struct dp_proxy_ct_ent {
+  __u32 rid;
+  __u32 aid;
+  struct dp_ct_key ct_in;
+  struct dp_ct_key ct_out;
+  struct dp_pb_stats st_in;
+  struct dp_pb_stats st_out;
+};
+
 struct dp_fwv4_tact {
   struct dp_cmn_act ca; /* Possible actions :
                          *  DP_SET_DROP
@@ -883,6 +892,7 @@ typedef int (*dp_map_walker_t)(int tid, void *key, void *arg);
 int llb_map2fd(int t);
 int llb_fetch_map_stats_cached(int tbl, uint32_t index, int raw, void *bc, void *pc);
 void llb_age_map_entries(int tbl);
+void llb_trigger_get_proxy_entries(void);
 void llb_collect_map_stats(int tbl);
 int llb_fetch_pol_map_stats(int tid, uint32_t e, void *ppass, void *pdrop);
 void llb_clear_map_stats(int tbl, __u32 idx);

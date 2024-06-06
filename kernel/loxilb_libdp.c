@@ -2070,6 +2070,7 @@ llb_conv_nat2proxy(void *k, void *v, struct proxy_ent *pent, struct proxy_val *p
     pval->select =  PROXY_SEL_N2;
   }
 
+  pval->_id = dat->ca.cidx;
   pval->n_eps = j;
   return 0;
 }
@@ -2697,6 +2698,23 @@ llb_age_map_entries(int tbl)
   XH_MPUNLOCK();
 
   return;
+}
+
+void __attribute__((weak))
+goProxyEntCollector(struct dp_proxy_ct_ent *e)
+{
+}
+
+static void
+llb_dump_proxy_entry_single(struct dp_proxy_ct_ent *e)
+{
+  goProxyEntCollector(e);
+}
+
+void
+llb_trigger_get_proxy_entries(void)
+{
+  proxy_dump_entry(llb_dump_proxy_entry_single);
 }
 
 static int
