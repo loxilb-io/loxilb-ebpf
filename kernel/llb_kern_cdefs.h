@@ -36,7 +36,7 @@
 #define PGM_ENT1    1
 
 #define SAMPLE_SIZE 64ul
-#define MAX_CPUS    128
+#define MAX_CPUS    16
 
 #ifndef lock_xadd
 #define lock_xadd(ptr, val)              \
