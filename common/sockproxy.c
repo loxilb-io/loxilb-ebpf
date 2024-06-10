@@ -1049,25 +1049,29 @@ restart:
             int ep = 0;
             pfe->nrb += rc;
             pfe->nrp++;
-            if (pfe->n_rfd > 1) {
-              if (pfe->seltype == PROXY_SEL_N2) {
-                ep = ngap_proto_epsel_helper(rcvbuf, rc, pfe->n_rfd);
-                if (ep < 0 || ep > pfe->n_rfd) {
-                  void *nb = malloc(rc);
-                  for (int i = 1; i < pfe->n_rfd; i++) {
-                    if (nb != NULL) {
-                      proxy_try_epxmit(pfe, rcvbuf, rc, i);
-                    }
-                  }
-                  if (nb) free(nb);
-                  ep = 0;
+            if (pfe->seltype == PROXY_SEL_N2) {
+              ep = ngap_proto_epsel_helper(rcvbuf, rc, pfe->n_rfd);
+              if (ep < 0 || ep > pfe->n_rfd) {
+                if (ep == -2 && pfe->odir && pfe->ep_num > 0) {
+                  log_debug("drop n2 ep(%d)", pfe->ep_num);
+                  goto restart;
                 }
+                void *nb = malloc(rc);
+                for (int i = 0; i < pfe->n_rfd; i++) {
+                  if (nb != NULL) {
+                    proxy_try_epxmit(pfe, rcvbuf, rc, i);
+                  }
+                }
+                if (nb) free(nb);
+                ep = 0;
               } else {
+                proxy_try_epxmit(pfe, rcvbuf, rc, ep);
+              }
+            } else {
+              if (pfe->n_rfd > 1) {
                 ep = pfe->lsel % pfe->n_rfd;
                 pfe->lsel++;
               }
-              proxy_try_epxmit(pfe, rcvbuf, rc, ep);
-            } else {
               proxy_try_epxmit(pfe, rcvbuf, rc, ep);
             }
           }

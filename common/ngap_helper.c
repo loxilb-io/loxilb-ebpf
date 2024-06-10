@@ -55,6 +55,7 @@ ngap_proto_unmarshal_ueid(void *msg, size_t len, uint32_t *identifier)
   NGAP_InitiatingMessage_t *im;
   unsigned long id = 0;
   asn_dec_rval_t rc;
+  int rval = -1;
 
   memset(&pdu, 0, sizeof(pdu));
   memset(&rc, 0, sizeof(rc));
@@ -74,6 +75,10 @@ ngap_proto_unmarshal_ueid(void *msg, size_t len, uint32_t *identifier)
     switch (im->procedureCode) {
     case NGAP_ProcedureCode_id_NGSetup:
     case NGAP_ProcedureCode_id_NGReset:
+      if (pdu->present == NGAP_NGAP_PDU_PR_successfulOutcome ||
+          pdu->present == NGAP_NGAP_PDU_PR_unsuccessfulOutcome) {
+        rval = -2;
+      }
       /* Non-NAS messages */
       break;
     default: {
@@ -91,7 +96,7 @@ ngap_proto_unmarshal_ueid(void *msg, size_t len, uint32_t *identifier)
 
   ASN_STRUCT_RESET(asn_DEF_NGAP_NGAP_PDU, pdu);
   if (id == 0) {
-    return -1;
+    return rval;
   }
   *identifier = id;
   return 0;
@@ -102,9 +107,10 @@ ngap_proto_epsel_helper(void *msg, size_t len, int max_ep)
 {
   uint32_t hash;
   uint32_t id;
+  int ret;
 
-  if (ngap_proto_unmarshal_ueid(msg, len, &id) < 0) {
-    return -1;
+  if ((ret = ngap_proto_unmarshal_ueid(msg, len, &id)) < 0) {
+    return ret;
   }
 
   hash = (id >> 16 & 0xffff) ^ (id & 0xffff);
