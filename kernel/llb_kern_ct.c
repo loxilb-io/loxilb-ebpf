@@ -810,7 +810,7 @@ dp_ct_sctp_sm(void *ctx, struct xfi *xf,
     nstate = CT_SCTP_SHUT;
     goto end;
   case SCTP_ABORT:
-    nstate = CT_SCTP_SHUTC;
+    nstate = CT_SCTP_ABRT;
     goto end;
   }
 
@@ -1277,7 +1277,7 @@ add_nph1:
 #endif
     break;
   case CT_SCTP_ABRT:
-    nstate = CT_SCTP_SHUTC;
+    nstate = CT_SCTP_ABRT;
     break;
   case CT_SCTP_SHUT:
     if (c->type != SCTP_SHUT_ACK && dir != CT_DIR_OUT) {
