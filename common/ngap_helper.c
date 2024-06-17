@@ -113,7 +113,8 @@ ngap_proto_epsel_helper(void *msg, size_t len, int max_ep)
     return ret;
   }
 
+  if (id > 0) id--;
   hash = (id >> 16 & 0xffff) ^ (id & 0xffff);
-  log_debug("id = 0x%x hash = 0x%x", id, hash);
+  //log_debug("id = 0x%x hash = 0x%x: max %d %d", id, hash, max_ep, hash % max_ep);
   return hash % max_ep;
 }
