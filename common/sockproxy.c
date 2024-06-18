@@ -153,7 +153,6 @@ proxy_list_xmitcache(proxy_fd_ent_t *ent)
   struct proxy_cache *curr = ent->cache_head;
 
   while (curr) {
-    log_info("%d:curr %p\n", i, curr);
     curr = curr->next;
     i++;
   }
@@ -213,7 +212,6 @@ proxy_try_epxmit(proxy_fd_ent_t *ent, void *msg, size_t len, int sel)
   n = send(ent->rfd[sel], msg, len, MSG_DONTWAIT|MSG_NOSIGNAL);
   if (n != len) {
     if (n >= 0) {
-      //log_debug("Partial send %d", n);
       if (rfd_ent) {
         rfd_ent->ntb += n;
         rfd_ent->ntp++;
@@ -225,7 +223,6 @@ proxy_try_epxmit(proxy_fd_ent_t *ent, void *msg, size_t len, int sel)
         if (!sel) proxy_add_xmitcache(ent, msg, len);
         return 0;
       }
-      //log_debug("Failed to send");
       return -1;
     }
   }
@@ -574,7 +571,6 @@ proxy_find_ep(uint32_t xip, uint16_t xport, uint8_t protocol,
       *epport = node->val.eps[sel].xport; 
       *epprotocol = node->val.eps[sel].protocol;
       node->val.ep_sel++;
-      //log_debug("epid 0x%x: 0x%u\n", node->val.eps[sel].xip, node->val.eps[sel].xport);
       PROXY_UNLOCK();
       return 0;
     }
@@ -909,6 +905,56 @@ proxy_destroy_eps(int sfd, proxy_ep_sel_t *ep_sel)
   }
 }
 
+#define PROXY_SEL_EP_DROP  -1
+#define PROXY_SEL_EP_BC    1
+#define PROXY_SEL_EP_UC    0
+
+static int
+proxy_select_ep(proxy_fd_ent_t *pfe, void *inbuf, size_t insz, int *ep)
+{
+  *ep = 0;
+
+  switch (pfe->seltype) {
+  case PROXY_SEL_N2:
+    *ep = ngap_proto_epsel_helper(inbuf, insz, pfe->n_rfd);
+    if (*ep < 0 || ep > pfe->n_rfd) {
+      if (*ep == -2 && pfe->odir && pfe->ep_num > 0) {
+        //log_debug("drop n2 ep(%d)", pfe->ep_num);
+        return PROXY_SEL_EP_DROP;
+      }
+      return PROXY_SEL_EP_BC;
+    }
+    break;
+  default:
+    if (pfe->n_rfd > 1) {
+      ep = pfe->lsel % pfe->n_rfd;
+      pfe->lsel++;
+    }
+    break;
+  }
+
+  return PROXY_SEL_EP_UC;
+}
+
+static int
+proxy_multiplexor(proxy_fd_ent_t *pfe, void *inbuf, size_t insz)
+{
+  int epret;
+  int ep = 0;
+
+  epret = proxy_select_ep(pfe, inbuf, insz,  &ep);
+  if (epret == PROXY_SEL_EP_DROP) {
+      return -1;
+  } else if (epret == PROXY_SEL_EP_BC) {
+    for (int i = 0; i < pfe->n_rfd; i++) {
+      proxy_try_epxmit(pfe, inbuf, insz, i);
+    }
+  } else {
+    proxy_try_epxmit(pfe, inbuf, insz, ep);
+  }
+  return 0;
+}
+
 static int
 proxy_notifer(int fd, notify_type_t type, void *priv)
 {
@@ -1046,33 +1092,10 @@ restart:
               goto restart;
             }
           } else {
-            int ep = 0;
             pfe->nrb += rc;
             pfe->nrp++;
-            if (pfe->seltype == PROXY_SEL_N2) {
-              ep = ngap_proto_epsel_helper(rcvbuf, rc, pfe->n_rfd);
-              if (ep < 0 || ep > pfe->n_rfd) {
-                if (ep == -2 && pfe->odir && pfe->ep_num > 0) {
-                  log_debug("drop n2 ep(%d)", pfe->ep_num);
-                  goto restart;
-                }
-                void *nb = malloc(rc);
-                for (int i = 0; i < pfe->n_rfd; i++) {
-                  if (nb != NULL) {
-                    proxy_try_epxmit(pfe, rcvbuf, rc, i);
-                  }
-                }
-                if (nb) free(nb);
-                ep = 0;
-              } else {
-                proxy_try_epxmit(pfe, rcvbuf, rc, ep);
-              }
-            } else {
-              if (pfe->n_rfd > 1) {
-                ep = pfe->lsel % pfe->n_rfd;
-                pfe->lsel++;
-              }
-              proxy_try_epxmit(pfe, rcvbuf, rc, ep);
+            if (proxy_multiplexor(pfe, rcvbuf, rc)) {
+              goto restart;
             }
           }
         }
