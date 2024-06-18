@@ -917,7 +917,7 @@ proxy_select_ep(proxy_fd_ent_t *pfe, void *inbuf, size_t insz, int *ep)
   switch (pfe->seltype) {
   case PROXY_SEL_N2:
     *ep = ngap_proto_epsel_helper(inbuf, insz, pfe->n_rfd);
-    if (*ep < 0 || ep > pfe->n_rfd) {
+    if (*ep < 0 || *ep > pfe->n_rfd) {
       if (*ep == -2 && pfe->odir && pfe->ep_num > 0) {
         //log_debug("drop n2 ep(%d)", pfe->ep_num);
         return PROXY_SEL_EP_DROP;
@@ -927,7 +927,7 @@ proxy_select_ep(proxy_fd_ent_t *pfe, void *inbuf, size_t insz, int *ep)
     break;
   default:
     if (pfe->n_rfd > 1) {
-      ep = pfe->lsel % pfe->n_rfd;
+      *ep = pfe->lsel % pfe->n_rfd;
       pfe->lsel++;
     }
     break;
