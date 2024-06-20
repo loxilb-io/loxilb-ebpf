@@ -586,6 +586,9 @@ proxy_delete_entry__(proxy_ent_t *ent)
 {
   struct proxy_map_ent *prev = NULL;
   struct proxy_map_ent *node;
+  proxy_fd_ent_t *fd_ent;
+
+  fd_ent = node->val.fdlist;
 
   node = proxy_struct->head;
 
@@ -867,8 +870,30 @@ static void
 proxy_pdestroy(void *priv)
 {
   int i = 0;
+  proxy_map_ent_t *ent;
   proxy_fd_ent_t *pfe = priv;
+  proxy_fd_ent_t *fd_ent;
   if (pfe) {
+    ent = pfe->head;
+    assert(ent);
+
+    if (pfe->fd == ent->val.main_fd) {
+      fd_ent = ent->val.fdlist;
+      while (fd_ent) {
+        if (fd_ent->odir == 0) {
+          for (int j = 0; j < fd_ent->n_rfd; j++) {
+            if (fd_ent->rfd[j] > 0) {
+              close(fd_ent->rfd[j]);
+            }
+          }
+          if (fd_ent->fd > 0 && fd_ent->fd != ent->val.main_fd) {
+            close(fd_ent->fd);
+          }
+        }
+        fd_ent = fd_ent->next;
+      }
+    }
+
     for (i = 0; i < pfe->n_rfd; i++) {
       if (pfe->rfd[i] > 0) {
         log_debug("proxy destroy: rfd %d", pfe->rfd[i]);
