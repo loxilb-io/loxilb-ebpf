@@ -187,7 +187,6 @@ proxy_xmit_cache(proxy_fd_ent_t *ent)
         }
       } else {
         n = SSL_write(ent->ssl, (uint8_t *)(curr->cache) + curr->off, curr->len);
-        printf("SSL write %d\n", n);
         if (n <= 0) {
           switch (SSL_get_error(ent->ssl, n)) {
           case SSL_ERROR_ZERO_RETURN:
@@ -1277,9 +1276,7 @@ restart:
       } else if (pfe->stype == PROXY_SOCK_ACTIVE) {
         for (j = 0; j < PROXY_NUM_BURST_RX; j++) {
           int rc = proxy_sock_read(pfe, fd, rcvbuf, SP_SOCK_MSG_LEN);
-          printf("sock read val %d\n", rc);
           if (proxy_sock_read_err(pfe, rc)) {
-            printf("sock read restart\n");
             goto restart;
           }
           pfe->nrb += rc;
