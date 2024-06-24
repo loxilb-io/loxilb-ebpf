@@ -187,10 +187,10 @@ proxy_xmit_cache(proxy_fd_ent_t *ent)
         }
       } else {
         n = SSL_write(ent->ssl, (uint8_t *)(curr->cache) + curr->off, curr->len);
+        printf("SSL write %d\n", n);
         if (n <= 0) {
           switch (SSL_get_error(ent->ssl, n)) {
           case SSL_ERROR_ZERO_RETURN:
-            break;
           case SSL_ERROR_WANT_READ:
           case SSL_ERROR_WANT_WRITE:
           default:
@@ -220,32 +220,46 @@ proxy_try_epxmit(proxy_fd_ent_t *ent, void *msg, size_t len, int sel)
 
   if (ent->rfd_ent[sel]) {
     rfd_ent = ent->rfd_ent[sel];
+  }
+
+  if (rfd_ent) {
     n = proxy_xmit_cache(rfd_ent);
     if (n < 0) {
       proxy_add_xmitcache(rfd_ent, msg, len);
       return 0;
     }
-  }
 
-  n = send(ent->rfd[sel], msg, len, MSG_DONTWAIT|MSG_NOSIGNAL);
-  if (n != len) {
-    if (n >= 0) {
-      if (rfd_ent) {
+    if (!rfd_ent->ssl) {
+      n = send(ent->rfd[sel], msg, len, MSG_DONTWAIT|MSG_NOSIGNAL);
+    } else {
+      n = SSL_write(rfd_ent->ssl, msg, len);
+      if (n <= 0) {
+        switch (SSL_get_error(ent->ssl, n)) {
+          case SSL_ERROR_WANT_READ:
+          case SSL_ERROR_WANT_WRITE:
+            return 0;
+          case SSL_ERROR_ZERO_RETURN:
+          case SSL_ERROR_SSL:
+          default:
+            return -1;
+        }
+      }
+    }
+    if (n != len) {
+      if (n > 0) {
         rfd_ent->ntb += n;
         rfd_ent->ntp++;
-      }
-      if (!sel) proxy_add_xmitcache(ent, (uint8_t *)(msg) + n, len - n);
-      return 0;
-    } else /*if (n < 0)*/ {
-      if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) {
-        if (!sel) proxy_add_xmitcache(ent, msg, len);
+        if (!sel) proxy_add_xmitcache(ent, (uint8_t *)(msg) + n, len - n);
         return 0;
+      } else /*if (n <= 0)*/ {
+        if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) {
+          if (!sel) proxy_add_xmitcache(ent, msg, len);
+          return 0;
+        }
+        return -1;
       }
-      return -1;
     }
-  }
 
-  if (rfd_ent) {
     rfd_ent->ntb += n;
     rfd_ent->ntp++;
   }
@@ -684,6 +698,7 @@ int
 proxy_add_entry(proxy_ent_t *new_ent, proxy_val_t *val)
 {
   int lsd;
+  void *ssl_ctx = NULL;
   proxy_map_ent_t *node;
   proxy_map_ent_t *ent = proxy_struct->head;
   proxy_fd_ent_t *fd_ctx;
@@ -707,30 +722,32 @@ proxy_add_entry(proxy_ent_t *new_ent, proxy_val_t *val)
     return -ENOMEM;
   }
 
+  val->have_ssl = 1;
   memcpy(&node->key, new_ent, sizeof(*ent));
 
   val->main_fd = -1;
   memcpy(&node->val, val, sizeof(*val));
 
   if (val->have_ssl) {
-    val->ssl_ctx = proxy_entry_ssl_ctx_init();
-    assert(val->ssl_ctx);
-    proxy_entry_ssl_cfg_cert(val->ssl_ctx);
+    ssl_ctx = proxy_entry_ssl_ctx_init();
+    assert(ssl_ctx);
+    proxy_entry_ssl_cfg_cert(ssl_ctx);
   }
 
   lsd = proxy_sock_init(node->key.xip, node->key.xport, node->key.protocol);
   if (lsd <= 0) {
     log_error("sockproxy : %s:%u sock-init failed",
         inet_ntoa(*(struct in_addr *)&node->key.xip), ntohs(node->key.xport));
-    if (val->ssl_ctx) {
-      SSL_CTX_free(val->ssl_ctx);
-      val->ssl_ctx = NULL;
+    if (ssl_ctx) {
+      SSL_CTX_free(ssl_ctx);
+      ssl_ctx = NULL;
     }
     PROXY_UNLOCK();
     return -1; 
   }
 
   node->val.main_fd = lsd;
+  node->val.ssl_ctx = ssl_ctx;
   fd_ctx = calloc(1, sizeof(*fd_ctx));
   assert(fd_ctx);
 
@@ -757,7 +774,7 @@ proxy_add_entry(proxy_ent_t *new_ent, proxy_val_t *val)
 
   log_info("sockproxy : %s:%u added %s",
     inet_ntoa(*(struct in_addr *)&node->key.xip), ntohs(node->key.xport),
-    val->ssl_ctx ? "ssl-en":"ssl-dis");
+    node->val.ssl_ctx ? "ssl-en":"ssl-dis");
   
   return 0;
 }
@@ -1088,13 +1105,17 @@ proxy_sock_read_err(proxy_fd_ent_t *pfe, int rval)
     }
     return 0;
   } else {
+    if (rval > 0) return 0;
     switch (SSL_get_error(pfe->ssl, rval)) {
+      case SSL_ERROR_SSL:
+        log_error("ssl-error");
+        return 1;
       case SSL_ERROR_ZERO_RETURN:
         return 1;
       case SSL_ERROR_WANT_READ:
       case SSL_ERROR_WANT_WRITE:
       default:
-        return 0;
+        return 1;
     }
   }
 
@@ -1136,12 +1157,22 @@ restart:
           ssl = SSL_new(ent->val.ssl_ctx);
           assert(ssl);
           SSL_set_fd(ssl, new_sd);
+          if (SSL_accept(ssl) < 0) {
+            SSL_shutdown(ssl);
+            SSL_free(ssl);
+            close(new_sd);
+            continue;
+          }
         }
 
         proxy_sock_setnb(new_sd);
 
         if (proxy_skmap_key_from_fd(new_sd, &key, &protocol)) {
           log_error("skmap key from fd failed");
+          if (ssl) {
+            SSL_shutdown(ssl);
+            SSL_free(ssl);
+          }
           close(new_sd);
           continue;
         }
@@ -1154,6 +1185,10 @@ restart:
         if (proxy_setup_ep__(key.sip, key.sport >> 16, (uint8_t)(protocol),
                              &ep_sel, &seltype)) {
           proxy_log("no endpoint", &key);
+          if (ssl) {
+            SSL_shutdown(ssl);
+            SSL_free(ssl);
+          }
           close(new_sd);
           continue;
         }
@@ -1242,7 +1277,9 @@ restart:
       } else if (pfe->stype == PROXY_SOCK_ACTIVE) {
         for (j = 0; j < PROXY_NUM_BURST_RX; j++) {
           int rc = proxy_sock_read(pfe, fd, rcvbuf, SP_SOCK_MSG_LEN);
+          printf("sock read val %d\n", rc);
           if (proxy_sock_read_err(pfe, rc)) {
+            printf("sock read restart\n");
             goto restart;
           }
           pfe->nrb += rc;
