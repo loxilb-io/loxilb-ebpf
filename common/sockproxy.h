@@ -36,6 +36,7 @@ struct proxy_fd_ent {
   proxy_cache_t *cache_head;
   struct proxy_fd_ent *next;
   void *head;
+  void *ssl;
   uint64_t nrb;
   uint64_t nrp;
   uint64_t ntb;
@@ -63,6 +64,8 @@ struct proxy_val {
   int main_fd;
   int ep_sel;
   int n_eps;
+  int have_ssl;
+  void *ssl_ctx;
   struct proxy_fd_ent *fdlist;
   proxy_ent_t eps[MAX_PROXY_EP];
 };

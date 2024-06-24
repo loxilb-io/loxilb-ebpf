@@ -20,7 +20,6 @@ $(KERN):
 
 $(KERN_CLEAN):
 	$(MAKE) -C $(subst _clean,,$@) clean
-	$(MAKE) -C $(NGAP_PATH) clean
 
 $(KERN_INST):
 	@sudo rm -fr $(kerninstalldir)
