@@ -696,6 +696,11 @@ proxy_entry_ssl_cfg_cert(SSL_CTX *ctx)
     return -EINVAL;
   }
 
+  if (!SSL_CTX_check_private_key(ctx)) {
+    log_error("sockproxy: privkey mismatch with public certificate");
+    return -EINVAL;
+  }
+
   return 0;
 }
 
