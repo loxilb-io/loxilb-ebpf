@@ -571,6 +571,7 @@ proxy_sock_init(uint32_t IP, uint16_t port, uint8_t protocol)
 static void *
 proxy_run(void *arg)
 {
+  SSL_library_init();
   notify_run(proxy_struct->ns);
   return NULL;
 }
@@ -1123,6 +1124,46 @@ proxy_sock_read_err(proxy_fd_ent_t *pfe, int rval)
 }
 
 static int
+proxy_ssl_accept(void *ssl, int fd)
+{
+  struct timeval tv;
+  fd_set fds;
+  int n_try = 0;
+  int sel_rc;
+  int ssl_rc;
+
+  tv.tv_sec = 0;
+  tv.tv_usec = 1000;
+
+  FD_ZERO(&fds);
+  FD_SET(fd, &fds);
+
+  for (n_try = 0; n_try < 10; n_try++) {
+    if ((ssl_rc = SSL_accept(ssl)) > 0) {
+      return 0;
+    }
+
+    sel_rc = 0;
+    switch (SSL_get_error(ssl, ssl_rc)) {
+      case SSL_ERROR_WANT_READ:
+        sel_rc = select(fd + 1, &fds, NULL, NULL, &tv);
+        break;
+      case SSL_ERROR_WANT_WRITE:
+        sel_rc = select(fd + 1, NULL, &fds, NULL, &tv);
+        break;
+      default:
+        log_error("ssl-accept failed %d\n", SSL_get_error(ssl, ssl_rc));
+        return -1;
+    }
+    if (sel_rc < 0) {
+      return -1;
+    }
+  }
+
+  return -1;
+}
+
+static int
 proxy_notifer(int fd, notify_type_t type, void *priv)
 {
   struct llb_sockmap_key key = { 0 };
@@ -1156,7 +1197,7 @@ restart:
           ssl = SSL_new(ent->val.ssl_ctx);
           assert(ssl);
           SSL_set_fd(ssl, new_sd);
-          if (SSL_accept(ssl) < 0) {
+          if (proxy_ssl_accept(ssl, new_sd) < 0) {
             SSL_shutdown(ssl);
             SSL_free(ssl);
             close(new_sd);
