@@ -18,6 +18,7 @@
 #include <time.h>
 #include <assert.h>
 #include <pthread.h>
+#include <signal.h>
 #include <netdb.h>
 #include <poll.h>
 #include <bpf.h>
@@ -274,17 +275,20 @@ proxy_skmap_key_from_fd(int fd, struct llb_sockmap_key *skmap_key, int *protocol
   socklen_t optsize = sizeof(int);
 
   if (getsockopt(fd, SOL_SOCKET, SO_PROTOCOL, protocol, &optsize)) {
+    perror("");
     return -1;
   }
 
   sin_len = sizeof(struct sockaddr);
   if (getsockname(fd, (struct sockaddr*)&sin_addr, &sin_len)) {
+    perror("");
     return -1;
   }
   skmap_key->sip = sin_addr.sin_addr.s_addr;
   skmap_key->sport = sin_addr.sin_port << 16;
 
   if (getpeername(fd, (struct sockaddr*)&sin_addr, &sin_len)) {
+    perror("");
     return -1;
   }
   skmap_key->dip = sin_addr.sin_addr.s_addr;
@@ -572,6 +576,7 @@ static void *
 proxy_run(void *arg)
 {
   SSL_library_init();
+  signal(SIGPIPE, SIG_IGN);
   notify_run(proxy_struct->ns);
   return NULL;
 }
@@ -993,9 +998,16 @@ proxy_pdestroy(void *priv)
 
     for (i = 0; i < pfe->n_rfd; i++) {
       if (pfe->rfd[i] > 0) {
+        fd_ent = pfe->rfd_ent[i];
         log_debug("proxy destroy: rfd %d", pfe->rfd[i]);
         close(pfe->rfd[i]);
         pfe->rfd[i] = -1;
+
+        if (fd_ent && fd_ent->ssl) {
+          SSL_shutdown(fd_ent->ssl);
+          SSL_free(fd_ent->ssl);
+          fd_ent->ssl = NULL;
+        }
       }
     }
 
@@ -1098,9 +1110,9 @@ proxy_sock_read_err(proxy_fd_ent_t *pfe, int rval)
 {
   if (!pfe->ssl) {
     if (rval <= 0) {
-      if (errno != EWOULDBLOCK && errno != EAGAIN) {
-        log_error("pollin : failed");
-      }
+      //if (errno != EWOULDBLOCK && errno != EAGAIN) {
+      //  log_error("pollin : failed %d", rval);
+      //}
       return 1;
     }
     return 0;
