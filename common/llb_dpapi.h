@@ -769,6 +769,9 @@ struct dp_nat_key {
 
 #define NAT_LB_PERSIST_TIMEOUT (10800000000000ULL)
 
+#define SEC_MODE_NONE 0
+#define SEC_MODE_HTTPS 1
+
 struct dp_nat_tacts {
   struct dp_cmn_act ca;
   uint64_t ito;
@@ -778,7 +781,8 @@ struct dp_nat_tacts {
   uint8_t cdis;
   uint8_t npmhh;
   uint16_t sel_hint;
-  uint16_t sel_type;
+  uint8_t sel_type;
+  uint8_t sec_mode;
   uint32_t pmhh[LLB_MAX_MHOSTS];
   struct mf_xfrm_inf nxfrms[LLB_MAX_NXFRMS];
   uint64_t lts;

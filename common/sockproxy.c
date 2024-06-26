@@ -733,7 +733,6 @@ proxy_add_entry(proxy_ent_t *new_ent, proxy_val_t *val)
     return -ENOMEM;
   }
 
-//  val->have_ssl = 1;
   memcpy(&node->key, new_ent, sizeof(*ent));
 
   val->main_fd = -1;
