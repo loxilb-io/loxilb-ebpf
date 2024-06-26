@@ -43,6 +43,7 @@
 
 #define SP_SOCK_MSG_LEN 8192
 #define PROXY_NUM_BURST_RX 1024
+#define PROXY_MAX_THREADS 2
 
 #define PROXY_SSL_FNAME_SZ 128
 #define PROXY_SSL_CERT_DIR "/etc/loxilb/ssl"
@@ -186,16 +187,16 @@ proxy_xmit_cache(proxy_fd_ent_t *ent)
           //log_debug("Failed to send cache");
           return -1;
         }
-      } else {
-        n = SSL_write(ent->ssl, (uint8_t *)(curr->cache) + curr->off, curr->len);
-        if (n <= 0) {
-          switch (SSL_get_error(ent->ssl, n)) {
-          case SSL_ERROR_ZERO_RETURN:
-          case SSL_ERROR_WANT_READ:
-          case SSL_ERROR_WANT_WRITE:
-          default:
-            return 0;
-          }
+      }
+    } else {
+      n = SSL_write(ent->ssl, (uint8_t *)(curr->cache) + curr->off, curr->len);
+      if (n <= 0) {
+        switch (SSL_get_error(ent->ssl, n)) {
+        case SSL_ERROR_ZERO_RETURN:
+        case SSL_ERROR_WANT_READ:
+        case SSL_ERROR_WANT_WRITE:
+        default:
+          return -1;
         }
       }
     }
@@ -577,7 +578,7 @@ proxy_run(void *arg)
 {
   SSL_library_init();
   signal(SIGPIPE, SIG_IGN);
-  notify_run(proxy_struct->ns);
+  notify_start(proxy_struct->ns);
   return NULL;
 }
 
@@ -732,7 +733,7 @@ proxy_add_entry(proxy_ent_t *new_ent, proxy_val_t *val)
     return -ENOMEM;
   }
 
-  val->have_ssl = 1;
+//  val->have_ssl = 1;
   memcpy(&node->key, new_ent, sizeof(*ent));
 
   val->main_fd = -1;
@@ -1371,7 +1372,7 @@ proxy_main(sockmap_cb_t sockmap_cb)
     assert(0);
   }
   proxy_struct->sockmap_cb = sockmap_cb;
-  proxy_struct->ns = notify_ctx_new(&cbs);
+  proxy_struct->ns = notify_ctx_new(&cbs, PROXY_MAX_THREADS);
   assert(proxy_struct->ns);
 
   pthread_create(&proxy_struct->pthr, NULL, proxy_run, NULL);
