@@ -1670,6 +1670,14 @@ llb_fetch_map_stats_cached(int tbl, uint32_t e, int raw,
   }
   pthread_rwlock_unlock(&t->stat_lock);
 
+  if (tbl == LL_DP_NAT_STATS_MAP) {
+    uint64_t b = 0;
+    uint64_t p = 0;
+    proxy_get_entry_stats((uint32_t )((e >> 4) & 0xfff), (int)(e & 0xf), &p, &b);
+    *(uint64_t *)packets += p;
+    *(uint64_t *)bytes += b;
+  }
+
   return 0;
 }
 
@@ -2065,6 +2073,16 @@ llb_conv_nat2proxy(void *k, void *v, struct proxy_ent *pent, struct proxy_val *p
     return -1;
   }
 
+  if (dat->sel_type == NAT_LB_SEL_N2) {
+    pval->proxy_mode = PROXY_MODE_ALL;
+    pval->select =  PROXY_SEL_N2;
+  }
+
+  if (dat->sec_mode == SEC_MODE_HTTPS) {
+    pval->have_ssl = 1;
+  }
+
+  pval->_id = dat->ca.cidx;
   pval->n_eps = j;
   return 0;
 }
@@ -2692,6 +2710,23 @@ llb_age_map_entries(int tbl)
   XH_MPUNLOCK();
 
   return;
+}
+
+void __attribute__((weak))
+goProxyEntCollector(struct dp_proxy_ct_ent *e)
+{
+}
+
+static void
+llb_dump_proxy_entry_single(struct dp_proxy_ct_ent *e)
+{
+  goProxyEntCollector(e);
+}
+
+void
+llb_trigger_get_proxy_entries(void)
+{
+  proxy_dump_entry(llb_dump_proxy_entry_single);
 }
 
 static int

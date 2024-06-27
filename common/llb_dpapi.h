@@ -723,6 +723,15 @@ struct dp_ct_key {
   __u8  v6;
 };
 
+struct dp_proxy_ct_ent {
+  __u32 rid;
+  __u32 aid;
+  struct dp_ct_key ct_in;
+  struct dp_ct_key ct_out;
+  struct dp_pb_stats st_in;
+  struct dp_pb_stats st_out;
+};
+
 struct dp_fwv4_tact {
   struct dp_cmn_act ca; /* Possible actions :
                          *  DP_SET_DROP
@@ -756,8 +765,12 @@ struct dp_nat_key {
 #define NAT_LB_SEL_PRIO 2
 #define NAT_LB_SEL_RR_PERSIST 3
 #define NAT_LB_SEL_LC 4
+#define NAT_LB_SEL_N2 5
 
 #define NAT_LB_PERSIST_TIMEOUT (10800000000000ULL)
+
+#define SEC_MODE_NONE 0
+#define SEC_MODE_HTTPS 1
 
 struct dp_nat_tacts {
   struct dp_cmn_act ca;
@@ -768,7 +781,8 @@ struct dp_nat_tacts {
   uint8_t cdis;
   uint8_t npmhh;
   uint16_t sel_hint;
-  uint16_t sel_type;
+  uint8_t sel_type;
+  uint8_t sec_mode;
   uint32_t pmhh[LLB_MAX_MHOSTS];
   struct mf_xfrm_inf nxfrms[LLB_MAX_NXFRMS];
   uint64_t lts;
@@ -882,6 +896,7 @@ typedef int (*dp_map_walker_t)(int tid, void *key, void *arg);
 int llb_map2fd(int t);
 int llb_fetch_map_stats_cached(int tbl, uint32_t index, int raw, void *bc, void *pc);
 void llb_age_map_entries(int tbl);
+void llb_trigger_get_proxy_entries(void);
 void llb_collect_map_stats(int tbl);
 int llb_fetch_pol_map_stats(int tid, uint32_t e, void *ppass, void *pdrop);
 void llb_clear_map_stats(int tbl, __u32 idx);

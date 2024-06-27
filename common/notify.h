@@ -21,7 +21,7 @@ typedef struct notify_cbs {
 
 int notify_delete_ent(void *ctx, int fd);
 int notify_add_ent(void *ctx, int fd, notify_type_t type, void *priv);
-void notify_run(void *ctx);
-void *notify_ctx_new(notify_cbs_t *cbs);
+int notify_start(void *ctx);
+void *notify_ctx_new(notify_cbs_t *cbs, int n_thrs);
 
 #endif
