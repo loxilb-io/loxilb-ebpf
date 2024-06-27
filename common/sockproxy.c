@@ -45,7 +45,7 @@
 #define PROXY_MAX_THREADS 2
 
 #define PROXY_SSL_FNAME_SZ 128
-#define PROXY_SSL_CERT_DIR "/etc/loxilb/ssl"
+#define PROXY_SSL_CERT_DIR "/etc/loxilb/certs"
 
 typedef struct proxy_ep_val {
   int ep_cfd;
