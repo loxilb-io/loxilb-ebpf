@@ -46,7 +46,7 @@
 #define PROXY_MAX_THREADS 2
 
 #define PROXY_SSL_FNAME_SZ 128
-#define PROXY_SSL_CERT_DIR "/etc/loxilb/ssl"
+#define PROXY_SSL_CERT_DIR "/opt/loxilb/cert"
 
 typedef struct proxy_ep_val {
   int ep_cfd;
@@ -175,18 +175,17 @@ proxy_xmit_cache(proxy_fd_ent_t *ent)
   while (curr) {
     if (!ent->ssl) {
       n = send(ent->fd, (uint8_t *)(curr->cache) + curr->off, curr->len, MSG_DONTWAIT|MSG_NOSIGNAL);
+      if (n <= 0) {
+        /* errno == EAGAIN || errno == EWOULDBLOCK */
+        //log_debug("Failed to send cache");
+        return -1;
+      }
       if (n != curr->len) {
-        if (n >= 0) {
-          /* errno == EAGAIN || errno == EWOULDBLOCK */
-          curr->off += n;
-          curr->len -= n;
-          ent->ntb += n;
-          ent->ntp++;
-          continue;
-        } else /*if (n < 0)*/ {
-          //log_debug("Failed to send cache");
-          return -1;
-        }
+        curr->off += n;
+        curr->len -= n;
+        ent->ntb += n;
+        ent->ntp++;
+        continue;
       }
     } else {
       n = SSL_write(ent->ssl, (uint8_t *)(curr->cache) + curr->off, curr->len);
@@ -577,7 +576,6 @@ static void *
 proxy_run(void *arg)
 {
   SSL_library_init();
-  signal(SIGPIPE, SIG_IGN);
   notify_start(proxy_struct->ns);
   return NULL;
 }
@@ -685,14 +683,14 @@ int
 proxy_entry_ssl_cfg_cert(SSL_CTX *ctx)
 {
   char fpath[512];
-  sprintf(fpath, "%s/%s", PROXY_SSL_CERT_DIR, "cert.pem");
+  sprintf(fpath, "%s/%s", PROXY_SSL_CERT_DIR, "server.crt");
   if (SSL_CTX_use_certificate_file(ctx, fpath, SSL_FILETYPE_PEM) <= 0) {
     log_error("sockproxy: pubcert load failed");
     return -EINVAL;
   }
 
-  sprintf(fpath, "%s/%s", PROXY_SSL_CERT_DIR, "key.pem");
-  if (SSL_CTX_use_PrivateKey_file(ctx, "key.pem", SSL_FILETYPE_PEM) <= 0 ) {
+  sprintf(fpath, "%s/%s", PROXY_SSL_CERT_DIR, "server.key");
+  if (SSL_CTX_use_PrivateKey_file(ctx, fpath, SSL_FILETYPE_PEM) <= 0 ) {
     log_error("sockproxy: privkey load failed");
     return -EINVAL;
   }
@@ -1002,19 +1000,25 @@ proxy_pdestroy(void *priv)
     }
 
     for (i = 0; i < pfe->n_rfd; i++) {
-      if (pfe->rfd[i] > 0) {
-        fd_ent = pfe->rfd_ent[i];
-        log_debug("proxy destroy: rfd %d", pfe->rfd[i]);
-        close(pfe->rfd[i]);
-        pfe->rfd[i] = -1;
+      fd_ent = pfe->rfd_ent[i];
+      if (fd_ent && fd_ent->fd > 0) {
+        log_debug("proxy destroy: rfd %d", fd_ent->fd);
 
-        if (fd_ent && fd_ent->ssl) {
+        proxy_destroy_xmitcache(fd_ent);
+
+        close(fd_ent->fd);
+        fd_ent->fd = -1;
+
+        if (fd_ent->ssl) {
           SSL_shutdown(fd_ent->ssl);
           SSL_free(fd_ent->ssl);
           fd_ent->ssl = NULL;
         }
       }
+      pfe->rfd[i] = -1;
     }
+
+    proxy_destroy_xmitcache(pfe);
 
     if (pfe->ssl) {
       SSL_shutdown(pfe->ssl);
@@ -1027,7 +1031,6 @@ proxy_pdestroy(void *priv)
       close(pfe->fd);
       pfe->fd = -1;
     }
-    proxy_destroy_xmitcache(pfe); 
     free(pfe);
   }
 }
