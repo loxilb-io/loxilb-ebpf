@@ -45,7 +45,7 @@
 #define PROXY_MAX_THREADS 2
 
 #define PROXY_SSL_FNAME_SZ 128
-#define PROXY_SSL_CERT_DIR "/etc/loxilb/certs"
+#define PROXY_SSL_CERT_DIR "/opt/loxilb/cert"
 
 typedef struct proxy_ep_val {
   int ep_cfd;
@@ -684,14 +684,14 @@ int
 proxy_entry_ssl_cfg_cert(SSL_CTX *ctx)
 {
   char fpath[512];
-  sprintf(fpath, "%s/%s", PROXY_SSL_CERT_DIR, "cert.pem");
+  sprintf(fpath, "%s/%s", PROXY_SSL_CERT_DIR, "server.crt");
   if (SSL_CTX_use_certificate_file(ctx, fpath, SSL_FILETYPE_PEM) <= 0) {
     log_error("sockproxy: pubcert load failed");
     return -EINVAL;
   }
 
-  sprintf(fpath, "%s/%s", PROXY_SSL_CERT_DIR, "key.pem");
-  if (SSL_CTX_use_PrivateKey_file(ctx, "key.pem", SSL_FILETYPE_PEM) <= 0 ) {
+  sprintf(fpath, "%s/%s", PROXY_SSL_CERT_DIR, "server.key");
+  if (SSL_CTX_use_PrivateKey_file(ctx, fpath, SSL_FILETYPE_PEM) <= 0 ) {
     log_error("sockproxy: privkey load failed");
     return -EINVAL;
   }
