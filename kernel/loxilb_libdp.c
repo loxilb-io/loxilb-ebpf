@@ -15,6 +15,7 @@
 #include <unistd.h>
 #include <time.h>
 #include <assert.h>
+#include <signal.h>
 #include <pthread.h>
 #include <netdb.h>
 #include <ifaddrs.h>
@@ -3176,6 +3177,8 @@ loxilb_main(struct ebpfcfg *cfg)
   xh = calloc(1, sizeof(*xh));
   assert(xh);
 
+  sigaction(SIGPIPE, &(struct sigaction){.sa_handler = SIG_IGN}, NULL);
+
   /* Save any special config parameters */
   if (cfg) {
 
@@ -3203,6 +3206,7 @@ loxilb_main(struct ebpfcfg *cfg)
   }
 
   llb_xh_init(xh);
+
   return 0;
 }
 

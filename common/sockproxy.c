@@ -174,18 +174,17 @@ proxy_xmit_cache(proxy_fd_ent_t *ent)
   while (curr) {
     if (!ent->ssl) {
       n = send(ent->fd, (uint8_t *)(curr->cache) + curr->off, curr->len, MSG_DONTWAIT|MSG_NOSIGNAL);
+      if (n <= 0) {
+        /* errno == EAGAIN || errno == EWOULDBLOCK */
+        //log_debug("Failed to send cache");
+        return -1;
+      }
       if (n != curr->len) {
-        if (n >= 0) {
-          /* errno == EAGAIN || errno == EWOULDBLOCK */
-          curr->off += n;
-          curr->len -= n;
-          ent->ntb += n;
-          ent->ntp++;
-          continue;
-        } else /*if (n < 0)*/ {
-          //log_debug("Failed to send cache");
-          return -1;
-        }
+        curr->off += n;
+        curr->len -= n;
+        ent->ntb += n;
+        ent->ntp++;
+        continue;
       }
     } else {
       n = SSL_write(ent->ssl, (uint8_t *)(curr->cache) + curr->off, curr->len);
@@ -576,7 +575,6 @@ static void *
 proxy_run(void *arg)
 {
   SSL_library_init();
-  signal(SIGPIPE, SIG_IGN);
   notify_start(proxy_struct->ns);
   return NULL;
 }
@@ -1001,19 +999,25 @@ proxy_pdestroy(void *priv)
     }
 
     for (i = 0; i < pfe->n_rfd; i++) {
-      if (pfe->rfd[i] > 0) {
-        fd_ent = pfe->rfd_ent[i];
-        log_debug("proxy destroy: rfd %d", pfe->rfd[i]);
-        close(pfe->rfd[i]);
-        pfe->rfd[i] = -1;
+      fd_ent = pfe->rfd_ent[i];
+      if (fd_ent && fd_ent->fd > 0) {
+        log_debug("proxy destroy: rfd %d", fd_ent->fd);
 
-        if (fd_ent && fd_ent->ssl) {
+        proxy_destroy_xmitcache(fd_ent);
+
+        close(fd_ent->fd);
+        fd_ent->fd = -1;
+
+        if (fd_ent->ssl) {
           SSL_shutdown(fd_ent->ssl);
           SSL_free(fd_ent->ssl);
           fd_ent->ssl = NULL;
         }
       }
+      pfe->rfd[i] = -1;
     }
+
+    proxy_destroy_xmitcache(pfe);
 
     if (pfe->ssl) {
       SSL_shutdown(pfe->ssl);
@@ -1026,7 +1030,6 @@ proxy_pdestroy(void *priv)
       close(pfe->fd);
       pfe->fd = -1;
     }
-    proxy_destroy_xmitcache(pfe); 
     free(pfe);
   }
 }
