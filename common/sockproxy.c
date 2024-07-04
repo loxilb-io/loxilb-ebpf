@@ -126,6 +126,7 @@ proxy_add_xmitcache(proxy_fd_ent_t *ent, uint8_t *cache, size_t len)
   return 0;
 }
 
+#ifdef HAVE_PROXY_DEBUG
 static void
 proxy_log(const char *str, struct llb_sockmap_key *key)
 {
@@ -137,6 +138,9 @@ proxy_log(const char *str, struct llb_sockmap_key *key)
   log_debug("%s %s:%u -> %s:%u", str,
             ab1, ntohs((key->dport >> 16)), ab2, ntohs(key->sport >> 16));
 }
+#else
+#define proxy_log(arg1, arg2)
+#endif
 
 static void
 proxy_destroy_xmitcache(proxy_fd_ent_t *ent)
@@ -965,71 +969,106 @@ proxy_selftests()
 }
 
 static void
+proxy_release_fd_ctx(proxy_fd_ent_t *fd_ent)
+{
+  if (fd_ent->fd > 0) {
+    //log_debug("proxy release: fd %d", fd_ent->fd);
+
+    proxy_destroy_xmitcache(fd_ent);
+
+    if (fd_ent->ssl) {
+      SSL_shutdown(fd_ent->ssl);
+      SSL_free(fd_ent->ssl);
+      fd_ent->ssl = NULL;
+    }
+
+    close(fd_ent->fd);
+    fd_ent->fd = -1;
+  }
+}
+
+static void
+proxy_release_rfd_ctx(proxy_fd_ent_t *pfe)
+{
+  proxy_fd_ent_t *fd_ent;
+
+  for (int i = 0; i < pfe->n_rfd; i++) {
+    fd_ent = pfe->rfd_ent[i];
+    if (fd_ent) {
+      //log_debug("proxy destroy: rfd %d", fd_ent->fd);
+      proxy_release_fd_ctx(fd_ent);
+    }
+    pfe->rfd[i] = -1;
+  }
+}
+
+static void
+proxy_reset_fd_list(proxy_map_ent_t *ent, void *match_pfe)
+{
+  proxy_fd_ent_t *fd_ent = ent->val.fdlist;
+  proxy_fd_ent_t *pfd_ent = NULL;
+
+  if (match_pfe == NULL) {
+    while (fd_ent) {
+      fd_ent->head = NULL;
+      fd_ent = fd_ent->next;
+    }
+    ent->val.fdlist = NULL;
+  } else {
+    while (fd_ent) {
+      if (fd_ent == match_pfe) {
+        if (pfd_ent) {
+          pfd_ent->next = fd_ent->next;
+        } else {
+          ent->val.fdlist = fd_ent->next;
+        }
+        break;
+      }
+      fd_ent = fd_ent->next;
+    }
+  }
+}
+
+static void
 proxy_pdestroy(void *priv)
 {
   int i = 0;
   proxy_map_ent_t *ent;
   proxy_fd_ent_t *pfe = priv;
   proxy_fd_ent_t *fd_ent;
+  proxy_fd_ent_t *pfd_ent;
+  int is_listener = 0;
+
   if (pfe) {
     ent = pfe->head;
-    assert(ent);
+    if (!ent) {
+      free(pfe);
+      return;
+    }
 
     if (pfe->fd == ent->val.main_fd) {
+      is_listener = 1;
       fd_ent = ent->val.fdlist;
       while (fd_ent) {
         if (fd_ent->odir == 0) {
-          for (int j = 0; j < fd_ent->n_rfd; j++) {
-            if (fd_ent->rfd[j] > 0) {
-              close(fd_ent->rfd[j]);
-            }
-          }
-          if (fd_ent->ssl) {
-            SSL_shutdown(fd_ent->ssl);
-            SSL_free(fd_ent->ssl);
-            fd_ent->ssl = NULL;
-          }
-
-          if (fd_ent->fd > 0 && fd_ent->fd != ent->val.main_fd) {
-            close(fd_ent->fd);
+          proxy_release_rfd_ctx(fd_ent);
+          if (fd_ent->fd != ent->val.main_fd) {
+            proxy_release_fd_ctx(fd_ent);
           }
         }
         fd_ent = fd_ent->next;
       }
+    } else {
+      proxy_release_rfd_ctx(pfe);
     }
 
-    for (i = 0; i < pfe->n_rfd; i++) {
-      fd_ent = pfe->rfd_ent[i];
-      if (fd_ent && fd_ent->fd > 0) {
-        log_debug("proxy destroy: rfd %d", fd_ent->fd);
+    //log_debug("proxy destroy: fd %d", pfe->fd);
+    proxy_release_fd_ctx(pfe);
 
-        proxy_destroy_xmitcache(fd_ent);
+    fd_ent = ent->val.fdlist;
+    pfd_ent = NULL;
 
-        close(fd_ent->fd);
-        fd_ent->fd = -1;
-
-        if (fd_ent->ssl) {
-          SSL_shutdown(fd_ent->ssl);
-          SSL_free(fd_ent->ssl);
-          fd_ent->ssl = NULL;
-        }
-      }
-      pfe->rfd[i] = -1;
-    }
-
-    proxy_destroy_xmitcache(pfe);
-
-    if (pfe->ssl) {
-      SSL_shutdown(pfe->ssl);
-      SSL_free(pfe->ssl);
-      pfe->ssl = NULL;
-    }
-    /* Redundant */
-    if (pfe->fd > 0) {
-      log_debug("proxy destroy: fd %d", pfe->fd);
-      close(pfe->fd);
-      pfe->fd = -1;
-    }
+    proxy_reset_fd_list(ent, is_listener ? NULL : pfe);
     free(pfe);
   }
 }
@@ -1118,10 +1157,8 @@ proxy_sock_read_err(proxy_fd_ent_t *pfe, int rval)
     if (rval > 0) return 0;
     switch (SSL_get_error(pfe->ssl, rval)) {
       case SSL_ERROR_SSL:
-        log_error("ssl-error");
-        return 1;
+        //log_error("ssl-error");
       case SSL_ERROR_ZERO_RETURN:
-        return 1;
       case SSL_ERROR_WANT_READ:
       case SSL_ERROR_WANT_WRITE:
       default:

@@ -302,7 +302,7 @@ notify_run(void *ctx, int thread)
       }
 
       if (type & (NOTI_TYPE_HUP|NOTI_TYPE_ERROR)) {
-        log_debug("notify hup %d", fd);
+        //log_debug("notify hup %d", fd);
         notify_delete_ent__(nctx, fd); 
       }
       if (type & NOTI_TYPE_IN) {
