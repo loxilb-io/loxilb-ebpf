@@ -119,17 +119,20 @@ dp_do_nat(void *ctx, struct xfi *xf)
   int sel;
 
   memset(&key, 0, sizeof(key));
-  DP_XADDR_CP(key.daddr, xf->l34m.daddr);
-  if (xf->l34m.nw_proto != IPPROTO_ICMP) {
-    key.dport = xf->l34m.dest;
-  } else {
-    key.dport = 0;
-  }
-  key.zone = xf->pm.zone;
-  key.l4proto = xf->l34m.nw_proto;
   key.mark = (__u16)(xf->pm.dp_mark & 0xffff);
-  if (xf->l2m.dl_type == bpf_ntohs(ETH_P_IPV6)) {
-    key.v6 = 1;
+
+  if (!(key.mark & 0x1000)) {
+    DP_XADDR_CP(key.daddr, xf->l34m.daddr);
+    if (xf->l34m.nw_proto != IPPROTO_ICMP) {
+      key.dport = xf->l34m.dest;
+    } else {
+      key.dport = 0;
+    }
+    key.zone = xf->pm.zone;
+    key.l4proto = xf->l34m.nw_proto;
+    if (xf->l2m.dl_type == bpf_ntohs(ETH_P_IPV6)) {
+      key.v6 = 1;
+    }
   }
 
   LL_DBG_PRINTK("[NAT] Lookup");
