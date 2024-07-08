@@ -5,37 +5,6 @@
  * SPDX-License-Identifier: (GPL-2.0 OR BSD-2-Clause)
  */
 
-static int __always_inline
-dp_do_fcv4_ct_helper(struct xfi *xf) 
-{
-  struct dp_ct_key key;
-  struct dp_ct_tact *act;
-
-  CT_KEY_GEN(&key, xf);
-
-  act = bpf_map_lookup_elem(&ct_map, &key);
-  if (!act) {
-    LL_DBG_PRINTK("[FCH4] miss");
-    return -1;
-  }
-
-  /* We dont do much strict tracking after EST state.
-   * But need to maintain certain ct info
-   */
-  switch (act->ca.act_type) {
-  case DP_SET_NOP:
-  case DP_SET_SNAT:
-  case DP_SET_DNAT:
-    act->ctd.pi.t.tcp_cts[CT_DIR_IN].pseq = xf->l34m.seq;
-    act->ctd.pi.t.tcp_cts[CT_DIR_IN].pack = xf->l34m.ack;
-    break;
-  default:
-    break;
-  }
-
-  return 0;
-}
-
 static int  __always_inline
 dp_mk_fcv4_key(struct xfi *xf, struct dp_fcv4_key *key)
 {

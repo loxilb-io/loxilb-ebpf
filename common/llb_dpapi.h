@@ -483,8 +483,11 @@ struct dp_pb_stats {
 };
 typedef struct dp_pb_stats dp_pb_stats_t;
 
+#define DP_ST_LTO  (10000000000ULL)
+
 struct dp_pbc_stats {
   dp_pb_stats_t st;
+  uint64_t lts_used;
   int used;
 };
 typedef struct dp_pbc_stats dp_pbc_stats_t;

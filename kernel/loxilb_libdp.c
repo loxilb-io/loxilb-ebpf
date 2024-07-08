@@ -1577,6 +1577,7 @@ ll_get_stats_pcpu_arr(int mfd, __u32 idx,
   __u64 sum_bytes = 0;
   __u64 sum_pkts = 0;
   __u64 opc = 0;
+  __u64 cts;
   int i;
 
   if ((bpf_map_lookup_elem(mfd, &idx, values)) != 0) {
@@ -1584,7 +1585,10 @@ ll_get_stats_pcpu_arr(int mfd, __u32 idx,
     return;
   }
   
+  cts = get_os_nsecs();
   opc = s->st.packets;
+  if (s->lts_used == 0)
+    s->lts_used = cts;
 
   /* Sum values from each CPU */
   for (i = 0; i < nr_cpus; i++) {
@@ -1602,6 +1606,9 @@ ll_get_stats_pcpu_arr(int mfd, __u32 idx,
        (unsigned long long)(s->st.bytes));
 #endif
     if (s->st.packets > opc) {
+      s->used = 1;
+      s->lts_used = cts;
+    } else if (cts - s->lts_used < DP_ST_LTO) {
       s->used = 1;
     }
     if (cb) {
