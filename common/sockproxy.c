@@ -1078,7 +1078,7 @@ proxy_pdestroy(void *priv)
       proxy_release_rfd_ctx(pfe);
     }
 
-    //printf("proxy destroy: fd %d\n", pfe->fd);
+    //log_debug("proxy destroy: fd %d", pfe->fd);
     proxy_release_fd_ctx(pfe);
 
     proxy_reset_fd_list(ent, is_listener ? NULL : pfe);
