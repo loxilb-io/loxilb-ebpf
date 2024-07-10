@@ -621,13 +621,10 @@ proxy_find_ep(uint32_t xip, uint16_t xport, uint8_t protocol,
 }
 
 static int
-proxy_delete_entry__(proxy_ent_t *ent)
+proxy_delete_entry__(proxy_ent_t *ent, int *mfd, void **ssl_ctx)
 {
   struct proxy_map_ent *prev = NULL;
   struct proxy_map_ent *node;
-  proxy_fd_ent_t *fd_ent;
-
-  fd_ent = node->val.fdlist;
 
   node = proxy_struct->head;
 
@@ -648,14 +645,14 @@ proxy_delete_entry__(proxy_ent_t *ent)
     }
 
     if (node->val.main_fd > 0) {
-      notify_delete_ent(proxy_struct->ns, node->val.main_fd);
-      close(node->val.main_fd);
+      *mfd = node->val.main_fd;
     }
     if (node->val.ssl_ctx) {
-      SSL_CTX_free(node->val.ssl_ctx);
+      *ssl_ctx = node->val.ssl_ctx;
       node->val.ssl_ctx = NULL;
     }
-    free(node);
+    /* This node is freed after cleanup in proxy_pdestroy() */
+    //free(node);
   } else {
     return -EINVAL;
   }
@@ -793,10 +790,21 @@ proxy_add_entry(proxy_ent_t *new_ent, proxy_val_t *val)
 int
 proxy_delete_entry(proxy_ent_t *ent)
 {
-  int ret = 0;
+  int ret = 0, fd = 0;
+  void *ssl_ctx = NULL;
+
   PROXY_LOCK();
-  ret = proxy_delete_entry__(ent);
+  ret = proxy_delete_entry__(ent, &fd, &ssl_ctx);
   PROXY_UNLOCK();
+
+  if (fd > 0) {
+    notify_delete_ent(proxy_struct->ns, fd);
+    close(fd);
+  }
+
+  if (ssl_ctx) {
+    SSL_CTX_free(ssl_ctx);
+  }
 
   return ret;
 }
@@ -991,15 +999,22 @@ static void
 proxy_release_rfd_ctx(proxy_fd_ent_t *pfe)
 {
   proxy_fd_ent_t *fd_ent;
+  int j = 0;
 
   for (int i = 0; i < pfe->n_rfd; i++) {
     fd_ent = pfe->rfd_ent[i];
     if (fd_ent) {
       //log_debug("proxy destroy: rfd %d", fd_ent->fd);
       proxy_release_fd_ctx(fd_ent);
+      pfe->rfd_ent[i] = NULL;
+      for (int j = 0; j < fd_ent->n_rfd; j++) {
+        fd_ent->rfd_ent[j] = NULL;
+      }
+      fd_ent->n_rfd = 0;
     }
     pfe->rfd[i] = -1;
   }
+  pfe->n_rfd = 0;
 }
 
 static void
@@ -1024,6 +1039,7 @@ proxy_reset_fd_list(proxy_map_ent_t *ent, void *match_pfe)
         }
         break;
       }
+      pfd_ent = fd_ent;
       fd_ent = fd_ent->next;
     }
   }
@@ -1032,17 +1048,17 @@ proxy_reset_fd_list(proxy_map_ent_t *ent, void *match_pfe)
 static void
 proxy_pdestroy(void *priv)
 {
-  int i = 0;
   proxy_map_ent_t *ent;
   proxy_fd_ent_t *pfe = priv;
   proxy_fd_ent_t *fd_ent;
-  proxy_fd_ent_t *pfd_ent;
   int is_listener = 0;
 
+  PROXY_LOCK();
   if (pfe) {
     ent = pfe->head;
     if (!ent) {
       free(pfe);
+      PROXY_UNLOCK();
       return;
     }
 
@@ -1062,15 +1078,16 @@ proxy_pdestroy(void *priv)
       proxy_release_rfd_ctx(pfe);
     }
 
-    //log_debug("proxy destroy: fd %d", pfe->fd);
+    //printf("proxy destroy: fd %d\n", pfe->fd);
     proxy_release_fd_ctx(pfe);
-
-    fd_ent = ent->val.fdlist;
-    pfd_ent = NULL;
 
     proxy_reset_fd_list(ent, is_listener ? NULL : pfe);
     free(pfe);
+    if (is_listener) {
+      free(ent);
+    }
   }
+  PROXY_UNLOCK();
 }
 
 static void
@@ -1222,11 +1239,12 @@ proxy_notifer(int fd, notify_type_t type, void *priv)
   proxy_fd_ent_t *pfe = priv;
   proxy_fd_ent_t *npfe1 = NULL;
   proxy_fd_ent_t *npfe2 = NULL;
-  proxy_map_ent_t *ent = pfe->head;
+  proxy_map_ent_t *ent;
   SSL *ssl = NULL;
 
   //log_debug("Fd = %d type 0x%x", fd, type);
   PROXY_LOCK();
+  ent = pfe->head;
 restart:
   while (type) {
     if (type & NOTI_TYPE_IN) {
