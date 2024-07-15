@@ -190,9 +190,12 @@ struct dp_rt_l2nh_act {
   __u16 rnh_num;
 };
 
+#define DP_MAX_ACTIVE_PATHS (4)
+
 struct dp_rt_nh_act {
-  __u16 nh_num;
-  __u16 bd; 
+  __u16 nh_num[DP_MAX_ACTIVE_PATHS];
+  __u16 naps;
+  __u16 bd;
   __u32 tid;
   struct dp_rt_l2nh_act l2nh;
 };

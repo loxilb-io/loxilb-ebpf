@@ -48,7 +48,7 @@ dp_pipe_set_l32_tun_nh(void *ctx, struct xfi *xf,
                        struct dp_rt_nh_act *rnh)
 {
   struct dp_rt_l2nh_act *nl2;
-  xf->pm.nh_num = rnh->nh_num;
+  xf->pm.nh_num = rnh->nh_num[0];
   /*
    * We do not set out_bd here. After NH lookup match is
    * found and packet tunnel insertion is done, BD is set accordingly
@@ -120,7 +120,15 @@ dp_do_rtops(void *ctx, struct xfi *xf, void *fa_, struct dp_rt_tact *act)
     xf->pm.oport = ra->oport;
   } else if (act->ca.act_type == DP_SET_RT_NHNUM) {
     struct dp_rt_nh_act *rnh = &act->rt_nh;
-    xf->pm.nh_num = rnh->nh_num;
+
+    if (rnh->naps > 1) {
+      int sel = dp_get_pkt_hash(ctx) % rnh->naps;
+      if (sel >= 0 && sel < DP_MAX_ACTIVE_PATHS) {
+        xf->pm.nh_num = rnh->nh_num[sel];
+      }
+    } else {
+      xf->pm.nh_num = rnh->nh_num[0];
+    }
     return dp_do_rt_fwdops(ctx, xf);
   } /*else if (act->ca.act_type == DP_SET_L3RT_TUN_NH) {
 #ifdef HAVE_DP_EXTFC
