@@ -39,8 +39,8 @@
 #include "llb_dpapi.h"
 #include "notify.h"
 #include "sockproxy.h"
+#include "picohttpparser.h"
 
-#define SP_SOCK_MSG_LEN 8192
 #define PROXY_NUM_BURST_RX 1024
 #define PROXY_MAX_THREADS 2
 
@@ -999,7 +999,6 @@ static void
 proxy_release_rfd_ctx(proxy_fd_ent_t *pfe)
 {
   proxy_fd_ent_t *fd_ent;
-  int j = 0;
 
   for (int i = 0; i < pfe->n_rfd; i++) {
     fd_ent = pfe->rfd_ent[i];
@@ -1233,7 +1232,7 @@ proxy_notifer(int fd, notify_type_t type, void *priv)
   struct llb_sockmap_key key = { 0 };
   struct llb_sockmap_key rkey = { 0 };
   proxy_ep_sel_t ep_sel = { 0 };
-  uint8_t rcvbuf[SP_SOCK_MSG_LEN];
+  //uint8_t rcvbuf[SP_SOCK_MSG_LEN];
   int j, n_eps = 0, seltype = 0;
   int epprotocol, protocol;
   proxy_fd_ent_t *pfe = priv;
@@ -1381,13 +1380,51 @@ restart:
         }
       } else if (pfe->stype == PROXY_SOCK_ACTIVE) {
         for (j = 0; j < PROXY_NUM_BURST_RX; j++) {
-          int rc = proxy_sock_read(pfe, fd, rcvbuf, SP_SOCK_MSG_LEN);
+          int rc = proxy_sock_read(pfe, fd, pfe->rcvbuf + pfe->rcv_off, SP_SOCK_MSG_LEN - pfe->rcv_off);
           if (proxy_sock_read_err(pfe, rc)) {
             goto restart;
           }
+          if (!pfe->odir) {
+            const char *method, *path;
+            int pret, minor_version;
+            size_t  method_len, path_len, num_headers;
+            struct phr_header headers[64];
+            num_headers = sizeof(headers) / sizeof(headers[0]);
+            printf("headers %d:\n", num_headers);
+            printf("rcv buf |%s|\n", pfe->rcvbuf + pfe->rcv_off);
+            //pret = phr_parse_headers((char *)rcvbuf, sizeof(rcvbuf)-1, headers, &num_headers, prevbuflen);
+            pret = phr_parse_request ((char *)(pfe->rcvbuf + pfe->rcv_off), SP_SOCK_MSG_LEN-pfe->rcv_off-1, 
+                              &method, &method_len, &path, &path_len, &minor_version,
+                              headers, &num_headers, pfe->rcv_off);
+            if (pret == -1) {
+              printf("Parse error\n");
+              pfe->rcv_off = 0;
+              goto restart;
+            } else if (pret < 0) {
+              printf("Incomplete error\n");
+              if (pfe->rcv_off + rc >= SP_SOCK_MSG_LEN) {
+                pfe->rcv_off = 0;
+              } else {
+                pfe->rcv_off += rc;
+              }
+              goto restart;
+            }
+
+            pfe->rcv_off = 0;
+
+            printf("method is %.*s\n", (int)method_len, method);
+            printf("path is %.*s\n", (int)path_len, path);
+            printf("HTTP version is 1.%d\n", minor_version);
+            printf("headers:\n");
+            for (int i = 0; i != num_headers; ++i) {
+                printf("%.*s: %.*s\n", (int)headers[i].name_len, headers[i].name,
+                (int)headers[i].value_len, headers[i].value);
+            }
+          }
+
           pfe->nrb += rc;
           pfe->nrp++;
-          if (proxy_multiplexor(pfe, rcvbuf, rc)) {
+          if (proxy_multiplexor(pfe, pfe->rcvbuf, rc)) {
             goto restart;
           }
         }

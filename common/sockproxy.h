@@ -41,6 +41,9 @@ struct proxy_fd_ent {
   uint64_t nrp;
   uint64_t ntb;
   uint64_t ntp;
+  size_t rcv_off;
+#define SP_SOCK_MSG_LEN 8192
+  uint8_t rcvbuf[SP_SOCK_MSG_LEN];
 };
 typedef struct proxy_fd_ent proxy_fd_ent_t;
 
