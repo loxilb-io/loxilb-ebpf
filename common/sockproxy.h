@@ -47,6 +47,13 @@ struct proxy_fd_ent {
 };
 typedef struct proxy_fd_ent proxy_fd_ent_t;
 
+#define PROXY_MODE_DFL 0
+#define PROXY_MODE_ALL 1
+
+#define PROXY_SEL_RR    0
+#define PROXY_SEL_HASH  1
+#define PROXY_SEL_N2    2
+
 struct proxy_ent {
   uint32_t xip;
   uint16_t xport;
@@ -55,30 +62,22 @@ struct proxy_ent {
 };
 typedef struct proxy_ent proxy_ent_t;
 
-struct proxy_val {
+struct proxy_arg {
+  char host_url[256];
   uint32_t _id;
-#define PROXY_MODE_DFL 0
-#define PROXY_MODE_ALL 1
-  int proxy_mode;
-#define PROXY_SEL_RR    0
-#define PROXY_SEL_HASH  1
-#define PROXY_SEL_N2    2
-  int select;
-  int main_fd;
-  int ep_sel;
-  int n_eps;
   int have_ssl;
-  void *ssl_ctx;
-  struct proxy_fd_ent *fdlist;
+  int proxy_mode;
+  int select;
+  int n_eps;
   proxy_ent_t eps[MAX_PROXY_EP];
 };
-typedef struct proxy_val proxy_val_t;
+typedef struct proxy_arg proxy_arg_t;
 
 typedef int (*sockmap_cb_t)(struct llb_sockmap_key *key, int fd, int doadd);
 typedef void (*proxy_info_cb_t)(struct dp_proxy_ct_ent *pct);
 int proxy_find_ep(uint32_t xip, uint16_t xport, uint8_t protocol,
                   uint32_t *epip, uint16_t *epport, uint8_t *epprotocol);
-int proxy_add_entry(struct proxy_ent *new_ent, struct proxy_val *val);
+int proxy_add_entry(struct proxy_ent *new_ent, struct proxy_arg *val);
 int proxy_delete_entry(struct proxy_ent *ent);
 void proxy_dump_entry(proxy_info_cb_t);
 void proxy_get_entry_stats(uint32_t id, int epid, uint64_t *p, uint64_t *b);

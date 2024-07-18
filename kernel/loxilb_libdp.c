@@ -2053,7 +2053,7 @@ llb_add_mf_map_elem__(int tbl, void *k, void *v)
 }
 
 static int
-llb_conv_nat2proxy(void *k, void *v, struct proxy_ent *pent, struct proxy_val *pval)
+llb_conv_nat2proxy(void *k, void *v, struct proxy_ent *pent, struct proxy_arg *pval)
 {
   struct dp_nat_key *nat_key = k;
   struct dp_nat_tacts *dat = v;
@@ -2063,6 +2063,8 @@ llb_conv_nat2proxy(void *k, void *v, struct proxy_ent *pent, struct proxy_val *p
   pent->xip = nat_key->daddr[0];
   pent->xport = nat_key->dport;
   pent->protocol = nat_key->l4proto;
+
+  strcpy(pval->host_url, "loxilb.io");
 
   for (i = 0; i < LLB_MAX_NXFRMS && i < MAX_PROXY_EP; i++) {
     struct mf_xfrm_inf *mf = &dat->nxfrms[i];
@@ -2135,11 +2137,12 @@ llb_add_map_elem(int tbl, void *k, void *v)
     struct dp_nat_key *nk = k;
     struct dp_nat_tacts *nv = v;
     struct proxy_ent pk = { 0 };
-    struct proxy_val pv = { 0 };
+    struct proxy_arg pv = { 0 };
 
     if (nv->ca.act_type == DP_SET_FULLPROXY &&
         (nk->l4proto == IPPROTO_TCP || nk->l4proto == IPPROTO_SCTP) && nk->v6 == 0) {
       llb_conv_nat2proxy(k, v, &pk, &pv);
+      // FIXME
       ret = proxy_add_entry(&pk, &pv);
       goto out;
     }
@@ -2271,10 +2274,10 @@ llb_del_map_elem(int tbl, void *k)
   if (tbl == LL_DP_NAT_MAP) {
     struct dp_nat_key *nk = k;
     struct proxy_ent pk = { 0 };
-    struct proxy_val pv = { 0 };
+    struct proxy_arg pa = { 0 };
 
     if ((nk->l4proto == IPPROTO_TCP || nk->l4proto == IPPROTO_SCTP )&& nk->v6 == 0) {
-      llb_conv_nat2proxy(nk, &t, &pk, &pv);
+      llb_conv_nat2proxy(nk, &t, &pk, &pa);
       proxy_delete_entry(&pk);
     }
 
