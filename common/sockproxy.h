@@ -38,6 +38,7 @@ struct proxy_fd_ent {
   struct proxy_fd_ent *next;
   void *head;
   void *ssl;
+  void *epv;
   uint64_t nrb;
   uint64_t nrp;
   uint64_t ntb;

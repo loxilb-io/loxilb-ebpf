@@ -58,6 +58,13 @@ typedef struct proxy_ep_sel {
   int n_eps;
 } proxy_ep_sel_t;
 
+typedef struct proxy_epstat {
+  uint64_t nrb;
+  uint64_t nrp;
+  uint64_t ntb;
+  uint64_t ntp;
+} proxy_epstat_t;
+
 struct proxy_epval {
   char host_url[256];
   uint32_t _id;
@@ -67,6 +74,7 @@ struct proxy_epval {
   int ep_sel;
   int select;
   proxy_ent_t eps[MAX_PROXY_EP];
+  proxy_epstat_t ep_stats[MAX_PROXY_EP];
   UT_hash_handle hh;
 };
 typedef struct proxy_epval proxy_epval_t;
@@ -102,6 +110,28 @@ typedef struct llb_sockmap_key smap_key_t;
 #define PROXY_UNLOCK()  pthread_rwlock_unlock(&proxy_struct->lock)
 
 static proxy_struct_t *proxy_struct;
+
+static void
+pfe_ent_accouting(proxy_fd_ent_t *pfe, uint64_t bc, int txdir)
+{
+  proxy_epval_t *epv = pfe->epv;
+  int n = pfe->ep_num;
+  if (!txdir) {
+    pfe->nrb += bc;
+    pfe->nrp++;
+    if (epv && n >= 0 && n < MAX_PROXY_EP) {
+      epv->ep_stats[n].nrb += bc;
+      epv->ep_stats[n].nrp++;
+    }
+  } else {
+    pfe->ntb += bc;
+    pfe->ntp++;
+    if (epv && n >= 0 && n < MAX_PROXY_EP) {
+      epv->ep_stats[n].ntb += bc;
+      epv->ep_stats[n].ntp++;
+    }
+  }
+}
 
 static bool
 cmp_proxy_ent(proxy_ent_t *e1, proxy_ent_t *e2)
@@ -215,8 +245,7 @@ proxy_xmit_cache(proxy_fd_ent_t *ent)
       if (n != curr->len) {
         curr->off += n;
         curr->len -= n;
-        ent->ntb += n;
-        ent->ntp++;
+        pfe_ent_accouting(ent, n, 1);
         continue;
       }
     } else {
@@ -279,8 +308,7 @@ proxy_try_epxmit(proxy_fd_ent_t *ent, void *msg, size_t len, int sel)
     }
     if (n != len) {
       if (n > 0) {
-        rfd_ent->ntb += n;
-        rfd_ent->ntp++;
+        pfe_ent_accouting(rfd_ent, n, 1);
         if (!sel) proxy_add_xmitcache(ent, (uint8_t *)(msg) + n, len - n);
         return 0;
       } else /*if (n <= 0)*/ {
@@ -292,8 +320,7 @@ proxy_try_epxmit(proxy_fd_ent_t *ent, void *msg, size_t len, int sel)
       }
     }
 
-    rfd_ent->ntb += n;
-    rfd_ent->ntp++;
+    pfe_ent_accouting(rfd_ent, n, 1);
   }
 
   return 0;
@@ -516,7 +543,7 @@ proxy_setup_ep_connect(uint32_t epip, uint16_t epport, uint8_t protocol)
 static int
 proxy_setup_ep__(uint32_t xip, uint16_t xport, uint8_t protocol,
                  const char *host_str, proxy_ep_sel_t *ep_sel,
-                 int *seltype, uint32_t *rid)
+                 proxy_epval_t **epv, int *seltype, uint32_t *rid)
 {
   int sel = 0;
   uint32_t epip;
@@ -554,6 +581,7 @@ proxy_setup_ep__(uint32_t xip, uint16_t xport, uint8_t protocol,
 
         *seltype = 0;
         *rid = tepval->_id;
+        *epv = tepval;
         ep_sel->ep_cfds[0].ep_num = sel;
         ep_sel->n_eps = 1;
 
@@ -576,6 +604,7 @@ proxy_setup_ep__(uint32_t xip, uint16_t xport, uint8_t protocol,
         }
 
         *rid = tepval->_id;
+        *epv = tepval;
         if (sel) {
           ep_sel->n_eps = sel;
           *seltype = tepval->select;
@@ -1004,6 +1033,7 @@ proxy_get_entry_stats(uint32_t id, int epid, uint64_t *p, uint64_t *b)
 {
   proxy_map_ent_t *node = proxy_struct->head;
   proxy_fd_ent_t *fd_ent;
+  proxy_epval_t *epv;
   int i = 0;
   int j = 0;
 
@@ -1012,6 +1042,13 @@ proxy_get_entry_stats(uint32_t id, int epid, uint64_t *p, uint64_t *b)
 
   PROXY_LOCK();
   while (node) {
+    for (epv = node->val.ephash; epv; epv = epv->hh.next) {
+      if (epid >=0 && epid < MAX_PROXY_EP) {
+        *b = epv->ep_stats[epid].ntb;
+        *p = epv->ep_stats[epid].ntp;
+      }
+    }
+#if 0
     fd_ent = node->val.fdlist;
     while (fd_ent) {
       if (fd_ent->_id == id && fd_ent->odir == 0) {
@@ -1026,6 +1063,7 @@ proxy_get_entry_stats(uint32_t id, int epid, uint64_t *p, uint64_t *b)
       }
       fd_ent = fd_ent->next;
     }
+#endif
     node = node->next;
     i++;
   }
@@ -1326,6 +1364,7 @@ setup_proxy_path(smap_key_t *key, smap_key_t *rkey, proxy_fd_ent_t *pfe, const c
   uint32_t rid = 0;
   proxy_fd_ent_t *npfe1 = pfe;
   proxy_fd_ent_t *npfe2 = NULL;
+  proxy_epval_t *tepval = NULL;
   proxy_map_ent_t *ent;
 
   memset(&ep_sel, 0, sizeof(ep_sel));
@@ -1336,7 +1375,7 @@ setup_proxy_path(smap_key_t *key, smap_key_t *rkey, proxy_fd_ent_t *pfe, const c
   }
 
   if (proxy_setup_ep__(key->sip, key->sport >> 16, (uint8_t)(protocol),
-                       flt_url, &ep_sel, &seltype, &rid)) {
+                       flt_url, &ep_sel, &tepval, &seltype, &rid)) {
     proxy_log("no endpoint", &key);
     close(pfe->fd);
     return -1;
@@ -1384,6 +1423,7 @@ setup_proxy_path(smap_key_t *key, smap_key_t *rkey, proxy_fd_ent_t *pfe, const c
     npfe2->ep_num = ep_num;
     npfe2->odir = 1;
     npfe2->_id = rid;
+    npfe2->epv = tepval;
     npfe2->n_rfd++;
     npfe2->head = ent;
     npfe2->next = ent->val.fdlist;
@@ -1537,8 +1577,7 @@ restart:
             }
           }
 
-          pfe->nrb += rc;
-          pfe->nrp++;
+          pfe_ent_accouting(pfe, rc, 0);
           if (proxy_multiplexor(pfe, pfe->rcvbuf, rc)) {
             goto restart;
           }
