@@ -2067,6 +2067,14 @@ llb_conv_nat2proxy(void *k, void *v, struct proxy_ent *pent, struct proxy_arg *p
   strncpy(pval->host_url, (const char *)dat->host_url, sizeof(pval->host_url) - 1);
   pval->host_url[sizeof(pval->host_url) - 1] = '\0';
 
+  if (!strcmp(pval->host_url, "")) {
+    char ab1[INET6_ADDRSTRLEN];
+    const char *host = inet_ntop(AF_INET, (struct in_addr *)&pent->xip, ab1, INET_ADDRSTRLEN);
+    if (host != NULL) {
+      sprintf(pval->host_url, "%s:%u", host, ntohs(pent->xport));
+    }
+  }
+
   for (i = 0; i < LLB_MAX_NXFRMS && i < MAX_PROXY_EP; i++) {
     struct mf_xfrm_inf *mf = &dat->nxfrms[i];
     struct proxy_ent *proxy_ep = &pval->eps[j];

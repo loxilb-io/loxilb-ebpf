@@ -1527,6 +1527,7 @@ restart:
           if (!pfe->odir) {
             const char *method, *path;
             char host_url[256];
+            const char *phurl = "";
             int pret, minor_version;
             size_t  method_len, path_len, num_headers;
             struct phr_header headers[64];
@@ -1557,10 +1558,11 @@ restart:
                   if (!strncasecmp("Host", headers[nh].name, headers[nh].name_len)) {
                     strncpy(host_url, headers[nh].value, headers[nh].value_len);
                     host_url[headers[nh].value_len] = '\0';
+                    phurl = host_url;
                   }
                 }
               }
-              if (setup_proxy_path(&key, &rkey, pfe, host_url)) {
+              if (setup_proxy_path(&key, &rkey, pfe, phurl)) {
                 goto restart;
               }
 
