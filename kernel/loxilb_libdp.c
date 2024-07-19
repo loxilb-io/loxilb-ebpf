@@ -1838,7 +1838,7 @@ static void ll_map_ct_rm_related(uint32_t rid, uint32_t *aids, int naid);
 static int
 llb_add_map_elem_nat_post_proc(void *k, void *v)
 {
-  struct dp_nat_tacts *na = v;
+  struct dp_proxy_tacts *na = v;
   struct mf_xfrm_inf *ep_arm;
   uint32_t inact_aids[LLB_MAX_NXFRMS];
   int i = 0;
@@ -1865,7 +1865,7 @@ llb_add_map_elem_nat_post_proc(void *k, void *v)
 static int
 llb_del_map_elem_nat_post_proc(void *k, void *v)
 {
-  struct dp_nat_tacts *na = v;
+  struct dp_proxy_tacts *na = v;
   struct mf_xfrm_inf *ep_arm;
   uint32_t inact_aids[LLB_MAX_NXFRMS];
   int i = 0;
@@ -2056,7 +2056,7 @@ static int
 llb_conv_nat2proxy(void *k, void *v, struct proxy_ent *pent, struct proxy_arg *pval)
 {
   struct dp_nat_key *nat_key = k;
-  struct dp_nat_tacts *dat = v;
+  struct dp_proxy_tacts *dat = v;
   int i = 0;
   int j = 0;
 
@@ -2064,7 +2064,8 @@ llb_conv_nat2proxy(void *k, void *v, struct proxy_ent *pent, struct proxy_arg *p
   pent->xport = nat_key->dport;
   pent->protocol = nat_key->l4proto;
 
-  strcpy(pval->host_url, "loxilb.io");
+  strncpy(pval->host_url, (const char *)dat->host_url, sizeof(pval->host_url) - 1);
+  pval->host_url[sizeof(pval->host_url) - 1] = '\0';
 
   for (i = 0; i < LLB_MAX_NXFRMS && i < MAX_PROXY_EP; i++) {
     struct mf_xfrm_inf *mf = &dat->nxfrms[i];
@@ -2135,7 +2136,7 @@ llb_add_map_elem(int tbl, void *k, void *v)
 
   if (tbl == LL_DP_NAT_MAP) {
     struct dp_nat_key *nk = k;
-    struct dp_nat_tacts *nv = v;
+    struct dp_proxy_tacts *nv = v;
     struct proxy_ent pk = { 0 };
     struct proxy_arg pv = { 0 };
 
@@ -2259,10 +2260,10 @@ llb_del_mf_map_elem__(int tbl, void *k)
 }
 
 int
-llb_del_map_elem(int tbl, void *k)
+llb_del_map_elem_wval(int tbl, void *k, void *v)
 {
   int ret = -EINVAL;
-  struct dp_nat_tacts t = { 0 };
+  struct dp_proxy_tacts t = { 0 };
 
   if (tbl < 0 || tbl >= LL_DP_MAX_MAP) {
     return ret;
@@ -2273,12 +2274,16 @@ llb_del_map_elem(int tbl, void *k)
   /* Need some pre-processing for certain maps */
   if (tbl == LL_DP_NAT_MAP) {
     struct dp_nat_key *nk = k;
+    struct dp_proxy_tacts *nv = v;
     struct proxy_ent pk = { 0 };
     struct proxy_arg pa = { 0 };
 
-    if ((nk->l4proto == IPPROTO_TCP || nk->l4proto == IPPROTO_SCTP )&& nk->v6 == 0) {
-      llb_conv_nat2proxy(nk, &t, &pk, &pa);
-      proxy_delete_entry(&pk);
+    assert(nv);
+
+    if (nv->ca.act_type == DP_SET_FULLPROXY &&
+        (nk->l4proto == IPPROTO_TCP || nk->l4proto == IPPROTO_SCTP) && nk->v6 == 0) {
+      llb_conv_nat2proxy(nk, nv, &pk, &pa);
+      proxy_delete_entry(&pk, &pa);
     }
 
     ret = bpf_map_lookup_elem(llb_map2fd(tbl), k, &t);
@@ -2305,6 +2310,12 @@ llb_del_map_elem(int tbl, void *k)
   XH_UNLOCK();
 
   return ret;
+}
+
+int
+llb_del_map_elem(int tbl, void *k)
+{
+  return llb_del_map_elem_wval(tbl, k, NULL);
 }
 
 unsigned long long

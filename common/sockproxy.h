@@ -32,6 +32,7 @@ struct proxy_fd_ent {
   int protocol;
   int seltype;
   int odir;
+  uint32_t _id;
   proxy_socktype_t stype;
   proxy_cache_t *cache_head;
   struct proxy_fd_ent *next;
@@ -77,8 +78,8 @@ typedef int (*sockmap_cb_t)(struct llb_sockmap_key *key, int fd, int doadd);
 typedef void (*proxy_info_cb_t)(struct dp_proxy_ct_ent *pct);
 int proxy_find_ep(uint32_t xip, uint16_t xport, uint8_t protocol,
                   uint32_t *epip, uint16_t *epport, uint8_t *epprotocol);
-int proxy_add_entry(struct proxy_ent *new_ent, struct proxy_arg *val);
-int proxy_delete_entry(struct proxy_ent *ent);
+int proxy_add_entry(struct proxy_ent *new_ent, struct proxy_arg *arg);
+int proxy_delete_entry(struct proxy_ent *ent, struct proxy_arg *arg);
 void proxy_dump_entry(proxy_info_cb_t);
 void proxy_get_entry_stats(uint32_t id, int epid, uint64_t *p, uint64_t *b);
 int proxy_main(sockmap_cb_t cb);

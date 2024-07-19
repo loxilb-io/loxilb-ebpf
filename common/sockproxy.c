@@ -72,7 +72,6 @@ struct proxy_epval {
 typedef struct proxy_epval proxy_epval_t;
 
 struct proxy_val {
-  uint32_t _id;
   int proxy_mode;
   int main_fd;
   int have_ssl;
@@ -516,7 +515,8 @@ proxy_setup_ep_connect(uint32_t epip, uint16_t epport, uint8_t protocol)
 
 static int
 proxy_setup_ep__(uint32_t xip, uint16_t xport, uint8_t protocol,
-                 const char *host_str, proxy_ep_sel_t *ep_sel, int *seltype)
+                 const char *host_str, proxy_ep_sel_t *ep_sel,
+                 int *seltype, uint32_t *rid)
 {
   int sel = 0;
   uint32_t epip;
@@ -553,6 +553,7 @@ proxy_setup_ep__(uint32_t xip, uint16_t xport, uint8_t protocol,
         }
 
         *seltype = 0;
+        *rid = tepval->_id;
         ep_sel->ep_cfds[0].ep_num = sel;
         ep_sel->n_eps = 1;
 
@@ -574,6 +575,7 @@ proxy_setup_ep__(uint32_t xip, uint16_t xport, uint8_t protocol,
           }
         }
 
+        *rid = tepval->_id;
         if (sel) {
           ep_sel->n_eps = sel;
           *seltype = tepval->select;
@@ -689,7 +691,7 @@ proxy_delete_entry__(proxy_ent_t *ent, proxy_arg_t *arg, int *mfd, void **ssl_ct
 
     epcount = HASH_COUNT(node->val.ephash);
     if (epcount > 0) {
-      log_info("sockproxy: %s:%u deleted ep(%s)", inet_ntoa(*(struct in_addr *)&ent->xip),
+      log_info("sockproxy: %s:%u (%s) deleted", inet_ntoa(*(struct in_addr *)&ent->xip),
                 ntohs(ent->xport), arg->host_url);
       return 0;
     }
@@ -710,10 +712,12 @@ proxy_delete_entry__(proxy_ent_t *ent, proxy_arg_t *arg, int *mfd, void **ssl_ct
     /* This node is freed after cleanup in proxy_pdestroy() */
     //free(node);
   } else {
+    log_info("sockproxy : %s:%u delete failed", inet_ntoa(*(struct in_addr *)&ent->xip), ntohs(ent->xport));
     return -EINVAL;
   }
 
-  log_info("sockproxy : %s:%u deleted", inet_ntoa(*(struct in_addr *)&ent->xip), ntohs(ent->xport));
+  log_info("sockproxy: %s:%u (%s) deleted", inet_ntoa(*(struct in_addr *)&ent->xip),
+                ntohs(ent->xport), arg->host_url);
 
   return 0;
 }
@@ -784,6 +788,8 @@ proxy_add_entry(proxy_ent_t *new_ent, proxy_arg_t *arg)
         tepval = calloc(1, sizeof(*tepval));
         assert(tepval);
         tepval->n_eps = arg->n_eps;
+        tepval->_id = arg->_id;
+        tepval->select = arg->select;
         strncpy(tepval->host_url, arg->host_url, sizeof(tepval->host_url) - 1);
         memcpy(tepval->eps, arg->eps, sizeof(arg->eps));
         HASH_ADD_STR(ent->val.ephash, host_url, tepval);
@@ -851,6 +857,8 @@ proxy_add_entry(proxy_ent_t *new_ent, proxy_arg_t *arg)
   tepval = calloc(1, sizeof(*tepval));
   assert(tepval);
   tepval->n_eps = arg->n_eps;
+  tepval->_id = arg->_id;
+  tepval->select = arg->select;
   strncpy(tepval->host_url, arg->host_url, sizeof(tepval->host_url) - 1);
   memcpy(tepval->eps, arg->eps, sizeof(arg->eps));
   HASH_ADD_STR(node->val.ephash, host_url, tepval);
@@ -874,14 +882,13 @@ proxy_add_entry(proxy_ent_t *new_ent, proxy_arg_t *arg)
 }
 
 int
-proxy_delete_entry(proxy_ent_t *ent)
+proxy_delete_entry(proxy_ent_t *ent, proxy_arg_t *arg)
 {
   int ret = 0, fd = 0;
   void *ssl_ctx = NULL;
-  struct proxy_arg arg;
 
   PROXY_LOCK();
-  ret = proxy_delete_entry__(ent, &arg, &fd, &ssl_ctx);
+  ret = proxy_delete_entry__(ent, arg, &fd, &ssl_ctx);
   PROXY_UNLOCK();
 
   if (fd > 0) {
@@ -962,7 +969,7 @@ proxy_dump_entry(proxy_info_cb_t cb)
     while (fd_ent) {
       if (fd_ent->odir == 0) {
         memset(&pct, 0, sizeof(pct));
-        pct.rid = node->val._id;
+        pct.rid = fd_ent->_id;
         if (!proxy_ct_from_fd(fd_ent->fd, &pct.ct_in, 0)) {
           pct.st_in.bytes = fd_ent->ntb;
           pct.st_in.bytes += fd_ent->nrb;
@@ -1005,22 +1012,19 @@ proxy_get_entry_stats(uint32_t id, int epid, uint64_t *p, uint64_t *b)
 
   PROXY_LOCK();
   while (node) {
-    if (node->val._id == id) {
-      fd_ent = node->val.fdlist;
-      while (fd_ent) {
-        if (fd_ent->odir == 0) {
-          for (j = 0; j < fd_ent->n_rfd; j++) {
-            if (fd_ent->rfd_ent[j]) {
-              if (epid == fd_ent->rfd_ent[j]->ep_num) {
-                *b += fd_ent->rfd_ent[j]->ntb;
-                *p += fd_ent->rfd_ent[j]->ntp;
-              }
+    fd_ent = node->val.fdlist;
+    while (fd_ent) {
+      if (fd_ent->_id == id && fd_ent->odir == 0) {
+        for (j = 0; j < fd_ent->n_rfd; j++) {
+          if (fd_ent->rfd_ent[j]) {
+            if (epid == fd_ent->rfd_ent[j]->ep_num) {
+              *b += fd_ent->rfd_ent[j]->ntb;
+              *p += fd_ent->rfd_ent[j]->ntp;
             }
           }
         }
-        fd_ent = fd_ent->next;
       }
-      break;
+      fd_ent = fd_ent->next;
     }
     node = node->next;
     i++;
@@ -1049,14 +1053,14 @@ proxy_selftests()
   proxy_add_entry(&key2, &arg);
   proxy_dump_entry(NULL);
 
-  proxy_delete_entry(&key2);
+  proxy_delete_entry(&key2, &arg);
   proxy_dump_entry(NULL);
 
   while(0) {
     sleep(1);
     n++;
     if (n > 10) {
-      proxy_delete_entry(&key);
+      proxy_delete_entry(&key, &arg);
     }
   }
 
@@ -1319,6 +1323,7 @@ setup_proxy_path(smap_key_t *key, smap_key_t *rkey, proxy_fd_ent_t *pfe, const c
   proxy_ep_sel_t ep_sel = { 0 };
   int j, n_eps = 0, seltype = 0;
   int epprotocol, protocol;
+  uint32_t rid = 0;
   proxy_fd_ent_t *npfe1 = pfe;
   proxy_fd_ent_t *npfe2 = NULL;
   proxy_map_ent_t *ent;
@@ -1331,7 +1336,7 @@ setup_proxy_path(smap_key_t *key, smap_key_t *rkey, proxy_fd_ent_t *pfe, const c
   }
 
   if (proxy_setup_ep__(key->sip, key->sport >> 16, (uint8_t)(protocol),
-                       flt_url, &ep_sel, &seltype)) {
+                       flt_url, &ep_sel, &seltype, &rid)) {
     proxy_log("no endpoint", &key);
     close(pfe->fd);
     return -1;
@@ -1378,6 +1383,7 @@ setup_proxy_path(smap_key_t *key, smap_key_t *rkey, proxy_fd_ent_t *pfe, const c
     npfe2->seltype = seltype;
     npfe2->ep_num = ep_num;
     npfe2->odir = 1;
+    npfe2->_id = rid;
     npfe2->n_rfd++;
     npfe2->head = ent;
     npfe2->next = ent->val.fdlist;
@@ -1391,6 +1397,7 @@ setup_proxy_path(smap_key_t *key, smap_key_t *rkey, proxy_fd_ent_t *pfe, const c
       return -1;
     }
 
+    npfe1->_id = rid;
     npfe1->rfd[npfe1->n_rfd] = ep_cfd;
     npfe1->rfd_ent[npfe1->n_rfd] = npfe2;
     npfe1->n_rfd++;
