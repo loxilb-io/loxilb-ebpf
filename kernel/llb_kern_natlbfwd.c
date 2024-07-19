@@ -19,7 +19,7 @@ dp_do_dec_nat_sess(void *ctx, struct xfi *xf, __u32 rule, __u16 aid)
 }
 
 static int __always_inline
-dp_sel_nat_ep(void *ctx, struct xfi *xf, struct dp_nat_tacts *act)
+dp_sel_nat_ep(void *ctx, struct xfi *xf, struct dp_proxy_tacts *act)
 {
   int sel = -1;
   uint8_t n = 0;
@@ -115,7 +115,7 @@ dp_do_nat(void *ctx, struct xfi *xf)
 {
   struct dp_nat_key key;
   struct mf_xfrm_inf *nxfrm_act;
-  struct dp_nat_tacts *act;
+  struct dp_proxy_tacts *act;
   int sel;
 
   memset(&key, 0, sizeof(key));

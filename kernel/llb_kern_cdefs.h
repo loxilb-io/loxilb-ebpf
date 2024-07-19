@@ -188,7 +188,7 @@ struct bpf_map_def SEC("maps") ct_stats_map = {
 struct bpf_map_def SEC("maps") nat_map = {
   .type = BPF_MAP_TYPE_HASH,
   .key_size = sizeof(struct dp_nat_key),
-  .value_size = sizeof(struct dp_nat_tacts),
+  .value_size = sizeof(struct dp_proxy_tacts),
   .max_entries = LLB_NATV4_MAP_ENTRIES
 };
 
@@ -439,7 +439,7 @@ struct {
 struct {
         __uint(type,        BPF_MAP_TYPE_HASH);
         __type(key,         struct dp_nat_key);
-        __type(value,       struct dp_nat_tacts);
+        __type(value,       struct dp_proxy_tacts);
         __uint(max_entries, LLB_NATV4_MAP_ENTRIES);
 } nat_map SEC(".maps");
 

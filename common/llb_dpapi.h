@@ -51,6 +51,7 @@
 #define LLB_RWR_MAP_ENTRIES   (1024)
 #define LLB_SOCK_MAP_SZ       (17*1024)
 #define LLB_SOCKID_MAP_SZ     (17*1024)
+#define LLB_MAX_HOSTURL_LEN   (256)
 
 #define LLB_DP_SUNP_PGM_ID2    (6)
 #define LLB_DP_CRC_PGM_ID2     (5)
@@ -778,7 +779,7 @@ struct dp_nat_key {
 #define SEC_MODE_NONE 0
 #define SEC_MODE_HTTPS 1
 
-struct dp_nat_tacts {
+struct dp_proxy_tacts {
   struct dp_cmn_act ca;
   uint64_t ito;
   uint64_t pto;
@@ -791,6 +792,7 @@ struct dp_nat_tacts {
   uint8_t sec_mode;
   uint32_t pmhh[LLB_MAX_MHOSTS];
   struct mf_xfrm_inf nxfrms[LLB_MAX_NXFRMS];
+  uint8_t host_url[LLB_MAX_HOSTURL_LEN];
   uint64_t lts;
   uint64_t base_to;
 };
@@ -907,6 +909,7 @@ void llb_collect_map_stats(int tbl);
 int llb_fetch_pol_map_stats(int tid, uint32_t e, void *ppass, void *pdrop);
 void llb_clear_map_stats(int tbl, __u32 idx);
 int llb_add_map_elem(int tbl, void *k, void *v);
+int llb_del_map_elem_wval(int tbl, void *k, void *v);
 int llb_del_map_elem(int tbl, void *k);
 void llb_map_loop_and_delete(int tbl, dp_map_walker_t cb, dp_map_ita_t *it);
 int llb_dp_link_attach(const char *ifname, const char *psec, int mp_type, int unload);
