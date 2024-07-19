@@ -1393,7 +1393,9 @@ setup_proxy_path(smap_key_t *key, smap_key_t *rkey, proxy_fd_ent_t *pfe, const c
 
     if (proxy_skmap_key_from_fd(ep_cfd, rkey, &epprotocol)) {
       log_error("skmap key from ep_cfd failed");
+      PROXY_UNLOCK();
       proxy_destroy_eps(pfe->fd, &ep_sel);
+      PROXY_LOCK();
       return -1;
     }
 
@@ -1407,7 +1409,9 @@ setup_proxy_path(smap_key_t *key, smap_key_t *rkey, proxy_fd_ent_t *pfe, const c
 #ifdef HAVE_SOCKMAP_KTLS
       if (proxy_sock_init_ktls(new_sd)) {
         log_error("tls failed");
+        PROXY_UNLOCK();
         proxy_destroy_eps(pfe->fd, &ep_sel);
+        PROXY_LOCK();
         return -1;
       }
 #endif
@@ -1514,7 +1518,9 @@ restart:
         if (notify_add_ent(proxy_struct->ns, new_sd,
                 NOTI_TYPE_IN|NOTI_TYPE_OUT|NOTI_TYPE_HUP, npfe1))  {
           free(npfe1);
+          PROXY_UNLOCK();
           proxy_destroy_eps(new_sd, &ep_sel);
+          PROXY_LOCK();
           log_error("failed to add new_sd %d", new_sd);
           goto restart;
         }
