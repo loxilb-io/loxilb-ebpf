@@ -421,6 +421,24 @@ proxy_sock_setnb(int fd)
   }
 }
 
+static void
+proxy_sock_setnodelay(int fd)
+{
+  int flag = 1;
+  int rc = setsockopt(fd, IPPROTO_TCP, TCP_NODELAY,
+                    (char *) &flag, sizeof(int));
+  if (rc == -1) {
+    log_error("setsockopt: failed to set tcp nodelay");
+  }
+}
+
+static void
+proxy_sock_set_opts(int fd)
+{
+  proxy_sock_setnb(fd);
+  proxy_sock_setnodelay(fd);
+}
+
 static int
 proxy_server_setup(int fd, uint32_t server, uint16_t port, uint8_t protocol)
 {
@@ -500,7 +518,7 @@ proxy_setup_ep_connect(uint32_t epip, uint16_t epport, uint8_t protocol)
     return -1;
   }
 
-  proxy_sock_setnb(fd);
+  proxy_sock_set_opts(fd);
 
   if (connect(fd, (struct sockaddr*)&epaddr, sizeof(epaddr)) < 0) {
     if (errno != EINPROGRESS) {
@@ -1490,7 +1508,7 @@ restart:
           }
         }
 
-        proxy_sock_setnb(new_sd);
+        proxy_sock_set_opts(new_sd);
 
         if (proxy_skmap_key_from_fd(new_sd, &key, &protocol)) {
           log_error("skmap key from fd failed");
@@ -1547,7 +1565,8 @@ restart:
               if (pret == -1) {
                 log_debug("http parse error\n");
                 pfe->rcv_off = 0;
-                goto restart;
+                phurl = NULL;
+                //goto restart;
               } else if (pret < 0) {
                 if (pfe->rcv_off + rc >= SP_SOCK_MSG_LEN) {
                   pfe->rcv_off = 0;
