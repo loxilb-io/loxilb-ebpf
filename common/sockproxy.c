@@ -172,6 +172,11 @@ proxy_add_xmitcache(proxy_fd_ent_t *ent, uint8_t *cache, size_t len)
   new->off = 0;;
   new->len = len;
 
+  if (ent->cache_head == NULL) {
+    notify_add_ent(proxy_struct->ns, ent->fd,
+        NOTI_TYPE_IN|NOTI_TYPE_OUT|NOTI_TYPE_HUP, ent);
+  }
+
   while (curr) {
     prev = &curr->next;
     curr = curr->next;
@@ -232,7 +237,12 @@ proxy_xmit_cache(proxy_fd_ent_t *ent)
 {
   struct proxy_cache *curr = ent->cache_head;
   struct proxy_cache *tmp = NULL;
+  int rstev = 0;
   int n = 0;
+
+  if (ent->cache_head != NULL) {
+    rstev = 1;
+  }
 
   while (curr) {
     if (!ent->ssl) {
@@ -268,6 +278,10 @@ proxy_xmit_cache(proxy_fd_ent_t *ent)
 
     if (tmp)
       free(tmp);
+  }
+  if (rstev) {
+    notify_add_ent(proxy_struct->ns, ent->fd,
+          NOTI_TYPE_IN|NOTI_TYPE_HUP, ent);
   }
   ent->cache_head = NULL;
   return 0;
@@ -309,11 +323,11 @@ proxy_try_epxmit(proxy_fd_ent_t *ent, void *msg, size_t len, int sel)
     if (n != len) {
       if (n > 0) {
         pfe_ent_accouting(rfd_ent, n, 1);
-        if (!sel) proxy_add_xmitcache(ent, (uint8_t *)(msg) + n, len - n);
+        if (!sel) proxy_add_xmitcache(rfd_ent, (uint8_t *)(msg) + n, len - n);
         return 0;
       } else /*if (n <= 0)*/ {
         if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) {
-          if (!sel) proxy_add_xmitcache(ent, msg, len);
+          if (!sel) proxy_add_xmitcache(rfd_ent, msg, len);
           return 0;
         }
         return -1;
@@ -1053,7 +1067,6 @@ proxy_get_entry_stats(uint32_t id, int epid, uint64_t *p, uint64_t *b)
   proxy_fd_ent_t *fd_ent;
   proxy_epval_t *epv;
   int i = 0;
-  int j = 0;
 
   *p = 0;
   *b = 0;
@@ -1070,7 +1083,7 @@ proxy_get_entry_stats(uint32_t id, int epid, uint64_t *p, uint64_t *b)
     fd_ent = node->val.fdlist;
     while (fd_ent) {
       if (fd_ent->_id == id && fd_ent->odir == 0) {
-        for (j = 0; j < fd_ent->n_rfd; j++) {
+        for (int j = 0; j < fd_ent->n_rfd; j++) {
           if (fd_ent->rfd_ent[j]) {
             if (epid == fd_ent->rfd_ent[j]->ep_num) {
               *b += fd_ent->rfd_ent[j]->ntb;
@@ -1452,7 +1465,7 @@ setup_proxy_path(smap_key_t *key, smap_key_t *rkey, proxy_fd_ent_t *pfe, const c
     ent->val.fdlist = npfe2;
 
     if (notify_add_ent(proxy_struct->ns, ep_cfd,
-        NOTI_TYPE_IN|NOTI_TYPE_OUT|NOTI_TYPE_HUP, npfe2))  {
+        NOTI_TYPE_IN|NOTI_TYPE_HUP, npfe2))  {
       free(npfe2);
       proxy_destroy_eps(pfe->fd, &ep_sel);
       log_error("failed to add epcfd %d", ep_cfd);
@@ -1534,7 +1547,7 @@ restart:
         ent->val.fdlist = npfe1;
 
         if (notify_add_ent(proxy_struct->ns, new_sd,
-                NOTI_TYPE_IN|NOTI_TYPE_OUT|NOTI_TYPE_HUP, npfe1))  {
+                NOTI_TYPE_IN|NOTI_TYPE_HUP, npfe1))  {
           free(npfe1);
           PROXY_UNLOCK();
           proxy_destroy_eps(new_sd, &ep_sel);

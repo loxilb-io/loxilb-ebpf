@@ -148,14 +148,21 @@ notify_add_ent(void *ctx, int fd, notify_type_t type, void *priv)
   }
 
   NOTI_LOCK(nctx); 
-  nctx->thr_sel++;
-  tslot = nctx->thr_sel % nctx->n_thrs;
   ent = &nctx->earr[fd];
   if (ent->fd > 0) {
+    pctx = &nctx->poll_ctx[ent->thr_id];
+    assert(pctx);
+    if (pctx->pfds[ent->poll_slot].events != events) {
+      pctx->pfds[ent->poll_slot].events = events;
+      NOTI_UNLOCK(nctx);
+      return 0;
+    }
     NOTI_UNLOCK(nctx); 
     return -EEXIST;
   }
 
+  nctx->thr_sel++;
+  tslot = nctx->thr_sel % nctx->n_thrs;
   pctx = &nctx->poll_ctx[tslot];
   ent->type = type;
   ent->fd = fd;
@@ -305,9 +312,7 @@ notify_run(void *ctx, int thread)
         //log_debug("notify hup %d", fd);
         notify_delete_ent__(nctx, fd); 
       }
-      if (type & NOTI_TYPE_IN) {
-        nproc++;
-      }
+      nproc++;
     }
 
 end_of_loop:
