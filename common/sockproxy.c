@@ -39,8 +39,8 @@
 #include "llb_dpapi.h"
 #include "notify.h"
 #include "uthash.h"
-#include "sockproxy.h"
 #include "picohttpparser.h"
+#include "sockproxy.h"
 
 #define PROXY_NUM_BURST_RX 1024
 #define PROXY_MAX_THREADS 2
@@ -1064,7 +1064,6 @@ void
 proxy_get_entry_stats(uint32_t id, int epid, uint64_t *p, uint64_t *b)
 {
   proxy_map_ent_t *node = proxy_struct->head;
-  proxy_fd_ent_t *fd_ent;
   proxy_epval_t *epv;
   int i = 0;
 
@@ -1080,7 +1079,7 @@ proxy_get_entry_stats(uint32_t id, int epid, uint64_t *p, uint64_t *b)
       }
     }
 #if 0
-    fd_ent = node->val.fdlist;
+    proxy_fd_ent_t *fd_ent = node->val.fdlist;
     while (fd_ent) {
       if (fd_ent->_id == id && fd_ent->odir == 0) {
         for (int j = 0; j < fd_ent->n_rfd; j++) {
@@ -1480,6 +1479,98 @@ setup_proxy_path(smap_key_t *key, smap_key_t *rkey, proxy_fd_ent_t *pfe, const c
   return 0;
 }
 
+int
+handle_on_message_complete(llhttp_t* parser)
+{
+  llhttp_settings_t *settings = parser->settings;
+  proxy_fd_ent_t *pfe;
+
+  pfe = settings->uarg;
+  assert(pfe);
+
+  pfe->http_pok = 1;
+
+#ifdef HAVE_PROXY_EXTRA_DEBUG
+	log_debug("http completed %p!\n", settings->uarg);
+#endif
+	return 0;
+}
+
+int
+handle_header_name(llhttp_t *parser, const char *at, size_t length)
+{
+  char str[256];
+  llhttp_settings_t *settings = parser->settings;
+  proxy_fd_ent_t *pfe;
+
+  pfe = settings->uarg;
+  assert(pfe);
+
+  if (length >= sizeof(str)-1) {
+    return 0;
+  }
+  strncpy(str, at, length);
+  str[length] = '\0';
+
+  if (strncasecmp("Host", str, length)) {
+    return 0;
+  }
+
+  pfe->http_hok = 1;
+
+#ifdef HAVE_PROXY_EXTRA_DEBUG
+	fprintf(stdout, "header name rcvd %s!\n", str);
+#endif
+
+	return 0;
+}
+
+int
+handle_header_val(llhttp_t *parser, const char *at, size_t length)
+{
+  llhttp_settings_t *settings = parser->settings;
+  proxy_fd_ent_t *pfe;
+
+  pfe = settings->uarg;
+  assert(pfe);
+
+  if (!pfe->http_hok) {
+    return 0;
+  }
+
+  if (pfe->http_hvok) {
+    //pfe->http_pok = 1;
+    return 0;
+  }
+
+  if (length >= sizeof(pfe->host_url)-1) {
+    return 0;
+  }
+
+  pfe->http_hvok = 1;
+  strncpy(pfe->host_url, at, length);
+  pfe->host_url[length] = '\0';
+
+#ifdef HAVE_PROXY_EXTRA_DEBUG
+	log_debug("Header val rcvd %s!\n", pfe->host_url);
+#endif
+
+	return 0;
+}
+
+#ifdef HAVE_PROXY_EXTRA_DEBUG
+int
+handle_url(llhttp_t *parser, const char *at, size_t length)
+{
+  char str[256];
+
+  strncpy(str, at, length);
+  str[length] = '\0';
+	log_debug("url val rcvd %s!\n", str);
+	return 0;
+}
+#endif
+
 static int
 proxy_notifer(int fd, notify_type_t type, void *priv)
 {
@@ -1546,6 +1637,16 @@ restart:
         npfe1->ssl = ssl;
         ent->val.fdlist = npfe1;
 
+        llhttp_settings_init(&npfe1->settings);
+	      npfe1->settings.on_message_complete = handle_on_message_complete;
+	      npfe1->settings.on_header_field = handle_header_name;
+	      npfe1->settings.on_header_value = handle_header_val;
+#ifdef HAVE_PROXY_EXTRA_DEBUG
+	      npfe1->settings.on_url = handle_url;
+#endif
+	      npfe1->settings.uarg = npfe1;
+        llhttp_init(&npfe1->parser, HTTP_BOTH, &npfe1->settings);
+
         if (notify_add_ent(proxy_struct->ns, new_sd,
                 NOTI_TYPE_IN|NOTI_TYPE_HUP, npfe1))  {
           free(npfe1);
@@ -1562,14 +1663,16 @@ restart:
             goto restart;
           }
           if (!pfe->odir) {
-            const char *method, *path;
-            char host_url[256];
             const char *phurl = "";
-            int pret, minor_version;
-            size_t  method_len, path_len, num_headers;
-            struct phr_header headers[64];
 
             if (pfe->rfd[0] <= 0) {
+#ifdef HAVE_PICOPARSER
+              const char *method, *path;
+              char host_url[256];
+              int pret, minor_version;
+              size_t  method_len, path_len, num_headers;
+              struct phr_header headers[64];
+
               num_headers = sizeof(headers) / sizeof(headers[0]);
               //pret = phr_parse_headers((char *)rcvbuf, sizeof(rcvbuf)-1, headers, &num_headers, prevbuflen);
               pret = phr_parse_request ((char *)(pfe->rcvbuf + pfe->rcv_off), SP_SOCK_MSG_LEN-pfe->rcv_off-1,
@@ -1600,9 +1703,6 @@ restart:
                   }
                 }
               }
-              if (setup_proxy_path(&key, &rkey, pfe, phurl)) {
-                goto restart;
-              }
 
 #ifdef HAVE_PROXY_EXTRA_DEBUG
               log_debug("method is %.*s\n", (int)method_len, method);
@@ -1614,6 +1714,35 @@ restart:
                   (int)headers[i].value_len, headers[i].value);
               }
 #endif
+
+#else
+              pfe->http_pok = 0;
+              pfe->http_hok = 0;
+              pfe->http_hvok = 0;
+              enum llhttp_errno err = llhttp_execute(&pfe->parser,
+                                      (char *)(pfe->rcvbuf + pfe->rcv_off), pfe->rcv_off+rc);
+              if (err == HPE_OK) {
+                pfe->rcv_off = 0;
+                if (pfe->http_pok) {
+                  if (pfe->http_hvok) {
+                    phurl = pfe->host_url;
+                  } else {
+                    phurl = NULL;
+                  }
+                } else {
+                  pfe->rcv_off += rc;
+                  goto restart;
+                }
+              } else {
+                log_debug("http parse error: %s %s\n", llhttp_errno_name(err), pfe->parser.reason);
+                pfe->rcv_off = 0;
+                llhttp_init(&pfe->parser, HTTP_BOTH, &pfe->settings);
+                phurl = NULL;
+	            }
+#endif
+              if (setup_proxy_path(&key, &rkey, pfe, phurl)) {
+                goto restart;
+              }
             }
           }
 

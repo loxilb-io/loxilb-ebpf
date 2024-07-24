@@ -6,6 +6,8 @@
 #ifndef __SOCKPROXY_H__
 #define __SOCKPROXY_H__
 
+#include "llhttp.h"
+
 typedef enum {
   PROXY_SOCK_LISTEN = 1,
   PROXY_SOCK_ACTIVE,
@@ -44,6 +46,12 @@ struct proxy_fd_ent {
   uint64_t ntb;
   uint64_t ntp;
   size_t rcv_off;
+  int http_pok;
+  int http_hok;
+  int http_hvok;
+  char host_url[256];
+  llhttp_t parser;
+  llhttp_settings_t settings;
 #define SP_SOCK_MSG_LEN 8192
   uint8_t rcvbuf[SP_SOCK_MSG_LEN];
 };
