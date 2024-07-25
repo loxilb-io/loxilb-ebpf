@@ -64,6 +64,7 @@ struct ebpfcfg {
   int egr_hooks;
   int have_sockrwr;
   int have_sockmap;
+  int have_noebpf;
 };
 
 void loxilb_set_loglevel(struct ebpfcfg *cfg);

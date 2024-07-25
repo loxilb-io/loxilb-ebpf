@@ -95,6 +95,7 @@ typedef struct llb_dp_struct
   int have_loader;
   int have_sockrwr;
   int have_sockmap;
+  int have_noebpf;
   struct llb_kern_mon *monp;
   const char *cgroup_dfl_path;
   int cgfd;
@@ -399,6 +400,10 @@ llb_packet_trace_en(int en)
   struct dp_intf_tact l2a;
   void *next_key = &nkey;
 
+  if (xh->have_noebpf) {
+    return 0;
+  }
+
   if (en < 0 || en > 2) {
     return -1;
   }
@@ -638,6 +643,10 @@ llb_setup_kern_sock(const char *cgroup_path)
   int cgfd = -1;
   int pfd;
 
+  if (xh->have_noebpf) {
+    return 0;
+  }
+
   if (xh->cgfd <= 0) {
     cgfd = cgroup_create_get(cgroup_path);
     if (cgfd < 0) {
@@ -708,6 +717,10 @@ llb_setup_kern_mon(void)
 {
   struct llb_kern_mon *prog;
   int err;
+
+  if (xh->have_noebpf) {
+    return 0;
+  }
 
   // Open and load eBPF Program
   prog = llb_kern_mon__open();
@@ -813,6 +826,10 @@ llb_setup_kern_sockmap_skmsg_helper(int map_fd)
   struct bpf_object *bpf_obj2;
   int pfd2;
 
+  if (xh->have_noebpf) {
+    return 0;
+  }
+
   bpf_obj2 = bpf_object__open(LLB_SOCK_DIR_IMG_BPF);
   map2 = bpf_object__find_map_by_name(bpf_obj2, "sock_proxy_map");
   if (map2 == NULL) {
@@ -871,6 +888,10 @@ llb_setup_kern_sockmap_strparser_helper(int sockmap_fd)
   struct bpf_object *bpf_obj2;
   int map_fd;
   int pfd2;
+
+  if (xh->have_noebpf) {
+    return 0;
+  }
 
   bpf_obj2 = bpf_object__open(LLB_SOCK_SP_IMG_BPF);
 #ifdef HAVE_SOCKOPS
@@ -940,6 +961,10 @@ err:
 static int
 llb_sockmap_op(struct llb_sockmap_key *key, int fd, int doadd)
 {
+  if (xh->have_noebpf) {
+    return 0;
+  }
+
   if (xh->smfd <= 0) {
     assert(0);
   }
@@ -965,6 +990,10 @@ llb_setup_kern_sockmap(const char *cgroup_path)
   int cgfd = -1;
   int map_fd = -1;
   int map_fd2 = -1;
+
+  if (xh->have_noebpf) {
+    return 0;
+  }
 
 #ifdef HAVE_SOCKOPS 
   if (xh->cgfd <= 0) {
@@ -1523,7 +1552,9 @@ llb_xh_init(llb_dp_struct_t *xh)
       assert(0);
     }
   } else {
-    llb_dp_maps_attach(xh);
+    if (!xh->have_noebpf) {
+      llb_dp_maps_attach(xh);
+    }
   }
 
   if (xh->have_mtrace) {
@@ -1723,6 +1754,10 @@ llb_fetch_map_stats_used(int tbl, uint32_t e, int clr, int *used)
 void 
 llb_collect_map_stats(int tid)
 {
+  if (xh->have_noebpf) {
+    return;
+  }
+
   return llb_fetch_map_stats_raw(tid, NULL, NULL);
 }
 
@@ -1731,6 +1766,10 @@ llb_fetch_pol_map_stats(int tid, uint32_t e, void *ppass, void *pdrop)
 {
   llb_dp_map_t *t;
   struct dp_pol_tact pa;
+
+  if (xh->have_noebpf) {
+    return 0;
+  }
 
   if (tid < 0 || tid >= LL_DP_MAX_MAP) 
     return -1;
@@ -1763,6 +1802,10 @@ llb_map_loop_and_delete(int tid, dp_map_walker_t cb, dp_map_ita_t *it)
   void *key = NULL;
   llb_dp_map_t *t;
   uint32_t n = 0;
+
+  if (xh->have_noebpf) {
+    return;
+  }
 
   if (!cb) return;
 
@@ -1798,6 +1841,9 @@ llb_clear_map_stats_internal(int tid, __u32 idx, bool wipe)
   llb_dp_map_t *t;
 
   if (tid < 0 || tid >= LL_DP_MAX_MAP) 
+    return;
+
+  if (xh->have_noebpf)
     return;
 
   t = &xh->maps[tid];
@@ -2157,6 +2203,11 @@ llb_add_map_elem(int tbl, void *k, void *v)
     }
   }
 
+  if (xh->have_noebpf) {
+    ret = 0;
+    goto ulock_out;
+  }
+
   if (tbl == LL_DP_FW4_MAP) {
     ret = llb_add_mf_map_elem__(tbl, k, v);
   } else {
@@ -2171,6 +2222,7 @@ out:
       llb_add_map_elem_nat_post_proc(k, v);
     }
   }
+ulock_out:
   XH_UNLOCK();
 
   return ret;
@@ -2294,11 +2346,21 @@ llb_del_map_elem_wval(int tbl, void *k, void *v)
       proxy_delete_entry(&pk, &pa);
     }
 
+    if (xh->have_noebpf) {
+      XH_UNLOCK();
+      return 0;
+    }
+
     ret = bpf_map_lookup_elem(llb_map2fd(tbl), k, &t);
     if (ret != 0) {
       XH_UNLOCK();
       return -EINVAL;
     }
+  }
+
+  if (xh->have_noebpf) {
+    XH_UNLOCK();
+    return 0;
   }
 
   if (tbl == LL_DP_FW4_MAP) {
@@ -2370,6 +2432,10 @@ ll_age_fcmap(void)
   struct dp_fcv4_key next_key;
   struct dp_fc_tacts *fc_val;
   uint64_t ns = get_os_nsecs();
+
+  if (xh->have_noebpf) {
+    return;
+  }
 
   fc_val = calloc(1, sizeof(*fc_val));
   if (!fc_val) return;
@@ -2681,6 +2747,10 @@ ll_age_ctmap(void)
   struct dp_ct_tact *adat;
   ct_arg_struct_t *as;
   uint64_t ns = get_os_nsecs();
+
+  if (xh->have_noebpf) {
+    return;
+  }
 
   adat = calloc(1, sizeof(*adat));
   if (!adat) return;
@@ -3086,6 +3156,10 @@ llb_ebpf_link_detach(struct config *cfg)
 {
   char cmd[PATH_MAX];
 
+  if (xh->have_noebpf) {
+    return 0;
+  }
+
   if (cfg->tc_bpf) {
     /* ntc is netlox's modified tc tool */
     if (cfg->tc_egr_bpf) {
@@ -3113,6 +3187,10 @@ llb_dp_link_attach(const char *ifname,
   struct config cfg;
   int nr = 0;
   int must_load = 0;
+
+  if (xh->have_noebpf) {
+    return 0;
+  }
 
   assert(psec);
   assert(ifname);
@@ -3224,13 +3302,24 @@ loxilb_main(struct ebpfcfg *cfg)
     xh->have_ptrace = cfg->have_ptrace;
     xh->nodenum = cfg->nodenum;
     xh->logfp = fp;
+    xh->have_noebpf = cfg->have_noebpf;
 
     // FIXME - Experimental
     xh->have_sockrwr = cfg->have_sockrwr;
     xh->have_sockmap = cfg->have_sockmap;
+
     xh->egr_hooks = cfg->egr_hooks;
     if (xh->have_sockrwr != 0) {
       xh->cgroup_dfl_path = CGROUP_PATH;
+    }
+
+    if (xh->have_noebpf) {
+      xh->have_loader = 0;
+      xh->have_mtrace = 0;
+      xh->have_ptrace = 0;
+      xh->have_sockrwr = 0;
+      xh->have_sockmap = 0;
+      xh->egr_hooks = 0;
     }
   }
 
