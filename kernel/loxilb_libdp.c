@@ -3279,7 +3279,10 @@ loxilb_main(struct ebpfcfg *cfg)
 {
   FILE *fp;
   libbpf_set_print(libbpf_print_fn);
-  llb_set_rlims();
+
+  if (!cfg->have_noebpf) {
+    llb_set_rlims();
+  }
 
   xh = calloc(1, sizeof(*xh));
   assert(xh);
