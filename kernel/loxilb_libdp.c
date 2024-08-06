@@ -2145,6 +2145,7 @@ llb_conv_nat2proxy(void *k, void *v, struct proxy_ent *pent, struct proxy_arg *p
 
   if (dat->sec_mode == SEC_MODE_HTTPS) {
     pval->have_ssl = 1;
+    pval->have_epssl = 1;
   }
 
   pval->_id = dat->ca.cidx;
