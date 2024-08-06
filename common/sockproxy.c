@@ -83,7 +83,9 @@ struct proxy_val {
   int proxy_mode;
   int main_fd;
   int have_ssl;
+  int have_epssl;
   void *ssl_ctx;
+  void *ssl_epctx;
   struct proxy_epval *ephash;
   struct proxy_fd_ent *fdlist;
 };
@@ -784,7 +786,7 @@ proxy_delete_entry__(proxy_ent_t *ent, proxy_arg_t *arg, int *mfd, void **ssl_ct
 }
 
 SSL_CTX *
-proxy_entry_ssl_ctx_init(void)
+proxy_server_ssl_ctx_init(void)
 {
     const SSL_METHOD *method;
     SSL_CTX *ctx;
@@ -801,9 +803,19 @@ proxy_entry_ssl_ctx_init(void)
 }
 
 int
-proxy_entry_ssl_cfg_cert(SSL_CTX *ctx)
+proxy_ssl_cfg_opts(SSL_CTX *ctx, int mtls_en)
 {
   char fpath[512];
+
+  if (mtls_en) {
+    sprintf(fpath, "%s", PROXY_SSL_CERT_DIR);
+    if (SSL_CTX_load_verify_locations(ctx, fpath, 0) <= 0) {
+      log_error("Unable to set verify locations %s",
+        ERR_error_string(ERR_get_error(), NULL));
+      return -EINVAL;
+    }
+  }
+
   sprintf(fpath, "%s/%s", PROXY_SSL_CERT_DIR, "server.crt");
   if (SSL_CTX_use_certificate_file(ctx, fpath, SSL_FILETYPE_PEM) <= 0) {
     log_error("sockproxy: pubcert load failed");
@@ -821,7 +833,29 @@ proxy_entry_ssl_cfg_cert(SSL_CTX *ctx)
     return -EINVAL;
   }
 
+  if (mtls_en) {
+    SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER|SSL_VERIFY_FAIL_IF_NO_PEER_CERT|
+      SSL_VERIFY_CLIENT_ONCE, 0);
+  }
+
   return 0;
+}
+
+SSL_CTX *
+proxy_client_ssl_ctx_init(void)
+{
+    const SSL_METHOD *method;
+    SSL_CTX *ctx;
+
+    method = TLS_client_method();
+
+    ctx = SSL_CTX_new(method);
+    if (!ctx) {
+      log_error("sockproxy: ssl-ctx creation failed");
+      return NULL;
+    }
+
+    return ctx;
 }
 
 int
@@ -829,6 +863,7 @@ proxy_add_entry(proxy_ent_t *new_ent, proxy_arg_t *arg)
 {
   int lsd;
   void *ssl_ctx = NULL;
+  void *ssl_epctx = NULL;
   proxy_map_ent_t *node;
   proxy_epval_t *tepval;
   proxy_map_ent_t *ent = proxy_struct->head;
@@ -876,9 +911,15 @@ proxy_add_entry(proxy_ent_t *new_ent, proxy_arg_t *arg)
   node->val.have_ssl = arg->have_ssl;
 
   if (arg->have_ssl) {
-    ssl_ctx = proxy_entry_ssl_ctx_init();
+    ssl_ctx = proxy_server_ssl_ctx_init();
     assert(ssl_ctx);
-    proxy_entry_ssl_cfg_cert(ssl_ctx);
+    proxy_ssl_cfg_opts(ssl_ctx, 0);
+  }
+
+  if (arg->have_epssl) {
+    ssl_epctx = proxy_client_ssl_ctx_init();
+    assert(ssl_epctx);
+    proxy_ssl_cfg_opts(ssl_epctx, 0);
   }
 
   lsd = proxy_sock_init(node->key.xip, node->key.xport, node->key.protocol);
@@ -895,6 +936,7 @@ proxy_add_entry(proxy_ent_t *new_ent, proxy_arg_t *arg)
 
   node->val.main_fd = lsd;
   node->val.ssl_ctx = ssl_ctx;
+  node->val.ssl_epctx = ssl_epctx;
   node->val.proxy_mode = arg->proxy_mode;
   fd_ctx = calloc(1, sizeof(*fd_ctx));
   assert(fd_ctx);
