@@ -550,6 +550,9 @@ proxy_ssl_connect(int fd, void *ssl)
         return -1;
       }
     } else {
+      log_error("Unable to ssl-connect %s",
+        ERR_error_string(ERR_get_error(), NULL));
+
       return -1;
     }
   }
