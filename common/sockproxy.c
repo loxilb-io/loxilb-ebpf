@@ -789,7 +789,8 @@ proxy_find_ep(uint32_t xip, uint16_t xport, uint8_t protocol,
 }
 
 static int
-proxy_delete_entry__(proxy_ent_t *ent, proxy_arg_t *arg, int *mfd, void **ssl_ctx)
+proxy_delete_entry__(proxy_ent_t *ent, proxy_arg_t *arg, int *mfd,
+                     void **ssl_ctx, void **ssl_epctx)
 {
   struct proxy_map_ent *prev = NULL;
   struct proxy_map_ent *node;
@@ -836,6 +837,12 @@ proxy_delete_entry__(proxy_ent_t *ent, proxy_arg_t *arg, int *mfd, void **ssl_ct
       *ssl_ctx = node->val.ssl_ctx;
       node->val.ssl_ctx = NULL;
     }
+
+    if (node->val.ssl_epctx) {
+      *ssl_epctx = node->val.ssl_epctx;
+      node->val.ssl_epctx = NULL;
+    }
+
     /* This node is freed after cleanup in proxy_pdestroy() */
     //free(node);
   } else {
@@ -908,18 +915,17 @@ proxy_ssl_cfg_opts(SSL_CTX *ctx, int mtls_en)
 SSL_CTX *
 proxy_client_ssl_ctx_init(void)
 {
-    const SSL_METHOD *method;
-    SSL_CTX *ctx;
+  const SSL_METHOD *method;
+  SSL_CTX *ctx;
 
-    method = TLS_client_method();
+  method = TLS_client_method();
+  ctx = SSL_CTX_new(method);
+  if (!ctx) {
+    log_error("sockproxy: ssl-ctx creation failed");
+    return NULL;
+  }
 
-    ctx = SSL_CTX_new(method);
-    if (!ctx) {
-      log_error("sockproxy: ssl-ctx creation failed");
-      return NULL;
-    }
-
-    return ctx;
+  return ctx;
 }
 
 int
@@ -1053,9 +1059,10 @@ proxy_delete_entry(proxy_ent_t *ent, proxy_arg_t *arg)
 {
   int ret = 0, fd = 0;
   void *ssl_ctx = NULL;
+  void *ssl_epctx = NULL;
 
   PROXY_LOCK();
-  ret = proxy_delete_entry__(ent, arg, &fd, &ssl_ctx);
+  ret = proxy_delete_entry__(ent, arg, &fd, &ssl_ctx, &ssl_epctx);
   PROXY_UNLOCK();
 
   if (fd > 0) {
@@ -1065,6 +1072,10 @@ proxy_delete_entry(proxy_ent_t *ent, proxy_arg_t *arg)
 
   if (ssl_ctx) {
     SSL_CTX_free(ssl_ctx);
+  }
+
+  if (ssl_epctx) {
+    SSL_CTX_free(ssl_epctx);
   }
 
   return ret;
