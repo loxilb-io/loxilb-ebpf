@@ -778,6 +778,7 @@ struct dp_nat_key {
 
 #define SEC_MODE_NONE 0
 #define SEC_MODE_HTTPS 1
+#define SEC_MODE_HTTPS_E2E 2
 
 struct dp_proxy_tacts {
   struct dp_cmn_act ca;

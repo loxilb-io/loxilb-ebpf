@@ -1682,6 +1682,9 @@ llb_fetch_map_stats_cached(int tbl, uint32_t e, int raw,
 {
   llb_dp_map_t *t;
 
+  if (xh->have_noebpf)
+    return 0;
+
   if (tbl < 0 || tbl >= LL_DP_MAX_MAP) 
     return -1;
 
@@ -2145,6 +2148,9 @@ llb_conv_nat2proxy(void *k, void *v, struct proxy_ent *pent, struct proxy_arg *p
 
   if (dat->sec_mode == SEC_MODE_HTTPS) {
     pval->have_ssl = 1;
+  } else if (dat->sec_mode == SEC_MODE_HTTPS_E2E) {
+    pval->have_ssl = 1;
+    pval->have_epssl = 1;
   }
 
   pval->_id = dat->ca.cidx;

@@ -83,7 +83,9 @@ struct proxy_val {
   int proxy_mode;
   int main_fd;
   int have_ssl;
+  int have_epssl;
   void *ssl_ctx;
+  void *ssl_epctx;
   struct proxy_epval *ephash;
   struct proxy_fd_ent *fdlist;
 };
@@ -513,7 +515,54 @@ proxy_server_setup(int fd, uint32_t server, uint16_t port, uint8_t protocol)
 }
 
 static int
-proxy_setup_ep_connect(uint32_t epip, uint16_t epport, uint8_t protocol)
+proxy_ssl_connect(int fd, void *ssl)
+{
+  fd_set fds;
+  int to = 10;
+  int err;
+  int ssl_err;
+  int sret;
+  struct timeval tv = { .tv_sec  = 0,
+                        .tv_usec = 500000
+                      };
+
+  assert(ssl);
+  SSL_set_fd(ssl, fd);
+
+  FD_ZERO(&fds);
+  FD_SET(fd, &fds);
+
+  while (to--) {
+    err = SSL_connect(ssl);
+    if (err == 1) {
+      break;
+    }
+
+    ssl_err = SSL_get_error(ssl, err);
+    if (ssl_err == SSL_ERROR_WANT_READ) {
+      sret = select(fd + 1, &fds, NULL, NULL, &tv);
+      if (sret == -1) {
+        return -1;
+      }
+    } else if (ssl_err == SSL_ERROR_WANT_WRITE) {
+      sret = select(fd + 1, NULL, &fds, NULL, &tv);
+      if (sret == -1) {
+        return -1;
+      }
+    } else {
+      log_error("Unable to ssl-connect %s",
+        ERR_error_string(ERR_get_error(), NULL));
+
+      return -1;
+    }
+  }
+
+  return 0;
+}
+
+static int
+proxy_setup_ep_connect(uint32_t epip, uint16_t epport, uint8_t protocol,
+                       void *ssl_ctx, void **ssl)
 {
   int fd, rc;
   struct sockaddr_in epaddr;
@@ -565,8 +614,19 @@ proxy_setup_ep_connect(uint32_t epip, uint16_t epport, uint8_t protocol)
       close(fd);
       return -1;
     }
+  }
 
-    return fd;
+  if (ssl_ctx) {
+    void *nssl = SSL_new(ssl_ctx);
+    assert(nssl);
+    if (proxy_ssl_connect(fd, nssl)) {
+      log_error("ssl-connect %s:%u(failed)", inet_ntoa(*(struct in_addr *)(&epip)), ntohs(epport));
+      close(fd);
+      SSL_free(nssl);
+      return -1;
+    }
+
+    *ssl = nssl;
   }
 
   return fd;
@@ -575,7 +635,8 @@ proxy_setup_ep_connect(uint32_t epip, uint16_t epport, uint8_t protocol)
 static int
 proxy_setup_ep__(uint32_t xip, uint16_t xport, uint8_t protocol,
                  const char *host_str, proxy_ep_sel_t *ep_sel,
-                 proxy_epval_t **epv, int *seltype, uint32_t *rid)
+                 proxy_epval_t **epv, int *seltype, uint32_t *rid,
+                 void *ssl_ctx, void **ssl)
 {
   int sel = 0;
   uint32_t epip;
@@ -606,7 +667,8 @@ proxy_setup_ep__(uint32_t xip, uint16_t xport, uint8_t protocol,
         epport = tepval->eps[sel].xport;
         epprotocol = tepval->eps[sel].protocol;
         tepval->ep_sel++;
-        ep_sel->ep_cfds[0].ep_cfd = proxy_setup_ep_connect(epip, epport, (uint8_t)epprotocol);
+        ep_sel->ep_cfds[0].ep_cfd = proxy_setup_ep_connect(epip, epport, (uint8_t)epprotocol,
+                                                           ssl_ctx, ssl);
         if (ep_sel->ep_cfds[0].ep_cfd < 0) {
           return -1;
         }
@@ -624,11 +686,15 @@ proxy_setup_ep__(uint32_t xip, uint16_t xport, uint8_t protocol,
         tepval = node->val.ephash;
         if (tepval == NULL) break;
 
+        /* Do not support for this mode */
+        assert(ssl_ctx);
+
         for (ep = 0; ep < tepval->n_eps; ep++) {
           epip = tepval->eps[ep].xip;
           epport = tepval->eps[ep].xport;
           epprotocol = tepval->eps[ep].protocol;
-          ep_sel->ep_cfds[sel].ep_cfd = proxy_setup_ep_connect(epip, epport, (uint8_t)epprotocol);
+          ep_sel->ep_cfds[sel].ep_cfd = proxy_setup_ep_connect(epip, epport, (uint8_t)epprotocol, 
+                                                               NULL, NULL);
           if (ep_sel->ep_cfds[sel].ep_cfd > 0) {
             ep_sel->ep_cfds[sel].ep_num = sel;
             sel++;
@@ -723,7 +789,8 @@ proxy_find_ep(uint32_t xip, uint16_t xport, uint8_t protocol,
 }
 
 static int
-proxy_delete_entry__(proxy_ent_t *ent, proxy_arg_t *arg, int *mfd, void **ssl_ctx)
+proxy_delete_entry__(proxy_ent_t *ent, proxy_arg_t *arg, int *mfd,
+                     void **ssl_ctx, void **ssl_epctx)
 {
   struct proxy_map_ent *prev = NULL;
   struct proxy_map_ent *node;
@@ -770,6 +837,12 @@ proxy_delete_entry__(proxy_ent_t *ent, proxy_arg_t *arg, int *mfd, void **ssl_ct
       *ssl_ctx = node->val.ssl_ctx;
       node->val.ssl_ctx = NULL;
     }
+
+    if (node->val.ssl_epctx) {
+      *ssl_epctx = node->val.ssl_epctx;
+      node->val.ssl_epctx = NULL;
+    }
+
     /* This node is freed after cleanup in proxy_pdestroy() */
     //free(node);
   } else {
@@ -784,7 +857,7 @@ proxy_delete_entry__(proxy_ent_t *ent, proxy_arg_t *arg, int *mfd, void **ssl_ct
 }
 
 SSL_CTX *
-proxy_entry_ssl_ctx_init(void)
+proxy_server_ssl_ctx_init(void)
 {
     const SSL_METHOD *method;
     SSL_CTX *ctx;
@@ -801,9 +874,19 @@ proxy_entry_ssl_ctx_init(void)
 }
 
 int
-proxy_entry_ssl_cfg_cert(SSL_CTX *ctx)
+proxy_ssl_cfg_opts(SSL_CTX *ctx, int mtls_en)
 {
   char fpath[512];
+
+  if (mtls_en) {
+    sprintf(fpath, "%s", PROXY_SSL_CERT_DIR);
+    if (SSL_CTX_load_verify_locations(ctx, fpath, 0) <= 0) {
+      log_error("Unable to set verify locations %s",
+        ERR_error_string(ERR_get_error(), NULL));
+      return -EINVAL;
+    }
+  }
+
   sprintf(fpath, "%s/%s", PROXY_SSL_CERT_DIR, "server.crt");
   if (SSL_CTX_use_certificate_file(ctx, fpath, SSL_FILETYPE_PEM) <= 0) {
     log_error("sockproxy: pubcert load failed");
@@ -821,7 +904,28 @@ proxy_entry_ssl_cfg_cert(SSL_CTX *ctx)
     return -EINVAL;
   }
 
+  if (mtls_en) {
+    SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER|SSL_VERIFY_FAIL_IF_NO_PEER_CERT|
+      SSL_VERIFY_CLIENT_ONCE, 0);
+  }
+
   return 0;
+}
+
+SSL_CTX *
+proxy_client_ssl_ctx_init(void)
+{
+  const SSL_METHOD *method;
+  SSL_CTX *ctx;
+
+  method = TLS_client_method();
+  ctx = SSL_CTX_new(method);
+  if (!ctx) {
+    log_error("sockproxy: ssl-ctx creation failed");
+    return NULL;
+  }
+
+  return ctx;
 }
 
 int
@@ -829,6 +933,7 @@ proxy_add_entry(proxy_ent_t *new_ent, proxy_arg_t *arg)
 {
   int lsd;
   void *ssl_ctx = NULL;
+  void *ssl_epctx = NULL;
   proxy_map_ent_t *node;
   proxy_epval_t *tepval;
   proxy_map_ent_t *ent = proxy_struct->head;
@@ -876,9 +981,15 @@ proxy_add_entry(proxy_ent_t *new_ent, proxy_arg_t *arg)
   node->val.have_ssl = arg->have_ssl;
 
   if (arg->have_ssl) {
-    ssl_ctx = proxy_entry_ssl_ctx_init();
+    ssl_ctx = proxy_server_ssl_ctx_init();
     assert(ssl_ctx);
-    proxy_entry_ssl_cfg_cert(ssl_ctx);
+    proxy_ssl_cfg_opts(ssl_ctx, 0);
+  }
+
+  if (arg->have_epssl) {
+    ssl_epctx = proxy_client_ssl_ctx_init();
+    assert(ssl_epctx);
+    proxy_ssl_cfg_opts(ssl_epctx, 0);
   }
 
   lsd = proxy_sock_init(node->key.xip, node->key.xport, node->key.protocol);
@@ -895,6 +1006,7 @@ proxy_add_entry(proxy_ent_t *new_ent, proxy_arg_t *arg)
 
   node->val.main_fd = lsd;
   node->val.ssl_ctx = ssl_ctx;
+  node->val.ssl_epctx = ssl_epctx;
   node->val.proxy_mode = arg->proxy_mode;
   fd_ctx = calloc(1, sizeof(*fd_ctx));
   assert(fd_ctx);
@@ -947,9 +1059,10 @@ proxy_delete_entry(proxy_ent_t *ent, proxy_arg_t *arg)
 {
   int ret = 0, fd = 0;
   void *ssl_ctx = NULL;
+  void *ssl_epctx = NULL;
 
   PROXY_LOCK();
-  ret = proxy_delete_entry__(ent, arg, &fd, &ssl_ctx);
+  ret = proxy_delete_entry__(ent, arg, &fd, &ssl_ctx, &ssl_epctx);
   PROXY_UNLOCK();
 
   if (fd > 0) {
@@ -959,6 +1072,10 @@ proxy_delete_entry(proxy_ent_t *ent, proxy_arg_t *arg)
 
   if (ssl_ctx) {
     SSL_CTX_free(ssl_ctx);
+  }
+
+  if (ssl_epctx) {
+    SSL_CTX_free(ssl_epctx);
   }
 
   return ret;
@@ -1396,7 +1513,10 @@ setup_proxy_path(smap_key_t *key, smap_key_t *rkey, proxy_fd_ent_t *pfe, const c
   proxy_fd_ent_t *npfe2 = NULL;
   proxy_epval_t *tepval = NULL;
   proxy_map_ent_t *ent;
+  void *ssl = NULL;
 
+  ent = pfe->head;
+  assert(ent);
   memset(&ep_sel, 0, sizeof(ep_sel));
 
   if (proxy_skmap_key_from_fd(pfe->fd, key, &protocol)) {
@@ -1405,13 +1525,12 @@ setup_proxy_path(smap_key_t *key, smap_key_t *rkey, proxy_fd_ent_t *pfe, const c
   }
 
   if (proxy_setup_ep__(key->sip, key->sport >> 16, (uint8_t)(protocol),
-                       flt_url, &ep_sel, &tepval, &seltype, &rid)) {
+                       flt_url, &ep_sel, &tepval, &seltype, &rid, ent->val.ssl_epctx, &ssl)) {
     proxy_log("no endpoint", &key);
     close(pfe->fd);
     return -1;
   }
 
-  ent = pfe->head;
   n_eps = ep_sel.n_eps;
 
   for (j = 0; j < n_eps; j++) {
@@ -1461,6 +1580,7 @@ setup_proxy_path(smap_key_t *key, smap_key_t *rkey, proxy_fd_ent_t *pfe, const c
     npfe2->n_rfd++;
     npfe2->head = ent;
     npfe2->next = ent->val.fdlist;
+    npfe2->ssl = ssl;
     ent->val.fdlist = npfe2;
 
     if (notify_add_ent(proxy_struct->ns, ep_cfd,
