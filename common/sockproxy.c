@@ -976,7 +976,7 @@ proxy_add_entry(proxy_ent_t *new_ent, proxy_arg_t *arg)
     return -ENOMEM;
   }
 
-  memcpy(&node->key, new_ent, sizeof(*ent));
+  memcpy(&node->key, new_ent, sizeof(proxy_ent_t));
   node->val.main_fd = -1;
   node->val.have_ssl = arg->have_ssl;
 
@@ -1033,6 +1033,7 @@ proxy_add_entry(proxy_ent_t *new_ent, proxy_arg_t *arg)
   tepval->_id = arg->_id;
   tepval->select = arg->select;
   strncpy(tepval->host_url, arg->host_url, sizeof(tepval->host_url) - 1);
+  tepval->host_url[sizeof(tepval->host_url) - 1] = '\0';
   memcpy(tepval->eps, arg->eps, sizeof(arg->eps));
   HASH_ADD_STR(node->val.ephash, host_url, tepval);
 
