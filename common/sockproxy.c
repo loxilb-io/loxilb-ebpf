@@ -874,29 +874,43 @@ proxy_server_ssl_ctx_init(void)
 }
 
 int
-proxy_ssl_cfg_opts(SSL_CTX *ctx, int mtls_en)
+proxy_ssl_cfg_opts(SSL_CTX *ctx, const char *site_path, int mtls_en)
 {
   char fpath[512];
 
   if (mtls_en) {
     sprintf(fpath, "%s", PROXY_SSL_CERT_DIR);
-    if (SSL_CTX_load_verify_locations(ctx, fpath, 0) <= 0) {
+    if (SSL_CTX_load_verify_locations(ctx, NULL, fpath) <= 0) {
       log_error("Unable to set verify locations %s",
         ERR_error_string(ERR_get_error(), NULL));
       return -EINVAL;
     }
   }
 
-  sprintf(fpath, "%s/%s", PROXY_SSL_CERT_DIR, "server.crt");
-  if (SSL_CTX_use_certificate_file(ctx, fpath, SSL_FILETYPE_PEM) <= 0) {
-    log_error("sockproxy: pubcert load failed");
-    return -EINVAL;
-  }
+  sprintf(fpath, "%s/%s/%s", PROXY_SSL_CERT_DIR, site_path?:"", "server.crt");
+  if (site_path && !access(fpath, F_OK)) {
+    if (SSL_CTX_use_certificate_file(ctx, fpath, SSL_FILETYPE_PEM) <= 0) {
+      log_error("sockproxy: cert (%s) load failed", fpath);
+      return -EINVAL;
+    }
 
-  sprintf(fpath, "%s/%s", PROXY_SSL_CERT_DIR, "server.key");
-  if (SSL_CTX_use_PrivateKey_file(ctx, fpath, SSL_FILETYPE_PEM) <= 0 ) {
-    log_error("sockproxy: privkey load failed");
-    return -EINVAL;
+    sprintf(fpath, "%s/%s/%s", PROXY_SSL_CERT_DIR, site_path, "server.key");
+    if (SSL_CTX_use_PrivateKey_file(ctx, fpath, SSL_FILETYPE_PEM) <= 0 ) {
+      log_error("sockproxy: privkey (%s) load failed", fpath);
+      return -EINVAL;
+    }
+  } else {
+    sprintf(fpath, "%s/%s", PROXY_SSL_CERT_DIR, "server.crt");
+    if (SSL_CTX_use_certificate_file(ctx, fpath, SSL_FILETYPE_PEM) <= 0) {
+      log_error("sockproxy: cert (%s) load failed", fpath);
+      return -EINVAL;
+    }
+
+    sprintf(fpath, "%s/%s", PROXY_SSL_CERT_DIR, "server.key");
+    if (SSL_CTX_use_PrivateKey_file(ctx, fpath, SSL_FILETYPE_PEM) <= 0 ) {
+      log_error("sockproxy: privkey (%s) load failed", fpath);
+      return -EINVAL;
+    }
   }
 
   if (!SSL_CTX_check_private_key(ctx)) {
@@ -983,19 +997,34 @@ proxy_add_entry(proxy_ent_t *new_ent, proxy_arg_t *arg)
   if (arg->have_ssl) {
     ssl_ctx = proxy_server_ssl_ctx_init();
     assert(ssl_ctx);
-    proxy_ssl_cfg_opts(ssl_ctx, 0);
+    if (proxy_ssl_cfg_opts(ssl_ctx,
+          strcmp(arg->host_url, "") ? arg->host_url : NULL, 0)) {
+      PROXY_UNLOCK();
+      return -EINVAL;
+    }
   }
 
   if (arg->have_epssl) {
     ssl_epctx = proxy_client_ssl_ctx_init();
     assert(ssl_epctx);
-    proxy_ssl_cfg_opts(ssl_epctx, 0);
+    if (proxy_ssl_cfg_opts(ssl_epctx, NULL, 0)) {
+      if (ssl_ctx) {
+        SSL_CTX_free(ssl_ctx);
+        ssl_ctx = NULL;
+      }
+      PROXY_UNLOCK();
+      return -EINVAL;
+    }
   }
 
   lsd = proxy_sock_init(node->key.xip, node->key.xport, node->key.protocol);
   if (lsd <= 0) {
     log_error("sockproxy : %s:%u sock-init failed",
         inet_ntoa(*(struct in_addr *)&node->key.xip), ntohs(node->key.xport));
+    if (ssl_epctx) {
+      SSL_CTX_free(ssl_epctx);
+      ssl_epctx = NULL;
+    }
     if (ssl_ctx) {
       SSL_CTX_free(ssl_ctx);
       ssl_ctx = NULL;
