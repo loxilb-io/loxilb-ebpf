@@ -47,6 +47,7 @@
 
 #define PROXY_SSL_FNAME_SZ 128
 #define PROXY_SSL_CERT_DIR "/opt/loxilb/cert"
+#define PROXY_SSL_CA_DIR "/etc/ssl/certs"
 
 typedef struct proxy_ep_val {
   int ep_cfd;
@@ -879,7 +880,7 @@ proxy_ssl_cfg_opts(SSL_CTX *ctx, const char *site_path, int mtls_en)
   char fpath[512];
 
   if (mtls_en) {
-    sprintf(fpath, "%s", PROXY_SSL_CERT_DIR);
+    sprintf(fpath, "%s", PROXY_SSL_CA_DIR);
     if (SSL_CTX_load_verify_locations(ctx, NULL, fpath) <= 0) {
       log_error("Unable to set verify locations %s",
         ERR_error_string(ERR_get_error(), NULL));
