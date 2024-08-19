@@ -1804,6 +1804,7 @@ restart:
           PROXY_UNLOCK();
           proxy_destroy_eps(new_sd, &ep_sel);
           PROXY_LOCK();
+          close(new_sd);
           log_error("failed to add new_sd %d", new_sd);
           goto restart;
         }
