@@ -24,7 +24,7 @@ typedef struct proxy_cache proxy_cache_t;
 
 struct proxy_fd_ent {
   int fd;
-#define MAX_PROXY_EP 16
+#define MAX_PROXY_EP LLB_MAX_NXFRMS
   int rfd[MAX_PROXY_EP];
   struct proxy_fd_ent *rfd_ent[MAX_PROXY_EP];
   int n_rfd;
