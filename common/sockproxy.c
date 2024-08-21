@@ -1784,9 +1784,7 @@ restart:
         npfe1->seltype = seltype;
         npfe1->ep_num = -1;
         npfe1->head = ent;
-        npfe1->next = ent->val.fdlist;
         npfe1->ssl = ssl;
-        ent->val.fdlist = npfe1;
 
         llhttp_settings_init(&npfe1->settings);
 	      npfe1->settings.on_message_complete = handle_on_message_complete;
@@ -1806,8 +1804,10 @@ restart:
           PROXY_LOCK();
           close(new_sd);
           log_error("failed to add new_sd %d", new_sd);
-          goto restart;
+          continue;
         }
+        npfe1->next = ent->val.fdlist;
+        ent->val.fdlist = npfe1;
       } else if (pfe->stype == PROXY_SOCK_ACTIVE) {
         for (j = 0; j < PROXY_NUM_BURST_RX; j++) {
           int rc = proxy_sock_read(pfe, fd, pfe->rcvbuf + pfe->rcv_off, SP_SOCK_MSG_LEN - pfe->rcv_off);

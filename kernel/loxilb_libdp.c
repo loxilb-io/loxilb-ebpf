@@ -1715,8 +1715,8 @@ llb_fetch_map_stats_cached(int tbl, uint32_t e, int raw,
   }
 
   if (e < t->max_entries) {
-    *(uint64_t *)bytes = t->pbs[e].st.bytes;
-    *(uint64_t *)packets = t->pbs[e].st.packets;
+    *(uint64_t *)bytes += t->pbs[e].st.bytes;
+    *(uint64_t *)packets += t->pbs[e].st.packets;
   }
   pthread_rwlock_unlock(&t->stat_lock);
 
