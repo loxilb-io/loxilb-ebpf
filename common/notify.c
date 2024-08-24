@@ -158,6 +158,7 @@ notify_add_ent(void *ctx, int fd, notify_type_t type, void *priv)
       return 0;
     }
     NOTI_UNLOCK(nctx); 
+    log_error("events exist\n");
     return -EEXIST;
   }
 
@@ -276,9 +277,13 @@ notify_run(void *ctx, int thread)
     memcpy(pfds, nctx->poll_ctx[thread].pfds, sizeof(pfds));
     n_pfds = nctx->poll_ctx[thread].n_pfds;
     NOTI_UNLOCK(nctx);
+
+    if (n_pfds <= 0) {
+      goto end_of_loop;
+    }
     
     //printf("n_pfds = %d\n", n_pfds);
-    rc = poll(pfds, n_pfds, 500);
+    rc = poll(pfds, n_pfds, 0);
     if (rc < 0) {
       perror("poll");
       goto end_of_loop;
