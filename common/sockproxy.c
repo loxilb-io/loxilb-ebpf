@@ -116,6 +116,7 @@ typedef struct llb_sockmap_key smap_key_t;
 
 static proxy_struct_t *proxy_struct;
 
+#define HAVE_PROXY_MAPFD
 #ifdef HAVE_PROXY_MAPFD
 static int
 fd_in_use(int fd)
@@ -154,7 +155,6 @@ get_mapped_proxy_fd(int fd)
     return fd;
   }
 
-  printf("mapfd dfd %d-->%d\n", fd, dfd);
   close(fd);
   return dfd;
 }
@@ -1466,14 +1466,8 @@ proxy_destroy_eps(int sfd, proxy_ep_sel_t *ep_sel)
   int i = 0;
   for (i = 0; i < ep_sel->n_eps; i++) {
     if (ep_sel->ep_cfds[i].ep_cfd > 0) {
-      //notify_delete_ent(proxy_struct->ns, ep_sel->ep_cfds[i].ep_cfd);
-      close(ep_sel->ep_cfds[i].ep_cfd);
       ep_sel->ep_cfds[i].ep_cfd = -1;
       ep_sel->ep_cfds[i].ep_num = -1;
-    }
-    if (sfd > 0) {
-      // notify_delete_ent(proxy_struct->ns, sfd);
-      close(sfd);
     }
   }
 }
@@ -1638,6 +1632,7 @@ setup_proxy_path(smap_key_t *key, smap_key_t *rkey, proxy_fd_ent_t *pfe, const c
     if (proxy_skmap_key_from_fd(ep_cfd, rkey, &epprotocol)) {
       log_error("skmap key from ep_cfd failed");
       proxy_destroy_eps(pfe->fd, &ep_sel);
+      close(pfe->fd);
       return -1;
     }
 
@@ -1652,6 +1647,7 @@ setup_proxy_path(smap_key_t *key, smap_key_t *rkey, proxy_fd_ent_t *pfe, const c
       if (proxy_sock_init_ktls(new_sd)) {
         log_error("tls failed");
         proxy_destroy_eps(pfe->fd, &ep_sel);
+        close(pfe->fd);
         return -1;
       }
 #endif
@@ -1671,16 +1667,19 @@ setup_proxy_path(smap_key_t *key, smap_key_t *rkey, proxy_fd_ent_t *pfe, const c
     npfe2->n_rfd++;
     npfe2->head = ent;
     npfe2->ssl = ssl;
-    npfe2->next = ent->val.fdlist;
-    ent->val.fdlist = npfe2;
 
     if (notify_add_ent(proxy_struct->ns, ep_cfd,
-        NOTI_TYPE_IN|NOTI_TYPE_HUP, npfe2))  {
+          NOTI_TYPE_IN|NOTI_TYPE_HUP, npfe2))  {
       proxy_destroy_eps(pfe->fd, &ep_sel);
+      proxy_release_fd_ctx(npfe2);
       free(npfe2);
+      close(pfe->fd);
       log_error("failed to add epcfd %d", ep_cfd);
       return -1;
     }
+
+    npfe2->next = ent->val.fdlist;
+    ent->val.fdlist = npfe2;
 
     npfe1->_id = rid;
     npfe1->rfd[npfe1->n_rfd] = ep_cfd;
@@ -1865,9 +1864,9 @@ restart:
 
         if (notify_add_ent(proxy_struct->ns, new_sd,
                 NOTI_TYPE_IN|NOTI_TYPE_HUP, npfe1))  {
-          free(npfe1);
           proxy_destroy_eps(new_sd, &ep_sel);
-          close(new_sd);
+          proxy_release_fd_ctx(npfe1);
+          free(npfe1);
           log_error("failed to add new_sd %d", new_sd);
           continue;
         }
