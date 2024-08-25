@@ -175,8 +175,10 @@ notify_add_ent(void *ctx, int fd, notify_type_t type, void *priv)
   if (ent->fd > 0) {
     pctx = &nctx->poll_ctx[ent->thr_id];
     assert(pctx);
-    if (pctx->pfds[ent->poll_slot].events != events) {
-      pctx->pfds[ent->poll_slot].events = events;
+    if (ent->priv == priv) {
+      if (pctx->pfds[ent->poll_slot].events != events) {
+        pctx->pfds[ent->poll_slot].events = events;
+      }
       NOTI_UNLOCK(nctx);
       return 0;
     }

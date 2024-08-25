@@ -98,14 +98,22 @@ typedef struct proxy_map_ent {
   struct proxy_map_ent *next;
 } proxy_map_ent_t;
 
+#define PROXY_START_MAPFD 500
+#define PROXY_MAX_MAPFD 200
+
+typedef struct proxy_mapfd {
+  uint16_t start;
+  uint16_t end;
+  uint16_t next;
+} proxy_mapfd_t;
+
 typedef struct proxy_struct {
   pthread_rwlock_t lock;
   pthread_t pthr;
   proxy_map_ent_t *head;
   sockmap_cb_t sockmap_cb;
   void *ns;
-#define PROXY_START_FD 200
-  uint16_t next_fd;
+  proxy_mapfd_t mapfd[PROXY_MAX_THREADS];
 } proxy_struct_t;
 
 typedef struct llb_sockmap_key smap_key_t;
@@ -127,33 +135,42 @@ fd_in_use(int fd)
 static int
 get_mapped_proxy_fd(int fd)
 {
-  int dfd;
-  int retry;
+  proxy_mapfd_t *mep;
+  int dfd, retry;
+  pid_t tid;
 
   if (notify_check_slot(proxy_struct->ns, fd)) {
     return fd;
   }
 
-  if (proxy_struct->next_fd < PROXY_START_FD) {
-    proxy_struct->next_fd = PROXY_START_FD;
+  tid = gettid() % PROXY_MAX_THREADS;
+  mep = &proxy_struct->mapfd[tid];
+
+  if (mep->next < mep->start ||
+      mep->next >= mep->end) {
+    mep->next = mep->start;
   }
 
   for (retry = 0; retry < 100; retry++) {
-    proxy_struct->next_fd++;
-    if (fd_in_use(proxy_struct->next_fd)) {
+    mep->next++;
+    if (fd_in_use(mep->next)) {
       continue;
     }
-    dfd = proxy_struct->next_fd;
+    dfd = mep->next;
     break;
   }
 
   if (retry >= 100) {
+    log_error("mapfd (%d) find failed", fd);
     return fd;
   }
 
   if (dup2(fd, dfd) < 0) {
+    log_error("mapfd (%d) dup2 failed", fd);
     return fd;
   }
+
+  //log_debug("mapfd tid %d %d->%d\n", tid, fd, dfd);
 
   close(fd);
   return dfd;
@@ -244,7 +261,6 @@ proxy_add_xmitcache(proxy_fd_ent_t *ent, uint8_t *cache, size_t len)
   return 0;
 }
 
-//#define HAVE_PROXY_DEBUG
 #ifdef HAVE_PROXY_DEBUG
 static void
 proxy_log(const char *str, smap_key_t *key)
@@ -1391,7 +1407,6 @@ static void
 proxy_release_rfd_ctx(proxy_fd_ent_t *pfe)
 {
   proxy_fd_ent_t *fd_ent;
-  proxy_map_ent_t *ent;
 
   for (int i = 0; i < pfe->n_rfd; i++) {
     fd_ent = pfe->rfd_ent[i];
@@ -1616,6 +1631,7 @@ setup_proxy_path(smap_key_t *key, smap_key_t *rkey, proxy_fd_ent_t *pfe, const c
   if (proxy_setup_ep__(key->sip, key->sport >> 16, (uint8_t)(protocol),
                        flt_url, &ep_sel, &tepval, &seltype, &rid, ent->val.ssl_epctx, &ssl)) {
     proxy_log("no endpoint", &key);
+    proxy_destroy_eps(pfe->fd, &ep_sel);
     close(pfe->fd);
     return -1;
   }
@@ -1987,6 +2003,7 @@ restart:
 int
 proxy_main(sockmap_cb_t sockmap_cb)
 {
+  int startfd = PROXY_START_MAPFD;
   notify_cbs_t cbs = { 0 };
   cbs.notify = proxy_notifer;
   cbs.pdestroy = proxy_pdestroy;
@@ -1997,8 +2014,14 @@ proxy_main(sockmap_cb_t sockmap_cb)
   }
   proxy_struct->sockmap_cb = sockmap_cb;
   proxy_struct->ns = notify_ctx_new(&cbs, PROXY_MAX_THREADS);
-  proxy_struct->next_fd = PROXY_START_FD;
   assert(proxy_struct->ns);
+
+  for (int i = 0; i < PROXY_MAX_THREADS; i++) {
+    proxy_struct->mapfd[i].start = startfd;
+    proxy_struct->mapfd[i].next = proxy_struct->mapfd[i].start;
+    proxy_struct->mapfd[i].end  = proxy_struct->mapfd[i].start + PROXY_MAX_MAPFD;
+    startfd += PROXY_MAX_MAPFD + 100;
+  }
 
   pthread_create(&proxy_struct->pthr, NULL, proxy_run, NULL);
 
