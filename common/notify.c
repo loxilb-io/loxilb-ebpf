@@ -191,6 +191,12 @@ notify_add_ent(void *ctx, int fd, notify_type_t type, void *priv)
   //tslot = ctx->thr_sel % nctx->n_thrs;
   tslot = fd % nctx->n_thrs;
   pctx = &nctx->poll_ctx[tslot];
+  if (pctx->n_pfds >= MAX_NOTIFY_POLL_FDS) {
+    NOTI_UNLOCK(nctx);
+    log_error("notify no slots exist %d", fd);
+    return -EINVAL;
+  }
+
   ent->type = type;
   ent->fd = fd;
   ent->poll_slot = pctx->n_pfds;
