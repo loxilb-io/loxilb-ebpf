@@ -44,8 +44,8 @@ typedef struct notify_ent {
   void *priv;
 } notify_ent_t; 
 
-#define NOTI_LOCK(C)    pthread_rwlock_wrlock(&(C)->lock)
-#define NOTI_UNLOCK(C)  pthread_rwlock_unlock(&(C)->lock)
+#define NOTI_LOCK(C) pthread_rwlock_wrlock(&(C)->lock)
+#define NOTI_UNLOCK(C) pthread_rwlock_unlock(&(C)->lock)
 
 typedef struct notify_thr {
   void *ctx;
@@ -128,6 +128,29 @@ notify_ctx_new(notify_cbs_t *cbs, int n_thrs)
 }
 
 int
+notify_check_slot(void *ctx, int fd)
+{
+  notify_ctx_t *nctx = ctx;
+  notify_ent_t *ent;
+
+  assert(ctx);
+
+  if (fd <= 0 || fd >= MAX_NOTIFY_FDS) {
+    return 0;
+  }
+
+  NOTI_LOCK(nctx);
+  ent = &nctx->earr[fd];
+  if (ent->fd > 0) {
+    NOTI_UNLOCK(nctx);
+    return 0;
+  }
+
+  NOTI_UNLOCK(nctx);
+  return 1;
+}
+
+int
 notify_add_ent(void *ctx, int fd, notify_type_t type, void *priv)
 {
   notify_ctx_t *nctx = ctx;
@@ -138,7 +161,7 @@ notify_add_ent(void *ctx, int fd, notify_type_t type, void *priv)
 
   assert(ctx); 
 
-  if (fd <= 0 || fd >= MAX_NOTIFY_FDS) {
+  if (fd <= 0 || fd > MAX_NOTIFY_FDS) {
     return -EINVAL;
   }
 
@@ -152,19 +175,28 @@ notify_add_ent(void *ctx, int fd, notify_type_t type, void *priv)
   if (ent->fd > 0) {
     pctx = &nctx->poll_ctx[ent->thr_id];
     assert(pctx);
-    if (pctx->pfds[ent->poll_slot].events != events) {
-      pctx->pfds[ent->poll_slot].events = events;
+    if (ent->priv == priv) {
+      if (pctx->pfds[ent->poll_slot].events != events) {
+        pctx->pfds[ent->poll_slot].events = events;
+      }
       NOTI_UNLOCK(nctx);
       return 0;
     }
     NOTI_UNLOCK(nctx); 
-    log_error("events exist\n");
+    log_debug("events exist %d", fd);
     return -EEXIST;
   }
 
-  nctx->thr_sel++;
-  tslot = nctx->thr_sel % nctx->n_thrs;
+  //nctx->thr_sel++;
+  //tslot = ctx->thr_sel % nctx->n_thrs;
+  tslot = fd % nctx->n_thrs;
   pctx = &nctx->poll_ctx[tslot];
+  if (pctx->n_pfds >= MAX_NOTIFY_POLL_FDS) {
+    NOTI_UNLOCK(nctx);
+    log_error("notify no slots exist %d", fd);
+    return -EINVAL;
+  }
+
   ent->type = type;
   ent->fd = fd;
   ent->poll_slot = pctx->n_pfds;
@@ -178,6 +210,8 @@ notify_add_ent(void *ctx, int fd, notify_type_t type, void *priv)
   pctx->n_pfds++;
 
   NOTI_UNLOCK(nctx); 
+
+  //log_debug("notify - add fd  %d tslot %d", fd, tslot);
   return 0;
 }
 
@@ -221,6 +255,8 @@ notify_delete_ent__(void *ctx, int fd)
       pent->poll_slot = i;
     }
   }
+
+  //log_debug("notify del fd  %d tslot %d", fd, ent->thr_id);
 
   ent->fd = -1;
   ent->type = 0; 
@@ -278,11 +314,7 @@ notify_run(void *ctx, int thread)
     n_pfds = nctx->poll_ctx[thread].n_pfds;
     NOTI_UNLOCK(nctx);
 
-    if (n_pfds <= 0) {
-      goto end_of_loop;
-    }
-    
-    //printf("n_pfds = %d\n", n_pfds);
+    //log_debug("tid %d n_pfds = %d", gettid(), n_pfds);
     rc = poll(pfds, n_pfds, 0);
     if (rc < 0) {
       perror("poll");
@@ -310,6 +342,9 @@ notify_run(void *ctx, int thread)
       NOTI_UNLOCK(nctx);
 
       if (nctx->cbs.notify) {
+        if (type & NOTI_TYPE_OUT) {
+          type |= NOTI_TYPE_IN;
+        }
         nctx->cbs.notify(fd, type, priv);
       }
 
