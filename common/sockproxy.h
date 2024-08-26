@@ -34,6 +34,7 @@ struct proxy_fd_ent {
   int protocol;
   int seltype;
   int odir;
+  int ssl_err;
   uint32_t _id;
   proxy_socktype_t stype;
   proxy_cache_t *cache_head;

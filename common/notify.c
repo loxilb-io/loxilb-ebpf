@@ -314,7 +314,7 @@ notify_run(void *ctx, int thread)
     n_pfds = nctx->poll_ctx[thread].n_pfds;
     NOTI_UNLOCK(nctx);
 
-    //log_debug("n_pfds = %d", n_pfds);
+    //log_debug("tid %d n_pfds = %d", gettid(), n_pfds);
     rc = poll(pfds, n_pfds, 0);
     if (rc < 0) {
       perror("poll");
@@ -342,6 +342,9 @@ notify_run(void *ctx, int thread)
       NOTI_UNLOCK(nctx);
 
       if (nctx->cbs.notify) {
+        if (type & NOTI_TYPE_OUT) {
+          type |= NOTI_TYPE_IN;
+        }
         nctx->cbs.notify(fd, type, priv);
       }
 
