@@ -134,6 +134,12 @@ fd_in_use(int fd)
 }
 
 static int
+get_random_fd_range(int r1, int r2)
+{
+   return r1 + rand() / (RAND_MAX / (r2 - r1 + 1) + 1);
+}
+
+static int
 get_mapped_proxy_fd(int fd)
 {
   proxy_mapfd_t *mep;
@@ -151,6 +157,8 @@ get_mapped_proxy_fd(int fd)
       mep->next >= mep->end) {
     mep->next = mep->start;
   }
+
+  //mep->next = get_random_fd_range(mep->start, mep->end);
 
   for (retry = 0; retry < PROXY_MAPFD_RETRIES; retry++) {
     mep->next++;
@@ -1603,7 +1611,9 @@ proxy_sock_read_err(proxy_fd_ent_t *pfe, int rval)
       case SSL_ERROR_SYSCALL:
         log_error("ssl-syscall-failed %s",
           ERR_error_string(ERR_get_error(), NULL));
+        perror("ssl");
         pfe->ssl_err = 1;
+        shutdown(pfe->fd, SHUT_RDWR);
         return -1;
       case SSL_ERROR_WANT_READ:
         //log_error("ssl-want-rd %s",
@@ -1691,17 +1701,17 @@ setup_proxy_path(smap_key_t *key, smap_key_t *rkey, proxy_fd_ent_t *pfe, const c
   proxy_epval_t *tepval = NULL;
   proxy_map_ent_t *ent;
   void *ssl = NULL;
+  int retry = 0;
 
   ent = pfe->head;
   assert(ent);
-  memset(&ep_sel, 0, sizeof(ep_sel));
 
   if (proxy_skmap_key_from_fd(pfe->fd, key, &protocol)) {
-    proxy_destroy_eps(pfe->fd, &ep_sel);
     log_error("skmap key from fd failed");
     return -1;
   }
 
+  memset(&ep_sel, 0, sizeof(ep_sel));
   if (proxy_setup_ep__(key->sip, key->sport >> 16, (uint8_t)(protocol),
                        flt_url, &ep_sel, &tepval, &seltype, &rid, ent->val.ssl_epctx, &ssl)) {
     proxy_log_always("no endpoint", key);
@@ -1758,8 +1768,20 @@ setup_proxy_path(smap_key_t *key, smap_key_t *rkey, proxy_fd_ent_t *pfe, const c
     npfe2->head = ent;
     npfe2->ssl = ssl;
 
-    if (notify_add_ent(proxy_struct->ns, ep_cfd,
-          NOTI_TYPE_IN|NOTI_TYPE_HUP, npfe2))  {
+    for (retry = 0; retry < 2; retry++) {
+      if (notify_add_ent(proxy_struct->ns, ep_cfd,
+          NOTI_TYPE_IN|NOTI_TYPE_HUP, npfe2) == 0)  {
+        break;
+      }
+      //log_debug("failed to add epcfd %d retry", ep_cfd);
+      ep_cfd = get_mapped_proxy_fd(ep_cfd);
+      npfe2->fd = ep_cfd;
+      if (npfe2->ssl) {
+        SSL_set_fd(npfe2->ssl, ep_cfd);
+      }
+    }
+
+    if (retry >= 2) {
       proxy_destroy_eps(pfe->fd, &ep_sel);
       proxy_release_fd_ctx(npfe2, 1);
       free(npfe2);
@@ -1878,7 +1900,7 @@ proxy_notifer(int fd, notify_type_t type, void *priv)
   struct llb_sockmap_key rkey = { 0 };
   proxy_ep_sel_t ep_sel = { 0 };
   int j, seltype = 0;
-  int protocol;
+  int protocol, retry;
   proxy_fd_ent_t *pfe = priv;
   proxy_fd_ent_t *npfe1 = NULL;
   proxy_map_ent_t *ent;
@@ -1951,14 +1973,27 @@ restart:
 	      npfe1->settings.uarg = npfe1;
         llhttp_init(&npfe1->parser, HTTP_BOTH, &npfe1->settings);
 
-        if (notify_add_ent(proxy_struct->ns, new_sd,
-                NOTI_TYPE_IN|NOTI_TYPE_HUP, npfe1))  {
+        for (retry = 0; retry < 2; retry++) {
+          if (notify_add_ent(proxy_struct->ns, new_sd,
+                  NOTI_TYPE_IN|NOTI_TYPE_HUP, npfe1) == 0)  {
+            break;
+          }
+          //log_debug("failed to add new_sd %d - retry", new_sd);
+          new_sd = get_mapped_proxy_fd(new_sd);
+          npfe1->fd = new_sd;
+          if (npfe1->ssl) {
+            SSL_set_fd(npfe1->ssl, new_sd);
+          }
+        }
+
+        if (retry >= 2) {
           proxy_destroy_eps(new_sd, &ep_sel);
           proxy_release_fd_ctx(npfe1, 1);
           free(npfe1);
           log_error("failed to add new_sd %d", new_sd);
           continue;
         }
+
         npfe1->next = ent->val.fdlist;
         ent->val.fdlist = npfe1;
       } else if (pfe->stype == PROXY_SOCK_ACTIVE) {

@@ -183,7 +183,7 @@ notify_add_ent(void *ctx, int fd, notify_type_t type, void *priv)
       return 0;
     }
     NOTI_UNLOCK(nctx); 
-    log_debug("events exist %d", fd);
+    //log_debug("events exist %d", fd);
     return -EEXIST;
   }
 
