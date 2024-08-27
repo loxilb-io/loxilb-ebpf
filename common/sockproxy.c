@@ -100,7 +100,8 @@ typedef struct proxy_map_ent {
 
 #define PROXY_START_MAPFD 500
 #define PROXY_MAX_MAPFD 200
-#define PROXY_MAPFD_RETRIES 100
+#define PROXY_MAPFD_ALLOC_RETRIES 100
+#define PROXY_MAPFD_RETRIES 5
 
 typedef struct proxy_mapfd {
   uint16_t start;
@@ -140,14 +141,16 @@ get_random_fd_range(int r1, int r2)
 }
 
 static int
-get_mapped_proxy_fd(int fd)
+get_mapped_proxy_fd(int fd, int check_slot)
 {
   proxy_mapfd_t *mep;
   int dfd, retry;
   pid_t tid;
 
-  if (notify_check_slot(proxy_struct->ns, fd)) {
-    return fd;
+  if (check_slot) {
+    if (notify_check_slot(proxy_struct->ns, fd)) {
+      return fd;
+    }
   }
 
   tid = gettid() % PROXY_MAX_THREADS;
@@ -158,9 +161,9 @@ get_mapped_proxy_fd(int fd)
     mep->next = mep->start;
   }
 
-  //mep->next = get_random_fd_range(mep->start, mep->end);
+  mep->next = get_random_fd_range(mep->start, mep->end);
 
-  for (retry = 0; retry < PROXY_MAPFD_RETRIES; retry++) {
+  for (retry = 0; retry < PROXY_MAPFD_ALLOC_RETRIES; retry++) {
     mep->next++;
     if (fd_in_use(mep->next)) {
       continue;
@@ -169,7 +172,7 @@ get_mapped_proxy_fd(int fd)
     break;
   }
 
-  if (retry >= PROXY_MAPFD_RETRIES) {
+  if (retry >= PROXY_MAPFD_ALLOC_RETRIES) {
     log_error("mapfd (%d) find failed", fd);
     return fd;
   }
@@ -186,7 +189,7 @@ get_mapped_proxy_fd(int fd)
 }
 #else
 static int
-get_mapped_proxy_fd(int fd)
+get_mapped_proxy_fd(int fd, int check_slot)
 {
   return fd;
 }
@@ -698,7 +701,7 @@ proxy_setup_ep_connect(uint32_t epip, uint16_t epport, uint8_t protocol,
     return -1;
   }
 
-  fd = get_mapped_proxy_fd(fd);
+  fd = get_mapped_proxy_fd(fd, 1);
 
   proxy_sock_set_opts(fd);
 
@@ -1732,6 +1735,9 @@ setup_proxy_path(smap_key_t *key, smap_key_t *rkey, proxy_fd_ent_t *pfe, const c
     if (proxy_skmap_key_from_fd(ep_cfd, rkey, &epprotocol)) {
       log_error("skmap key from ep_cfd failed");
       proxy_destroy_eps(pfe->fd, &ep_sel);
+      if (ssl) {
+        SSL_shutdown(ssl);
+      }
       shutdown(pfe->fd, SHUT_RDWR);
       return -1;
     }
@@ -1747,6 +1753,9 @@ setup_proxy_path(smap_key_t *key, smap_key_t *rkey, proxy_fd_ent_t *pfe, const c
       if (proxy_sock_init_ktls(new_sd)) {
         log_error("tls failed");
         proxy_destroy_eps(pfe->fd, &ep_sel);
+        if (ssl) {
+          SSL_shutdown(ssl);
+        }
         shutdown(pfe->fd, SHUT_RDWR);
         return -1;
       }
@@ -1768,23 +1777,26 @@ setup_proxy_path(smap_key_t *key, smap_key_t *rkey, proxy_fd_ent_t *pfe, const c
     npfe2->head = ent;
     npfe2->ssl = ssl;
 
-    for (retry = 0; retry < 2; retry++) {
+    for (retry = 0; retry < PROXY_MAPFD_RETRIES; retry++) {
       if (notify_add_ent(proxy_struct->ns, ep_cfd,
           NOTI_TYPE_IN|NOTI_TYPE_HUP, npfe2) == 0)  {
         break;
       }
       //log_debug("failed to add epcfd %d retry", ep_cfd);
-      ep_cfd = get_mapped_proxy_fd(ep_cfd);
+      ep_cfd = get_mapped_proxy_fd(ep_cfd, 0);
       npfe2->fd = ep_cfd;
       if (npfe2->ssl) {
         SSL_set_fd(npfe2->ssl, ep_cfd);
       }
     }
 
-    if (retry >= 2) {
+    if (retry >= PROXY_MAPFD_RETRIES) {
       proxy_destroy_eps(pfe->fd, &ep_sel);
       proxy_release_fd_ctx(npfe2, 1);
       free(npfe2);
+      if (npfe2->ssl) {
+        SSL_shutdown(npfe2->ssl);
+      }
       shutdown(pfe->fd, SHUT_RDWR);
       log_error("failed to add epcfd %d", ep_cfd);
       return -1;
@@ -1927,7 +1939,7 @@ restart:
           continue;
         }
 
-        new_sd = get_mapped_proxy_fd(new_sd);
+        new_sd = get_mapped_proxy_fd(new_sd, 1);
 
         if (ent->val.ssl_ctx) {
           ssl = SSL_new(ent->val.ssl_ctx);
@@ -1973,20 +1985,20 @@ restart:
 	      npfe1->settings.uarg = npfe1;
         llhttp_init(&npfe1->parser, HTTP_BOTH, &npfe1->settings);
 
-        for (retry = 0; retry < 2; retry++) {
+        for (retry = 0; retry < PROXY_MAPFD_RETRIES; retry++) {
           if (notify_add_ent(proxy_struct->ns, new_sd,
                   NOTI_TYPE_IN|NOTI_TYPE_HUP, npfe1) == 0)  {
             break;
           }
           //log_debug("failed to add new_sd %d - retry", new_sd);
-          new_sd = get_mapped_proxy_fd(new_sd);
+          new_sd = get_mapped_proxy_fd(new_sd, 0);
           npfe1->fd = new_sd;
           if (npfe1->ssl) {
             SSL_set_fd(npfe1->ssl, new_sd);
           }
         }
 
-        if (retry >= 2) {
+        if (retry >= PROXY_MAPFD_RETRIES) {
           proxy_destroy_eps(new_sd, &ep_sel);
           proxy_release_fd_ctx(npfe1, 1);
           free(npfe1);
@@ -2131,7 +2143,7 @@ proxy_main(sockmap_cb_t sockmap_cb)
     proxy_struct->mapfd[i].start = startfd;
     proxy_struct->mapfd[i].next = proxy_struct->mapfd[i].start;
     proxy_struct->mapfd[i].end  = proxy_struct->mapfd[i].start + PROXY_MAX_MAPFD;
-    startfd += PROXY_MAX_MAPFD + PROXY_MAPFD_RETRIES;
+    startfd += PROXY_MAX_MAPFD + PROXY_MAPFD_ALLOC_RETRIES;
   }
 
   SSL_library_init();
