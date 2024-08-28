@@ -35,6 +35,7 @@
 #define MAX_NOTIFY_FDS 65535
 #define MAX_NOTIFY_POLL_FDS 8192
 #define MAX_NOTIFY_THREADS (8)
+#define MAX_NOTIFY_POLL_TIMEO (10)
 
 typedef struct notify_ent {
   int fd;
@@ -295,6 +296,7 @@ notify_run(void *ctx, int thread)
   int i = 0;
   int n_pfds = 0;
   void *priv = NULL;
+  char estr[128];;
   struct pollfd pfds[MAX_NOTIFY_POLL_FDS];
   notify_ent_t *ent;
   notify_ctx_t *nctx = ctx;
@@ -307,18 +309,22 @@ notify_run(void *ctx, int thread)
 
   while(1) {
 
-    nproc = 0;
     /* This is seemingly expensive operation */
     NOTI_LOCK(nctx);
     memcpy(pfds, nctx->poll_ctx[thread].pfds, sizeof(pfds));
     n_pfds = nctx->poll_ctx[thread].n_pfds;
     NOTI_UNLOCK(nctx);
 
-    //log_debug("tid %d n_pfds = %d", gettid(), n_pfds);
-    rc = poll(pfds, n_pfds, 0);
+    nproc = 0;
+    rc = poll(pfds, n_pfds, MAX_NOTIFY_POLL_TIMEO);
     if (rc < 0) {
-      perror("poll");
-      goto end_of_loop;
+      log_error("poll :error(%s)", strerror_r(errno, estr, sizeof(estr)));
+      usleep(200*1000);
+      continue;
+    }
+
+    if (rc == 0) {
+      continue;
     }
 
     for (i = 0 ; i < n_pfds; i++) {
@@ -353,11 +359,6 @@ notify_run(void *ctx, int thread)
         notify_delete_ent__(nctx, fd); 
       }
       nproc++;
-    }
-
-end_of_loop:
-    if (nproc <= 0) {
-      usleep(200*1000);
     }
   }
 }
