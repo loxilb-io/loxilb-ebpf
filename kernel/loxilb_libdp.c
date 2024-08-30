@@ -3129,6 +3129,79 @@ llb_sys_exec(char *str)
   (void)(system(str)+1);
 }
 
+static int
+load_bpf_and_tc_attach(struct config *cfg, int egr)
+{
+  int len, err;
+  int pmfd;
+  char pinpbuf[PATH_MAX];
+  struct bpf_object *bpf_obj;
+  struct bpf_program *bpf_pgm;
+  struct bpf_map *map;
+  DECLARE_LIBBPF_OPTS(bpf_tc_hook,
+                      hook,
+                      .ifindex = -1,
+                      .attach_point = egr ? BPF_TC_EGRESS : BPF_TC_INGRESS);
+  DECLARE_LIBBPF_OPTS(bpf_tc_opts, opts,
+                      .handle = 1,
+                      .priority = 1,
+                      .prog_fd = -1);
+
+  hook.ifindex = if_nametoindex(cfg->ifname);
+  if (!hook.ifindex) {
+    log_error("tc: ifname %s find failed", cfg->ifname);
+    return -1;
+  }
+
+  if (bpf_tc_hook_create(&hook)) {
+    log_error("tc: hook create failed");
+    return -1;
+  }
+
+  bpf_obj = bpf_object__open(cfg->filename);
+  if (bpf_object__load(bpf_obj)) {
+    log_error("tc: obj load failed");
+    return -1;
+  }
+
+  bpf_object__for_each_map(map, bpf_obj) {
+    len = snprintf(pinpbuf, PATH_MAX, "%s/%s", cfg->pin_dir, bpf_map__name(map));
+    if (len < 0 || len >= PATH_MAX) {
+      goto cleanup;
+    }
+
+    pmfd = bpf_obj_get(pinpbuf);
+    if (pmfd < 0)
+      goto cleanup;
+
+    if (bpf_map__reuse_fd(map, pmfd))
+      goto cleanup;
+  }
+
+  bpf_pgm = bpf_object__find_program_by_name(bpf_obj, cfg->progsec);
+  if (bpf_pgm == NULL) {
+    log_error("tc: pgm %s find failed", cfg->progsec);
+    return -1;
+  }
+
+  opts.prog_fd = bpf_program__fd(bpf_pgm);
+  if (opts.prog_fd <= -1) {
+    log_error("tc: pgm %s has  no fd", cfg->progsec);
+    return -1;
+  }
+
+  int rc = bpf_tc_attach(&hook, &opts);
+  if (rc < 0) {
+    goto cleanup;
+  }
+
+  return 0;
+
+cleanup:
+  bpf_object__close(bpf_obj);
+  return -1;
+}
+
 static void * 
 llb_ebpf_link_attach(struct config *cfg)
 {
