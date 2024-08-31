@@ -3123,63 +3123,48 @@ llb_psec_setup(const char *psec, struct bpf_object *obj)
   return 0;
 }
 
-static void
-llb_sys_exec(char *str)
-{
-  (void)(system(str)+1);
-}
-
 static void * 
-llb_ebpf_link_attach(struct config *cfg)
+llb_ebpf_link_attach(struct libbpf_cfg *cfg)
 {
-  char cmd[PATH_MAX];
+  void *robj = NULL;
+  void *reobj = NULL;
+
   if (cfg->tc_bpf) {
-    /* ntc is netlox's modified tc tool */
-    sprintf(cmd, "ntc qdisc add dev %s clsact 2>&1 >/dev/null", cfg->ifname);
-    llb_sys_exec(cmd);
-    log_debug("exec: %s", cmd);
-
-    sprintf(cmd, "ntc filter add dev %s ingress bpf da obj %s sec %s 2>&1",
-            cfg->ifname, cfg->filename, cfg->progsec);
-    llb_sys_exec(cmd);
-    log_debug("exec: %s", cmd);
-
-    if (cfg->tc_egr_bpf) {
-      sprintf(cmd, "ntc filter add dev %s egress bpf da obj %s sec %s 2>&1",
-            cfg->ifname, LLB_FP_IMG_BPF_EGR, cfg->progsec);
-      llb_sys_exec(cmd);
-      log_debug("exec: %s", cmd);
+    if (!(robj = libbpf_tc_attach(cfg, 0))) {
+      return NULL;
     }
 
-    return 0;
+    if (cfg->tc_egr_bpf) {
+      reobj = libbpf_tc_attach(cfg, 1);
+      if (!reobj) {
+        bpf_object__close(robj);
+        robj = NULL;
+      }
+    }
+
+    return robj;
   } else {
-    return load_bpf_and_xdp_attach(cfg);
+    return libbpf_xdp_attach(cfg);
   }
 }
 
 static int
-llb_ebpf_link_detach(struct config *cfg)
+llb_ebpf_link_detach(struct libbpf_cfg *cfg)
 {
-  char cmd[PATH_MAX];
 
   if (xh->have_noebpf) {
     return 0;
   }
 
   if (cfg->tc_bpf) {
-    /* ntc is netlox's modified tc tool */
     if (cfg->tc_egr_bpf) {
-      sprintf(cmd, "ntc filter del dev %s egress 2>&1 > /dev/null", cfg->ifname);
-      log_debug("exec: %s\n", cmd);
-      llb_sys_exec(cmd);
+      tc_link_detach(cfg, 1);
     }
 
-    sprintf(cmd, "ntc filter del dev %s ingress 2>&1 > /dev/null", cfg->ifname);
-    log_debug("exec: %s", cmd);
-    llb_sys_exec(cmd);
+    tc_link_detach(cfg, 0);
     return 0;
   } else {
-    return xdp_link_detach(cfg->ifindex, cfg->xdp_flags, 0);
+    return xdp_link_detach(cfg->ifindex, cfg->bpf_flags, 0);
   }
 }
 
@@ -3190,7 +3175,7 @@ llb_dp_link_attach(const char *ifname,
                    int unload)
 {
   struct bpf_object *bpf_obj;
-  struct config cfg;
+  struct libbpf_cfg cfg;
   int nr = 0;
   int must_load = 0;
 
@@ -3217,13 +3202,13 @@ llb_dp_link_attach(const char *ifname,
 
   strncpy(cfg.pin_dir,  xh->ll_dp_pdir,  sizeof(cfg.pin_dir));
   if (strcmp(ifname, LLB_MGMT_CHANNEL) == 0) {
-    cfg.xdp_flags |= XDP_FLAGS_SKB_MODE;
+    cfg.bpf_flags |= XDP_FLAGS_SKB_MODE;
     must_load = 1;
   }
 
   /* Large MTU not supported until kernel 5.18 */
-  cfg.xdp_flags |= XDP_FLAGS_SKB_MODE;
-  cfg.xdp_flags &= ~XDP_FLAGS_UPDATE_IF_NOEXIST;
+  cfg.bpf_flags |= XDP_FLAGS_SKB_MODE;
+  cfg.bpf_flags &= ~XDP_FLAGS_UPDATE_IF_NOEXIST;
   cfg.ifname = (char *)&cfg.ifname_buf;
   strncpy(cfg.ifname, ifname, IF_NAMESIZE);
 
@@ -3252,7 +3237,7 @@ llb_dp_link_attach(const char *ifname,
   }
 
   if (llb_link_prop_add(ifname, bpf_obj, mp_type) != 0) {
-    xdp_link_detach(cfg.ifindex, cfg.xdp_flags, 0);
+    xdp_link_detach(cfg.ifindex, cfg.bpf_flags, 0);
     llb_psec_del(psec);
     llb_link_prop_del(ifname, mp_type);
     return -1;

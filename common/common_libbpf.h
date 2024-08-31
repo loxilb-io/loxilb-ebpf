@@ -1,24 +1,28 @@
-/* Common function that with time should be moved to libbpf */
+/* Common wrapper function for libbpf */
 #ifndef __COMMON_LIBBPF_H
 #define __COMMON_LIBBPF_H
 
-struct bpf_pinned_map {
-	const char *name;
-	const char *filename;
-	int map_fd;
+#define PINPATH_MAX_LEN 4096
+
+struct libbpf_cfg {
+  int     ifindex;
+  char    *ifname;
+  char    ifname_buf[IF_NAMESIZE];
+  bool    do_unload;
+  bool    reuse_maps;
+  char    pin_dir[512];
+  char    filename[512];
+  char    progsec[32];
+  int     tc_bpf;
+  int     tc_egr_bpf;
+  __u32   bpf_flags;
 };
 
-/*     bpf_prog_load_attr extended */
-struct bpf_prog_load_attr_maps {
-	const char *file;
-	enum bpf_prog_type prog_type;
-	enum bpf_attach_type expected_attach_type;
-	int ifindex;
-	int nr_pinned_maps;
-	struct bpf_pinned_map *pinned_maps;
-};
+int xdp_link_attach(int ifindex, __u32 bpf_flags, int prog_fd);
+int xdp_link_detach(int ifindex, __u32 bpf_flags, __u32 epgid);
+struct bpf_object *libbpf_xdp_attach(struct libbpf_cfg *cfg);
 
-int bpf_prog_load_xattr_maps(const struct bpf_prog_load_attr_maps *attr,
-			     struct bpf_object **pobj, int *prog_fd);
+int tc_link_detach(struct libbpf_cfg *cfg, int egr);
+void *libbpf_tc_attach(struct libbpf_cfg *cfg, int egr);
 
 #endif /* __COMMON_LIBBPF_H */
