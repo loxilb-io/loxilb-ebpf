@@ -3123,208 +3123,19 @@ llb_psec_setup(const char *psec, struct bpf_object *obj)
   return 0;
 }
 
-static void
-llb_sys_exec(char *str)
-{
-  (void)(system(str)+1);
-}
-
-static int
-tc_link_detach(struct config *cfg, int egr)
-{
-  DECLARE_LIBBPF_OPTS(bpf_tc_hook,
-                      hook,
-                      .ifindex = cfg->ifindex,
-                      .parent = 0,
-                      .attach_point = egr ? BPF_TC_EGRESS : BPF_TC_INGRESS);
-  DECLARE_LIBBPF_OPTS(bpf_tc_opts, opts,
-                      .handle = 1,
-                      .priority = 1,
-                      .prog_fd = -1,
-                      .flags = 0,
-                      .prog_id = 0);
-
-  bpf_tc_hook_create(&hook);
-  bpf_tc_detach(&hook, &opts);
-
-  hook.attach_point = BPF_TC_EGRESS|BPF_TC_INGRESS;
-  int rc = bpf_tc_hook_destroy(&hook);
-  if (rc < 0) {
-    log_error("tc: bpf hook destroy failed for %s ", cfg->ifname);
-  } else {
-    log_debug("tc: bpf destroy OK for %s ", cfg->ifname);
-  }
-  return 0;
-}
-
-static int
-setup_tail_calls(struct bpf_object *obj, struct config *cfg)
-{
-  int key, jmp_table_fd;
-  struct bpf_program *prog;
-  const char *section;
-  char pinpbuf[PATH_MAX];
-
-  int len = snprintf(pinpbuf, PATH_MAX, "%s/%s", cfg->pin_dir, "pgm_tbl");
-  if (len < 0 || len >= PATH_MAX) {
-    log_error("failed to find jump tables %s", pinpbuf);
-    return -1;
-  }
-
-  jmp_table_fd = bpf_object__find_map_fd_by_name(obj, "pgm_tbl");
-  if (jmp_table_fd < 0) {
-    jmp_table_fd = bpf_obj_get(pinpbuf);
-
-    if (jmp_table_fd < 0) {
-      log_error("finding a map in obj file %s failed", pinpbuf);
-      return -1;
-    }
-  }
-
-  bpf_object__for_each_program(prog, obj) {
-    int fd = bpf_program__fd(prog);
-
-    section = bpf_program__section_name(prog);
-    if (strcmp(section, "tc_packet_hook7") == 0) {
-      key = 7;
-    } else if (strcmp(section, "tc_packet_hook6") == 0) {
-      key = 6;
-    } else if (strcmp(section, "tc_packet_hook5") == 0) {
-      key = 5;
-    } else if (strcmp(section, "tc_packet_hook4") == 0) {
-      key = 4;
-    } else if (strcmp(section, "tc_packet_hook3") == 0) {
-      key = 3;
-    } else if (strcmp(section, "tc_packet_hook2") == 0) {
-      key = 2;
-    } else if (strcmp(section, "tc_packet_hook1") == 0) {
-      key = 1;
-    } else  if (strcmp(section, "tc_packet_hook0") == 0) {
-      key = 0;
-    } else key = -1;
-
-    if (key >= 0)
-      bpf_map_update_elem(jmp_table_fd, &key, &fd, BPF_ANY);
-  }
-
-  return 0;
-}
-
-
-static void *
-load_bpf_and_tc_attach(struct config *cfg, int egr)
-{
-  int len, pmfd;
-  char pinpbuf[PATH_MAX];
-  struct bpf_object *bpf_obj;
-  struct bpf_program *bpf_pgm = NULL;
-  struct bpf_program *p;
-  struct bpf_map *map;
-  DECLARE_LIBBPF_OPTS(bpf_tc_hook,
-                      hook,
-                      .ifindex = cfg->ifindex,
-                      .parent = 0,
-                      .attach_point = egr ? BPF_TC_EGRESS : BPF_TC_INGRESS);
-  DECLARE_LIBBPF_OPTS(bpf_tc_opts, opts,
-                      .handle = 1,
-                      .priority = 1,
-                      .prog_fd = -1);
-
-  if (bpf_tc_hook_create(&hook)) {
-    log_error("tc: hook create failed");
-    return NULL;
-  }
-
-  bpf_obj = bpf_object__open(cfg->filename);
-
-  bpf_object__for_each_map(map, bpf_obj) {
-    len = snprintf(pinpbuf, PATH_MAX, "%s/%s", cfg->pin_dir, bpf_map__name(map));
-    if (len < 0 || len >= PATH_MAX) {
-      goto cleanup;
-    }
-
-    pmfd = bpf_obj_get(pinpbuf);
-    if (pmfd < 0)
-      goto cleanup;
-
-    if (bpf_map__reuse_fd(map, pmfd))
-      goto cleanup;
-  }
-
-  bpf_object__for_each_program(p, bpf_obj) {
-    if ((strcmp(bpf_program__section_name(p), "tc_packet_hook1") == 0 ||
-        strcmp(bpf_program__section_name(p), "tc_packet_hook2") == 0 ||
-        strcmp(bpf_program__section_name(p), "tc_packet_hook3") == 0 ||
-        strcmp(bpf_program__section_name(p), "tc_packet_hook4") == 0 ||
-        strcmp(bpf_program__section_name(p), "tc_packet_hook5") == 0 ||
-        strcmp(bpf_program__section_name(p), "tc_packet_hook6") == 0 ||
-        strcmp(bpf_program__section_name(p), "tc_packet_hook7") == 0) &&
-        strcmp(bpf_program__section_name(p), cfg->progsec)) {
-
-      log_debug("tc: autoload sec %s prog %s",
-           bpf_program__section_name(p),  bpf_program__name(p));
-
-      if (bpf_program__set_autoload(p, true))
-        goto cleanup;
-    }
-
-    bpf_program__set_type(p, BPF_PROG_TYPE_SCHED_CLS);
-
-    if (strcmp(bpf_program__section_name(p), cfg->progsec) == 0) {
-      if (bpf_pgm == NULL) {
-        bpf_pgm = p;
-      }
-    }
-  }
-
-  if (bpf_pgm == NULL) {
-    log_error("tc: pgm %s find failed", cfg->progsec);
-    goto cleanup;
-  }
-
-  if (bpf_object__load(bpf_obj)) {
-    log_error("tc: obj load failed");
-    return NULL;
-  }
-
-  if (setup_tail_calls(bpf_obj, cfg)) {
-    log_error("tc: setup tail calls failed");
-    return NULL;
-  }
-
-  opts.prog_fd = bpf_program__fd(bpf_pgm);
-  if (opts.prog_fd <= -1) {
-    log_error("tc: pgm %s has  no fd", cfg->progsec);
-    goto cleanup;
-  }
-
-  int rc = bpf_tc_attach(&hook, &opts);
-  if (rc < 0) {
-    log_error("tc: bpf attach failed for %s ", cfg->ifname);
-    goto cleanup;
-  }
-
-  log_error("tc: bpf attach OK for %s ", cfg->ifname);
-  return bpf_obj;
-
-cleanup:
-  bpf_object__close(bpf_obj);
-  return NULL;
-}
-
 static void * 
-llb_ebpf_link_attach(struct config *cfg)
+llb_ebpf_link_attach(struct libbpf_cfg *cfg)
 {
   void *robj = NULL;
   void *reobj = NULL;
 
   if (cfg->tc_bpf) {
-    if (!(robj = load_bpf_and_tc_attach(cfg, 0))) {
+    if (!(robj = libbpf_tc_attach(cfg, 0))) {
       return NULL;
     }
 
     if (cfg->tc_egr_bpf) {
-      reobj = load_bpf_and_tc_attach(cfg, 1);
+      reobj = libbpf_tc_attach(cfg, 1);
       if (!reobj) {
         bpf_object__close(robj);
         robj = NULL;
@@ -3333,12 +3144,12 @@ llb_ebpf_link_attach(struct config *cfg)
 
     return robj;
   } else {
-    return load_bpf_and_xdp_attach(cfg);
+    return libbpf_xdp_attach(cfg);
   }
 }
 
 static int
-llb_ebpf_link_detach(struct config *cfg)
+llb_ebpf_link_detach(struct libbpf_cfg *cfg)
 {
 
   if (xh->have_noebpf) {
@@ -3353,7 +3164,7 @@ llb_ebpf_link_detach(struct config *cfg)
     tc_link_detach(cfg, 0);
     return 0;
   } else {
-    return xdp_link_detach(cfg->ifindex, cfg->xdp_flags, 0);
+    return xdp_link_detach(cfg->ifindex, cfg->bpf_flags, 0);
   }
 }
 
@@ -3364,7 +3175,7 @@ llb_dp_link_attach(const char *ifname,
                    int unload)
 {
   struct bpf_object *bpf_obj;
-  struct config cfg;
+  struct libbpf_cfg cfg;
   int nr = 0;
   int must_load = 0;
 
@@ -3391,13 +3202,13 @@ llb_dp_link_attach(const char *ifname,
 
   strncpy(cfg.pin_dir,  xh->ll_dp_pdir,  sizeof(cfg.pin_dir));
   if (strcmp(ifname, LLB_MGMT_CHANNEL) == 0) {
-    cfg.xdp_flags |= XDP_FLAGS_SKB_MODE;
+    cfg.bpf_flags |= XDP_FLAGS_SKB_MODE;
     must_load = 1;
   }
 
   /* Large MTU not supported until kernel 5.18 */
-  cfg.xdp_flags |= XDP_FLAGS_SKB_MODE;
-  cfg.xdp_flags &= ~XDP_FLAGS_UPDATE_IF_NOEXIST;
+  cfg.bpf_flags |= XDP_FLAGS_SKB_MODE;
+  cfg.bpf_flags &= ~XDP_FLAGS_UPDATE_IF_NOEXIST;
   cfg.ifname = (char *)&cfg.ifname_buf;
   strncpy(cfg.ifname, ifname, IF_NAMESIZE);
 
@@ -3426,7 +3237,7 @@ llb_dp_link_attach(const char *ifname,
   }
 
   if (llb_link_prop_add(ifname, bpf_obj, mp_type) != 0) {
-    xdp_link_detach(cfg.ifindex, cfg.xdp_flags, 0);
+    xdp_link_detach(cfg.ifindex, cfg.bpf_flags, 0);
     llb_psec_del(psec);
     llb_link_prop_del(ifname, mp_type);
     return -1;
