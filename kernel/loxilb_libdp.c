@@ -3127,7 +3127,6 @@ static void *
 llb_ebpf_link_attach(struct libbpf_cfg *cfg)
 {
   void *robj = NULL;
-  void *reobj = NULL;
 
   if (cfg->tc_bpf) {
     if (!(robj = libbpf_tc_attach(cfg, 0))) {
@@ -3135,10 +3134,13 @@ llb_ebpf_link_attach(struct libbpf_cfg *cfg)
     }
 
     if (cfg->tc_egr_bpf) {
-      reobj = libbpf_tc_attach(cfg, 1);
-      if (!reobj) {
-        bpf_object__close(robj);
-        robj = NULL;
+      struct libbpf_cfg ecfg;
+      memcpy(&ecfg, cfg, sizeof(*cfg));
+      ecfg.ifname = ecfg.ifname_buf;
+      strcpy(ecfg.filename, LLB_FP_IMG_BPF_EGR);
+      if (!(libbpf_tc_attach(&ecfg, 1))) {
+        libbpf_tc_detach(cfg, 0);
+        return NULL;
       }
     }
 
@@ -3158,10 +3160,10 @@ llb_ebpf_link_detach(struct libbpf_cfg *cfg)
 
   if (cfg->tc_bpf) {
     if (cfg->tc_egr_bpf) {
-      tc_link_detach(cfg, 1);
+      libbpf_tc_detach(cfg, 1);
     }
 
-    tc_link_detach(cfg, 0);
+    libbpf_tc_detach(cfg, 0);
     return 0;
   } else {
     return xdp_link_detach(cfg->ifindex, cfg->bpf_flags, 0);

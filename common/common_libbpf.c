@@ -6,6 +6,7 @@
 #include <errno.h>
 #include <linux/if_link.h>
 #include <linux/err.h>
+#include <linux/pkt_cls.h>
 #include <bpf/libbpf.h>
 
 #include "bpf.h"
@@ -66,7 +67,7 @@ setup_tail_calls(struct bpf_object *obj, struct libbpf_cfg *cfg)
 }
 
 int
-tc_link_detach(struct libbpf_cfg *cfg, int egr)
+libbpf_tc_detach(struct libbpf_cfg *cfg, int egr)
 {
   DECLARE_LIBBPF_OPTS(bpf_tc_hook,
                       hook,
@@ -80,15 +81,16 @@ tc_link_detach(struct libbpf_cfg *cfg, int egr)
                       .flags = 0,
                       .prog_id = 0);
 
+
   bpf_tc_hook_create(&hook);
   bpf_tc_detach(&hook, &opts);
 
   hook.attach_point = BPF_TC_EGRESS|BPF_TC_INGRESS;
   int rc = bpf_tc_hook_destroy(&hook);
   if (rc < 0) {
-    log_error("tc: bpf hook destroy failed for %s ", cfg->ifname);
+    log_error("tc: bpf hook destroy failed for %s:%d", cfg->ifname, egr);
   } else {
-    log_debug("tc: bpf destroy OK for %s ", cfg->ifname);
+    log_debug("tc: bpf destroy OK for %s:%d", cfg->ifname, egr);
   }
   return 0;
 }
@@ -110,11 +112,16 @@ libbpf_tc_attach(struct libbpf_cfg *cfg, int egr)
   DECLARE_LIBBPF_OPTS(bpf_tc_opts, opts,
                       .handle = 1,
                       .priority = 1,
-                      .prog_fd = -1);
+                      .prog_fd = -1,
+                      .flags = BPF_TC_F_REPLACE);
 
-  if (bpf_tc_hook_create(&hook)) {
-    log_error("tc: hook create failed");
-    return NULL;
+  log_info("tc: bpf attach start for %s:%d", cfg->ifname, egr);
+
+  if (!egr) {
+    if (bpf_tc_hook_create(&hook)) {
+      log_error("tc: hook create failed");
+      return NULL;
+    }
   }
 
   bpf_obj = bpf_object__open(cfg->filename);
@@ -122,15 +129,20 @@ libbpf_tc_attach(struct libbpf_cfg *cfg, int egr)
   bpf_object__for_each_map(map, bpf_obj) {
     len = snprintf(pinpbuf, PINPATH_MAX_LEN, "%s/%s", cfg->pin_dir, bpf_map__name(map));
     if (len < 0 || len >= PINPATH_MAX_LEN) {
+      log_error("tc: pinpath buffer error");
       goto cleanup;
     }
 
     pmfd = bpf_obj_get(pinpbuf);
-    if (pmfd < 0)
+    if (pmfd < 0) {
+      log_error("tc: no obj for pinpath %s ", pinpbuf);
       goto cleanup;
+    }
 
-    if (bpf_map__reuse_fd(map, pmfd))
+    if (bpf_map__reuse_fd(map, pmfd)) {
+      log_error("tc: map %s reus failed", bpf_map__name(map));
       goto cleanup;
+    }
   }
 
   bpf_object__for_each_program(p, bpf_obj) {
@@ -182,11 +194,11 @@ libbpf_tc_attach(struct libbpf_cfg *cfg, int egr)
 
   int rc = bpf_tc_attach(&hook, &opts);
   if (rc < 0) {
-    log_error("tc: bpf attach failed for %s ", cfg->ifname);
+    log_error("tc: bpf attach failed for %s (%d)", cfg->ifname, cfg->tc_egr_bpf);
     goto cleanup;
   }
 
-  log_error("tc: bpf attach OK for %s ", cfg->ifname);
+  log_info("tc: bpf attach OK for %s ", cfg->ifname);
   return bpf_obj;
 
 cleanup:

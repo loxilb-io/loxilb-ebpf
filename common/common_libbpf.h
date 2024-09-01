@@ -22,7 +22,7 @@ int xdp_link_attach(int ifindex, __u32 bpf_flags, int prog_fd);
 int xdp_link_detach(int ifindex, __u32 bpf_flags, __u32 epgid);
 struct bpf_object *libbpf_xdp_attach(struct libbpf_cfg *cfg);
 
-int tc_link_detach(struct libbpf_cfg *cfg, int egr);
+int libbpf_tc_detach(struct libbpf_cfg *cfg, int egr);
 void *libbpf_tc_attach(struct libbpf_cfg *cfg, int egr);
 
 #endif /* __COMMON_LIBBPF_H */
