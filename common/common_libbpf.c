@@ -69,6 +69,7 @@ setup_tail_calls(struct bpf_object *obj, struct libbpf_cfg *cfg)
 int
 libbpf_tc_detach(struct libbpf_cfg *cfg, int egr)
 {
+  int rc = 0;
   DECLARE_LIBBPF_OPTS(bpf_tc_hook,
                       hook,
                       .ifindex = cfg->ifindex,
@@ -82,11 +83,13 @@ libbpf_tc_detach(struct libbpf_cfg *cfg, int egr)
                       .prog_id = 0);
 
 
-  bpf_tc_hook_create(&hook);
   bpf_tc_detach(&hook, &opts);
 
-  hook.attach_point = BPF_TC_EGRESS|BPF_TC_INGRESS;
-  int rc = bpf_tc_hook_destroy(&hook);
+  if (!egr) {
+    hook.attach_point = BPF_TC_EGRESS|BPF_TC_INGRESS;
+    rc = bpf_tc_hook_destroy(&hook);
+  }
+
   if (rc < 0) {
     log_error("tc: bpf hook destroy failed for %s:%d", cfg->ifname, egr);
   } else {
