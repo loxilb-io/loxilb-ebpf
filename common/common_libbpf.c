@@ -139,11 +139,11 @@ libbpf_tc_attach(struct libbpf_cfg *cfg, int egr)
     pmfd = bpf_obj_get(pinpbuf);
     if (pmfd < 0) {
       log_error("tc: no obj for pinpath %s ", pinpbuf);
-      goto cleanup;
+      continue;
     }
 
     if (bpf_map__reuse_fd(map, pmfd)) {
-      log_error("tc: map %s reus failed", bpf_map__name(map));
+      log_error("tc: map %s reuse failed", bpf_map__name(map));
       goto cleanup;
     }
   }
@@ -305,16 +305,21 @@ reuse_maps_from_pinned_path(struct bpf_object *obj, const char *path)
 
     len = snprintf(buf, PINPATH_MAX_LEN, "%s/%s", path, bpf_map__name(map));
     if (len < 0 || len >= PINPATH_MAX_LEN) {
+      log_error("bpfhelper: pinpbuf err");
       return -EINVAL;
     }
 
     pinned_map_fd = bpf_obj_get(buf);
-    if (pinned_map_fd < 0)
-      return pinned_map_fd;
+    if (pinned_map_fd < 0) {
+      log_error("bpfhelper: map not found : %s", buf);
+      continue;
+    }
 
     err = bpf_map__reuse_fd(map, pinned_map_fd);
-    if (err)
+    if (err) {
+      log_error("bpfhelper: reuse_fd failed : %s", strerror(-err));
       return err;
+    }
   }
 
   return 0;

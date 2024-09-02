@@ -173,8 +173,8 @@ libbpf_print_fn(enum libbpf_print_level level,
                 va_list args)
 {
   /* Ignore debug-level libbpf logs */
-//  if (level == LIBBPF_DEBUG)
-//    return 0;
+  //  if (level == LIBBPF_DEBUG)
+  //    return 0;
   return vfprintf(stderr, format, args);
 }
 
@@ -1135,7 +1135,7 @@ llb_setup_cpu_map(int mapfd)
   unsigned int live_cpus = bpf_num_possible_cpus();
   int ret, i;
 
-  for (i = 0; i < live_cpus; i++) {
+  for (i = 0; i < live_cpus && i < MAX_CPUS; i++) {
     ret = bpf_map_update_elem(mapfd, &i, &qsz, BPF_ANY);
     if (ret < 0) {
       log_error("Failed to update cpu-map %d ent", i);
@@ -1148,6 +1148,10 @@ llb_setup_lcpu_map(int mapfd)
 {
   unsigned int live_cpus = bpf_num_online_cpus();
   int ret, i;
+
+  if (live_cpus > MAX_CPUS) {
+    live_cpus = MAX_CPUS;
+  }
 
   i = 0;
   ret = bpf_map_update_elem(mapfd, &i, &live_cpus, BPF_ANY);

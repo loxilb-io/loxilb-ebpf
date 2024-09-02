@@ -7,6 +7,10 @@
 #ifndef __LLB_DP_MDI_H__ 
 #define __LLB_DP_MDI_H__
 
+#ifndef MAX_CPUS
+#define MAX_CPUS    16
+#endif
+
 #define DP_BUF_DATA(F)        (DP_TC_PTR(F->fm.data))
 #define DP_BUF_DATA_END(F)    (DP_TC_PTR(F->fm.data_end))
 

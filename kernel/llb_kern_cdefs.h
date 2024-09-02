@@ -36,7 +36,6 @@
 #define PGM_ENT1    1
 
 #define SAMPLE_SIZE 64ul
-#define MAX_CPUS    16
 
 #ifndef lock_xadd
 #define lock_xadd(ptr, val)              \
@@ -924,7 +923,7 @@ dp_redirect_port(void *tbl, struct xfi *xf)
   if (!oif) {
     return TC_ACT_SHOT;
   }
-  LL_DBG_PRINTK("[REDR] port %d OIF %d\n", key, *oif);
+  LL_DBG_PRINTK("[REDR] port %d OIF %d", key, *oif);
   return bpf_redirect(*oif, 0);
 }
 
