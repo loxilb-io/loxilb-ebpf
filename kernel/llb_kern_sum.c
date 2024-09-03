@@ -44,39 +44,36 @@ dp_sctp_csum(void *ctx, struct xfi *xf)
     crc = *(__u32 *)&xf->km.skey[8];
   }
 
-  for (loop = 0; loop < DP_MAX_LOOPS_PER_TCALL && rlen > 0; loop++) {
-    if (rlen >= PBUF_STACK_SZ) {
-      int ret = dp_pktbuf_read(ctx, off, pbuf, PBUF_STACK_SZ);
-      if (ret < 0) {
-        goto drop;
-      }
-
-      for (int i = 0; i < PBUF_STACK_SZ; i++) {
-        pb = pbuf[i];
-        idx =(crc ^ pb) & 0xff;
-        tbval = get_crc32c_map(idx);
-        crc = tbval ^ (crc >> 8);
-        off++;
-        rlen--;
-      }
-
-    } else {
-
-      for (int i = 0; i <= PBUF_STACK_SZ && i < rlen; i++) {
-        int ret = dp_pktbuf_read(ctx, off, pbuf, 1);
-        if (ret < 0) {
-          goto drop;
-        }
-
-        pb = pbuf[0];
-        idx =(crc ^ pb) & 0xff;
-        tbval = get_crc32c_map(idx);
-        crc = tbval ^ (crc >> 8);
-        off++;
-        rlen--;
-      }
+  for (loop = 0; loop < DP_MAX_LOOPS_PER_TCALL && rlen > 0 && rlen >= PBUF_STACK_SZ; loop++) {
+    int ret = dp_pktbuf_read(ctx, off, pbuf, PBUF_STACK_SZ);
+    if (ret < 0) {
+      goto drop;
     }
+
+    for (int i = 0; i < PBUF_STACK_SZ; i++) {
+      pb = pbuf[i];
+      idx =(crc ^ pb) & 0xff;
+      tbval = get_crc32c_map(idx);
+      crc = tbval ^ (crc >> 8);
+    }
+    off += PBUF_STACK_SZ;
+    rlen -= PBUF_STACK_SZ;
   }
+
+  for (int i = 0; i < PBUF_STACK_SZ && i < rlen && loop < DP_MAX_LOOPS_PER_TCALL; i++) {
+    int ret = dp_pktbuf_read(ctx, off, pbuf, 1);
+    if (ret < 0) {
+      goto drop;
+    }
+
+    pb = pbuf[0];
+    idx =(crc ^ pb) & 0xff;
+    tbval = get_crc32c_map(idx);
+    crc = tbval ^ (crc >> 8);
+    off++;
+    rlen--;
+  }
+
   if (rlen <= 0) {
     /*
      * Update crc in sctp. Reset any flag which indicates
