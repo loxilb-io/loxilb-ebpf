@@ -83,14 +83,14 @@ struct bpf_map_def SEC("maps") pkt_ring = {
   .type = BPF_MAP_TYPE_PERF_EVENT_ARRAY,
   .key_size = sizeof(int),
   .value_size = sizeof(__u32),
-  .max_entries = MAX_CPUS,
+  .max_entries = MAX_REAL_CPUS,
 };
 
 struct bpf_map_def SEC("maps") cp_ring = {
   .type = BPF_MAP_TYPE_PERF_EVENT_ARRAY,
   .key_size = sizeof(int),
   .value_size = sizeof(__u32),
-  .max_entries = MAX_CPUS,
+  .max_entries = MAX_REAL_CPUS,
 };
 
 struct bpf_map_def SEC("maps") pkts = {
@@ -334,14 +334,14 @@ struct {
         __uint(type,        BPF_MAP_TYPE_PERF_EVENT_ARRAY);
         __type(key,         int);
         __type(value,       __u32);
-        __uint(max_entries, MAX_CPUS);
+        __uint(max_entries, MAX_REAL_CPUS);
 } pkt_ring SEC(".maps");
 
 struct {
         __uint(type,        BPF_MAP_TYPE_PERF_EVENT_ARRAY);
         __type(key,         int);
         __type(value,       __u32);
-        __uint(max_entries, MAX_CPUS);
+        __uint(max_entries, MAX_REAL_CPUS);
 } cp_ring SEC(".maps");
 
 struct {
@@ -567,14 +567,14 @@ struct {
 	      __uint(type,        BPF_MAP_TYPE_CPUMAP);
 	      __type(key,         __u32);
 	      __type(value,       __u32);
-	      __uint(max_entries, MAX_CPUS);
+	      __uint(max_entries, MAX_REAL_CPUS);
 } cpu_map SEC(".maps");
 
 struct {
 	      __uint(type,        BPF_MAP_TYPE_ARRAY);
 	      __type(key,         __u32);
 	      __type(value,       __u32);
-	      __uint(max_entries, MAX_CPUS);
+	      __uint(max_entries, MAX_REAL_CPUS);
 } live_cpu_map SEC(".maps");
 
 struct {

@@ -5,8 +5,8 @@
  * SPDX-License-Identifier: (GPL-2.0 OR BSD-2-Clause)
  */
 
-#define DP_MAX_LOOPS_PER_TCALL (8)
-#define PBUF_STACK_SZ (256)
+#define DP_MAX_LOOPS_PER_TCALL (76)
+#define PBUF_STACK_SZ (32)
 
 struct pbuf {
   __u8 buf[PBUF_STACK_SZ];
@@ -59,7 +59,6 @@ dp_sctp_csum(void *ctx, struct xfi *xf)
     if (rlen >= PBUF_STACK_SZ) {
       int ret = dp_pktbuf_read(ctx, off, pbuf, PBUF_STACK_SZ);
       if (ret < 0) {
-         bpf_printk("Dropped off %u", off);
         goto drop;
       }
 
@@ -77,7 +76,6 @@ dp_sctp_csum(void *ctx, struct xfi *xf)
       for (int i = 0; i <= PBUF_STACK_SZ && i < rlen; i++) {
         int ret = dp_pktbuf_read(ctx, off, pbuf, 1);
         if (ret < 0) {
-           bpf_printk("Dropped off %u", off);
           goto drop;
         }
 
@@ -137,6 +135,5 @@ dp_sctp_csum(void *ctx, struct xfi *xf)
 drop:
   /* Something went wrong here */
   xf->pm.rcode |= LLB_PIPE_RC_PLCS_ERR;
-  bpf_printk("Dropped");
   return DP_DROP;
 }
