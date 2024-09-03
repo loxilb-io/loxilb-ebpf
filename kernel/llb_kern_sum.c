@@ -5,7 +5,19 @@
  * SPDX-License-Identifier: (GPL-2.0 OR BSD-2-Clause)
  */
 
-#define DP_MAX_LOOPS_PER_TCALL (2200)
+#define DP_MAX_LOOPS_PER_TCALL (76)
+#define PBUF_STACK_SZ (32)
+
+struct pbuf {
+  __u8 buf[PBUF_STACK_SZ];
+};
+
+struct {
+        __uint(type,        BPF_MAP_TYPE_PERCPU_ARRAY);
+        __type(key,         int);
+        __type(value,       struct pbuf);
+        __uint(max_entries, 1);
+} pbuf_map SEC(".maps");
 
 static __u32 __always_inline
 get_crc32c_map(__u32 off)
@@ -24,14 +36,15 @@ get_crc32c_map(__u32 off)
 static int __always_inline
 dp_sctp_csum(void *ctx, struct xfi *xf)
 {
-  int ret;
-  int off;
   int rlen;
   __u8 tcall;
   __u32 tbval;
   __u8 pb;
+  __u8 idx;
+  __u16 off = 0;
   int loop = 0;
   __u32 crc = 0xffffffff;
+  __u8 pbuf[PBUF_STACK_SZ];
 
   xf->pm.phit |= LLB_DP_CSUM_HIT;
 
@@ -42,20 +55,38 @@ dp_sctp_csum(void *ctx, struct xfi *xf)
     crc = *(__u32 *)&xf->km.skey[8];
   }
 
-  for (loop = 0; loop < DP_MAX_LOOPS_PER_TCALL; loop++) {
-      __u8 idx;
-      if (rlen > 0) {
-        ret = dp_pktbuf_read(ctx, off, &pb, sizeof(pb));
-        if (ret < 0) {
-          xf->pm.rcode |= LLB_PIPE_RC_PLCS_ERR;
-          goto drop;
-        }
+  for (loop = 0; loop < DP_MAX_LOOPS_PER_TCALL && rlen > 0; loop++) {
+    if (rlen >= PBUF_STACK_SZ) {
+      int ret = dp_pktbuf_read(ctx, off, pbuf, PBUF_STACK_SZ);
+      if (ret < 0) {
+        goto drop;
+      }
+
+      for (int i = 0; i < PBUF_STACK_SZ; i++) {
+        pb = pbuf[i];
         idx =(crc ^ pb) & 0xff;
         tbval = get_crc32c_map(idx);
         crc = tbval ^ (crc >> 8);
         off++;
         rlen--;
-    } else break;
+      }
+
+    } else {
+
+      for (int i = 0; i <= PBUF_STACK_SZ && i < rlen; i++) {
+        int ret = dp_pktbuf_read(ctx, off, pbuf, 1);
+        if (ret < 0) {
+          goto drop;
+        }
+
+        pb = pbuf[0];
+        idx =(crc ^ pb) & 0xff;
+        tbval = get_crc32c_map(idx);
+        crc = tbval ^ (crc >> 8);
+        off++;
+        rlen--;
+      }
+    }
   }
   if (rlen <= 0) {
     /*
@@ -98,10 +129,11 @@ dp_sctp_csum(void *ctx, struct xfi *xf)
     TCALL_CRC1();
   }
 
-  LL_DBG_PRINTK("Too many tcalls");
+  bpf_printk("Too many tcalls");
   xf->pm.rcode |= LLB_PIPE_RC_TCALL_ERR;
  
 drop:
   /* Something went wrong here */
+  xf->pm.rcode |= LLB_PIPE_RC_PLCS_ERR;
   return DP_DROP;
 }

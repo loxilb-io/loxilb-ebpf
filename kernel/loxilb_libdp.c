@@ -1135,7 +1135,7 @@ llb_setup_cpu_map(int mapfd)
   unsigned int live_cpus = bpf_num_possible_cpus();
   int ret, i;
 
-  for (i = 0; i < live_cpus && i < MAX_CPUS; i++) {
+  for (i = 0; i < live_cpus && i < MAX_REAL_CPUS; i++) {
     ret = bpf_map_update_elem(mapfd, &i, &qsz, BPF_ANY);
     if (ret < 0) {
       log_error("Failed to update cpu-map %d ent", i);
@@ -1149,8 +1149,8 @@ llb_setup_lcpu_map(int mapfd)
   unsigned int live_cpus = bpf_num_online_cpus();
   int ret, i;
 
-  if (live_cpus > MAX_CPUS) {
-    live_cpus = MAX_CPUS;
+  if (live_cpus > MAX_REAL_CPUS) {
+    live_cpus = MAX_REAL_CPUS;
   }
 
   i = 0;
@@ -1481,7 +1481,7 @@ llb_xh_init(llb_dp_struct_t *xh)
 
   xh->maps[LL_DP_PKT_PERF_RING].map_name = "pkt_ring";
   xh->maps[LL_DP_PKT_PERF_RING].has_pb   = 0;
-  xh->maps[LL_DP_PKT_PERF_RING].max_entries = 128;  /* MAX_CPUS */
+  xh->maps[LL_DP_PKT_PERF_RING].max_entries = MAX_REAL_CPUS;
 
   xh->maps[LL_DP_SESS4_MAP].map_name = "sess_v4_map";
   xh->maps[LL_DP_SESS4_MAP].has_pb   = 1;
@@ -1527,7 +1527,7 @@ llb_xh_init(llb_dp_struct_t *xh)
 
   xh->maps[LL_DP_CP_PERF_RING].map_name = "cp_ring";
   xh->maps[LL_DP_CP_PERF_RING].has_pb   = 0;
-  xh->maps[LL_DP_CP_PERF_RING].max_entries = 128;  /* MAX_CPUS */
+  xh->maps[LL_DP_CP_PERF_RING].max_entries = MAX_REAL_CPUS;
 
   xh->maps[LL_DP_NAT_EP_MAP].map_name = "nat_ep_map";
   xh->maps[LL_DP_NAT_EP_MAP].has_pb   = 0;
