@@ -8,17 +8,6 @@
 #define DP_MAX_LOOPS_PER_TCALL (76)
 #define PBUF_STACK_SZ (32)
 
-struct pbuf {
-  __u8 buf[PBUF_STACK_SZ];
-};
-
-struct {
-        __uint(type,        BPF_MAP_TYPE_PERCPU_ARRAY);
-        __type(key,         int);
-        __type(value,       struct pbuf);
-        __uint(max_entries, 1);
-} pbuf_map SEC(".maps");
-
 static __u32 __always_inline
 get_crc32c_map(__u32 off)
 {
