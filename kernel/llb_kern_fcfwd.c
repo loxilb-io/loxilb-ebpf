@@ -180,7 +180,7 @@ dp_do_fcv4_lkup(void *ctx, struct xfi *xf)
 
   LL_FC_PRINTK("[FCH4] oport %d\n",  xf->pm.oport);
   dp_unparse_packet_always(ctx, xf);
-  dp_unparse_packet(ctx, xf);
+  dp_unparse_packet(ctx, xf, 0);
 
   xf->pm.oport = acts->ca.oaux; /* Field overloaded as oif */
 

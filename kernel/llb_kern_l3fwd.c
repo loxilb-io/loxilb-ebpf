@@ -114,6 +114,8 @@ dp_do_rtops(void *ctx, struct xfi *xf, void *fa_, struct dp_rt_tact *act)
     ta->ca.act_type = act->ca.act_type;
 #endif
     LLBS_PPLN_TRAPC(xf, LLB_PIPE_RC_RT_TRAP);
+  } else if (act->ca.act_type == DP_SET_NOP) {
+    LLBS_PPLN_PASSC(xf, LLB_PIPE_RC_RT_TRAP);
   } else if (act->ca.act_type == DP_SET_RDR_PORT) {
     struct dp_rdr_act *ra = &act->port_act;
     LLBS_PPLN_RDR(xf);
@@ -185,6 +187,8 @@ dp_do_rtv6(void *ctx, struct xfi *xf, void *fa_)
     xf->pm.nf &= ~LLB_NAT_SRC;
     if (!DP_LLB_IS_EGR(ctx)) {
       LLBS_PPLN_TRAPC(xf, LLB_PIPE_RC_RT_TRAP);
+    } else {
+      LLBS_PPLN_PASSC(xf, LLB_PIPE_RC_RT_TRAP);
     }
     return 0;
   }
@@ -219,6 +223,8 @@ dp_do_rtv4(void *ctx, struct xfi *xf, void *fa_)
     xf->pm.nf &= ~LLB_NAT_SRC;
     if (!DP_LLB_IS_EGR(ctx)) {
       LLBS_PPLN_TRAPC(xf, LLB_PIPE_RC_RT_TRAP);
+    } else {
+      LLBS_PPLN_PASSC(xf, LLB_PIPE_RC_RT_TRAP);
     }
     return 0;
   }

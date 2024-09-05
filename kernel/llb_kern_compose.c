@@ -1055,7 +1055,7 @@ dp_unparse_packet_always(void *ctx,  struct xfi *xf)
 }
 
 static int __always_inline
-dp_unparse_packet(void *ctx,  struct xfi *xf)
+dp_unparse_packet(void *ctx,  struct xfi *xf, int egr)
 {
   if (xf->tm.new_tunnel_id == 0) {
     if (xf->pm.nf & LLB_NAT_SRC && xf->nm.dsr == 0) {
@@ -1110,6 +1110,10 @@ dp_unparse_packet(void *ctx,  struct xfi *xf)
         return DP_DROP;
       }
     }
+  }
+
+  if (egr) {
+    return 0;
   }
 
   return dp_do_out_vlan(ctx, xf);

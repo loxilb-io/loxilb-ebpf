@@ -309,6 +309,11 @@ dp_pipe_check_res(void *ctx, struct xfi *xf, void *fa)
         xf->pm.oport = xf->pm.iport;
         dp_swap_mac_header(ctx, xf);
         return dp_redirect_port_in(&tx_intf_map, xf);
+      } else if (xf->pm.pipe_act & LLB_PIPE_PASS) {
+        if (dp_unparse_packet(ctx, xf, 1) != 0) {
+          return DP_DROP;
+        }
+        return DP_PASS;
       }
     }
 
@@ -331,7 +336,7 @@ dp_pipe_check_res(void *ctx, struct xfi *xf, void *fa)
 #endif
 
     if (xf->pm.pipe_act & LLB_PIPE_RDR_MASK) {
-      if (dp_unparse_packet(ctx, xf) != 0) {
+      if (dp_unparse_packet(ctx, xf, 0) != 0) {
         return DP_DROP;
       }
       return dp_redir_packet(ctx, xf);
