@@ -3295,6 +3295,7 @@ loxilb_main(struct ebpfcfg *cfg)
     if (cfg->loglevel < 0 ||  cfg->loglevel >= LOG_FATAL) {
       cfg->loglevel = LOG_INFO;
     }
+    log_set_level(cfg->loglevel);
     log_add_fp(fp, cfg->loglevel);
 
     xh->have_loader = !cfg->no_loader;
