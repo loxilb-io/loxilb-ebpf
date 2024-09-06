@@ -173,8 +173,8 @@ libbpf_print_fn(enum libbpf_print_level level,
                 va_list args)
 {
   /* Ignore debug-level libbpf logs */
-  //  if (level == LIBBPF_DEBUG)
-  //    return 0;
+  if (level == LIBBPF_DEBUG)
+    return 0;
   return vfprintf(stderr, format, args);
 }
 
