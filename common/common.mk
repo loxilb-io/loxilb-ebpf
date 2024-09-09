@@ -73,7 +73,7 @@ LIBBPF_DIR ?= ../libbpf/src/
 OBJECT_LIBBPF = $(LIBBPF_DIR)/libbpf.a
 
 # Extend if including Makefile already added some
-COMMON_OBJS += $(COMMON_DIR)/common_sum.o $(COMMON_DIR)/common_libbpf.o $(COMMON_DIR)/common_pdi.o $(COMMON_DIR)/common_frame.o $(COMMON_DIR)/log.o $(COMMON_DIR)/throttler.o $(COMMON_DIR)/cgroup.o $(COMMON_DIR)/sockproxy.o $(COMMON_DIR)/notify.o $(COMMON_DIR)/picohttpparser.o $(COMMON_DIR)/llhttp.o $(COMMON_DIR)/httpapi.o $(COMMON_DIR)/http.o
+COMMON_OBJS += $(COMMON_DIR)/common_sum.o $(COMMON_DIR)/common_libbpf.o $(COMMON_DIR)/common_pdi.o $(COMMON_DIR)/common_frame.o $(COMMON_DIR)/log.o $(COMMON_DIR)/throttler.o $(COMMON_DIR)/cgroup.o $(COMMON_DIR)/sockproxy.o $(COMMON_DIR)/notify.o $(COMMON_DIR)/picohttpparser.o $(COMMON_DIR)/llhttp.o $(COMMON_DIR)/httpapi.o $(COMMON_DIR)/http.o $(COMMON_DIR)/ngap_helper.o
 
 # Create expansions for dependencies
 COMMON_H := ${COMMON_OBJS:.o=.h}
@@ -97,7 +97,7 @@ endif
 
 BPF_CFLAGS ?= -I$(LIBBPF_DIR)/build/usr/include/ -I../headers/ -I/usr/include/$(shell uname -m)-linux-gnu $(CFLAGS_ALL)
 
-LIBS = $(OBJECT_LIBBPF) -lelf $(USER_LIBS) -lz -lpthread -lssl -lcrypto
+LIBS = $(OBJECT_LIBBPF) -lelf $(USER_LIBS) -lz -lpthread -lssl -lcrypto ../proto/ngap/lib-llbngap.a
 
 all: llvm-check $(USER_TARGETS) $(XDP_OBJ) $(TC_OBJ) $(TC_EOBJ) $(MON_OBJ) $(SOCK_OBJ) $(SM_OBJ) $(STREAM_OBJ) $(SOCKDIR_OBJ) $(USER_TARGETS_LIB)
 

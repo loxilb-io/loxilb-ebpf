@@ -58,6 +58,16 @@ typedef struct notify_poll_ctx {
   struct pollfd pfds[MAX_NOTIFY_POLL_FDS];
 } notify_poll_ctx_t;
 
+typedef struct notify_thr {
+  void *ctx;
+  int thrid;
+} notify_thr_t;
+
+typedef struct notify_poll_ctx {
+  int n_pfds;
+  struct pollfd pfds[MAX_NOTIFY_POLL_FDS];
+} notify_poll_ctx_t;
+
 typedef struct notify_ctx {
   pthread_rwlock_t lock;
   notify_ent_t earr[MAX_NOTIFY_FDS];
@@ -172,6 +182,8 @@ notify_add_ent(void *ctx, int fd, notify_type_t type, void *priv)
   }
 
   NOTI_LOCK(nctx); 
+  nctx->thr_sel++;
+  tslot = nctx->thr_sel % nctx->n_thrs;
   ent = &nctx->earr[fd];
   if (ent->fd > 0) {
     pctx = &nctx->poll_ctx[ent->thr_id];
@@ -360,6 +372,38 @@ notify_run(void *ctx, int thread)
       }
       nproc++;
     }
+  }
+}
+
+static void *
+notify_run_worker(void *arg)
+{
+  notify_thr_t *targ = arg;
+  notify_run(targ->ctx, targ->thrid);
+  return NULL;
+}
+
+int
+notify_start(void *ctx)
+{
+  int i = 0;
+  pthread_t *ptarr;
+  notify_thr_t *nthr;
+  notify_ctx_t *nctx = ctx;
+
+  ptarr = calloc(1, nctx->n_thrs*sizeof(pthread_t));
+
+  for (i = 0; i < nctx->n_thrs; i++) {
+    nthr = calloc(1, sizeof(*nthr));
+    assert(nthr);
+
+    nthr->ctx = ctx;
+    nthr->thrid = i;
+    pthread_create(&ptarr[i], NULL, notify_run_worker, nthr);
+  }
+
+  while (1) {
+    sleep(1);
   }
 }
 

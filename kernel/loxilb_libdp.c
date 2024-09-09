@@ -1724,6 +1724,14 @@ llb_fetch_map_stats_cached(int tbl, uint32_t e, int raw,
   }
   pthread_rwlock_unlock(&t->stat_lock);
 
+  if (tbl == LL_DP_NAT_STATS_MAP) {
+    uint64_t b = 0;
+    uint64_t p = 0;
+    proxy_get_entry_stats((uint32_t )((e >> 4) & 0xfff), (int)(e & 0xf), &p, &b);
+    *(uint64_t *)packets += p;
+    *(uint64_t *)bytes += b;
+  }
+
   return 0;
 }
 
