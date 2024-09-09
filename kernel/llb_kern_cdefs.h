@@ -36,7 +36,6 @@
 #define PGM_ENT1    1
 
 #define SAMPLE_SIZE 64ul
-#define MAX_CPUS    16
 
 #ifndef lock_xadd
 #define lock_xadd(ptr, val)              \
@@ -84,14 +83,14 @@ struct bpf_map_def SEC("maps") pkt_ring = {
   .type = BPF_MAP_TYPE_PERF_EVENT_ARRAY,
   .key_size = sizeof(int),
   .value_size = sizeof(__u32),
-  .max_entries = MAX_CPUS,
+  .max_entries = MAX_REAL_CPUS,
 };
 
 struct bpf_map_def SEC("maps") cp_ring = {
   .type = BPF_MAP_TYPE_PERF_EVENT_ARRAY,
   .key_size = sizeof(int),
   .value_size = sizeof(__u32),
-  .max_entries = MAX_CPUS,
+  .max_entries = MAX_REAL_CPUS,
 };
 
 struct bpf_map_def SEC("maps") pkts = {
@@ -188,7 +187,7 @@ struct bpf_map_def SEC("maps") ct_stats_map = {
 struct bpf_map_def SEC("maps") nat_map = {
   .type = BPF_MAP_TYPE_HASH,
   .key_size = sizeof(struct dp_nat_key),
-  .value_size = sizeof(struct dp_nat_tacts),
+  .value_size = sizeof(struct dp_proxy_tacts),
   .max_entries = LLB_NATV4_MAP_ENTRIES
 };
 
@@ -335,14 +334,14 @@ struct {
         __uint(type,        BPF_MAP_TYPE_PERF_EVENT_ARRAY);
         __type(key,         int);
         __type(value,       __u32);
-        __uint(max_entries, MAX_CPUS);
+        __uint(max_entries, MAX_REAL_CPUS);
 } pkt_ring SEC(".maps");
 
 struct {
         __uint(type,        BPF_MAP_TYPE_PERF_EVENT_ARRAY);
         __type(key,         int);
         __type(value,       __u32);
-        __uint(max_entries, MAX_CPUS);
+        __uint(max_entries, MAX_REAL_CPUS);
 } cp_ring SEC(".maps");
 
 struct {
@@ -439,7 +438,7 @@ struct {
 struct {
         __uint(type,        BPF_MAP_TYPE_HASH);
         __type(key,         struct dp_nat_key);
-        __type(value,       struct dp_nat_tacts);
+        __type(value,       struct dp_proxy_tacts);
         __uint(max_entries, LLB_NATV4_MAP_ENTRIES);
 } nat_map SEC(".maps");
 
@@ -568,14 +567,14 @@ struct {
 	      __uint(type,        BPF_MAP_TYPE_CPUMAP);
 	      __type(key,         __u32);
 	      __type(value,       __u32);
-	      __uint(max_entries, MAX_CPUS);
+	      __uint(max_entries, MAX_REAL_CPUS);
 } cpu_map SEC(".maps");
 
 struct {
 	      __uint(type,        BPF_MAP_TYPE_ARRAY);
 	      __type(key,         __u32);
 	      __type(value,       __u32);
-	      __uint(max_entries, MAX_CPUS);
+	      __uint(max_entries, MAX_REAL_CPUS);
 } live_cpu_map SEC(".maps");
 
 struct {
@@ -924,7 +923,7 @@ dp_redirect_port(void *tbl, struct xfi *xf)
   if (!oif) {
     return TC_ACT_SHOT;
   }
-  LL_DBG_PRINTK("[REDR] port %d OIF %d\n", key, *oif);
+  LL_DBG_PRINTK("[REDR] port %d OIF %d", key, *oif);
   return bpf_redirect(*oif, 0);
 }
 

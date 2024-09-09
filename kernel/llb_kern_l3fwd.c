@@ -48,7 +48,7 @@ dp_pipe_set_l32_tun_nh(void *ctx, struct xfi *xf,
                        struct dp_rt_nh_act *rnh)
 {
   struct dp_rt_l2nh_act *nl2;
-  xf->pm.nh_num = rnh->nh_num;
+  xf->pm.nh_num = rnh->nh_num[0];
   /*
    * We do not set out_bd here. After NH lookup match is
    * found and packet tunnel insertion is done, BD is set accordingly
@@ -114,13 +114,23 @@ dp_do_rtops(void *ctx, struct xfi *xf, void *fa_, struct dp_rt_tact *act)
     ta->ca.act_type = act->ca.act_type;
 #endif
     LLBS_PPLN_TRAPC(xf, LLB_PIPE_RC_RT_TRAP);
+  } else if (act->ca.act_type == DP_SET_NOP) {
+    LLBS_PPLN_PASSC(xf, LLB_PIPE_RC_RT_TRAP);
   } else if (act->ca.act_type == DP_SET_RDR_PORT) {
     struct dp_rdr_act *ra = &act->port_act;
     LLBS_PPLN_RDR(xf);
     xf->pm.oport = ra->oport;
   } else if (act->ca.act_type == DP_SET_RT_NHNUM) {
     struct dp_rt_nh_act *rnh = &act->rt_nh;
-    xf->pm.nh_num = rnh->nh_num;
+
+    if (rnh->naps > 1) {
+      int sel = dp_get_pkt_hash(ctx) % rnh->naps;
+      if (sel >= 0 && sel < DP_MAX_ACTIVE_PATHS) {
+        xf->pm.nh_num = rnh->nh_num[sel];
+      }
+    } else {
+      xf->pm.nh_num = rnh->nh_num[0];
+    }
     return dp_do_rt_fwdops(ctx, xf);
   } /*else if (act->ca.act_type == DP_SET_L3RT_TUN_NH) {
 #ifdef HAVE_DP_EXTFC
@@ -177,6 +187,8 @@ dp_do_rtv6(void *ctx, struct xfi *xf, void *fa_)
     xf->pm.nf &= ~LLB_NAT_SRC;
     if (!DP_LLB_IS_EGR(ctx)) {
       LLBS_PPLN_TRAPC(xf, LLB_PIPE_RC_RT_TRAP);
+    } else {
+      LLBS_PPLN_PASSC(xf, LLB_PIPE_RC_RT_TRAP);
     }
     return 0;
   }
@@ -211,6 +223,8 @@ dp_do_rtv4(void *ctx, struct xfi *xf, void *fa_)
     xf->pm.nf &= ~LLB_NAT_SRC;
     if (!DP_LLB_IS_EGR(ctx)) {
       LLBS_PPLN_TRAPC(xf, LLB_PIPE_RC_RT_TRAP);
+    } else {
+      LLBS_PPLN_PASSC(xf, LLB_PIPE_RC_RT_TRAP);
     }
     return 0;
   }

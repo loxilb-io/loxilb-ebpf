@@ -42,8 +42,6 @@ enum llb_bpf_mnt_type {
 #include <linux/bpf.h>
 #include <pthread.h>
 
-#include "../common/common_params.h"
-#include "../common/common_user_bpf_xdp.h"
 #include "../common/common_libbpf.h"
 #include "../common/common_pdi.h"
 #include "../common/throttler.h"
@@ -64,6 +62,7 @@ struct ebpfcfg {
   int egr_hooks;
   int have_sockrwr;
   int have_sockmap;
+  int have_noebpf;
 };
 
 void loxilb_set_loglevel(struct ebpfcfg *cfg);

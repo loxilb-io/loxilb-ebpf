@@ -53,7 +53,7 @@ dp_do_smac_lkup(void *ctx, struct xfi *xf, void *fc)
 static int __always_inline
 dp_pipe_set_l22_tun_nh(void *ctx, struct xfi *xf, struct dp_rt_nh_act *rnh)
 {
-  xf->pm.nh_num = rnh->nh_num;
+  xf->pm.nh_num = rnh->nh_num[0];
 
   /*
    * We do not set out_bd here. After NH lookup match is

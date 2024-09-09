@@ -35,6 +35,7 @@
 #define MAX_NOTIFY_FDS 65535
 #define MAX_NOTIFY_POLL_FDS 8192
 #define MAX_NOTIFY_THREADS (8)
+#define MAX_NOTIFY_POLL_TIMEO (10)
 
 typedef struct notify_ent {
   int fd;
@@ -44,8 +45,18 @@ typedef struct notify_ent {
   void *priv;
 } notify_ent_t; 
 
-#define NOTI_LOCK(C)    pthread_rwlock_wrlock(&(C)->lock)
-#define NOTI_UNLOCK(C)  pthread_rwlock_unlock(&(C)->lock)
+#define NOTI_LOCK(C) pthread_rwlock_wrlock(&(C)->lock)
+#define NOTI_UNLOCK(C) pthread_rwlock_unlock(&(C)->lock)
+
+typedef struct notify_thr {
+  void *ctx;
+  int thrid;
+} notify_thr_t;
+
+typedef struct notify_poll_ctx {
+  int n_pfds;
+  struct pollfd pfds[MAX_NOTIFY_POLL_FDS];
+} notify_poll_ctx_t;
 
 typedef struct notify_thr {
   void *ctx;
@@ -128,6 +139,29 @@ notify_ctx_new(notify_cbs_t *cbs, int n_thrs)
 }
 
 int
+notify_check_slot(void *ctx, int fd)
+{
+  notify_ctx_t *nctx = ctx;
+  notify_ent_t *ent;
+
+  assert(ctx);
+
+  if (fd <= 0 || fd >= MAX_NOTIFY_FDS) {
+    return 0;
+  }
+
+  NOTI_LOCK(nctx);
+  ent = &nctx->earr[fd];
+  if (ent->fd > 0) {
+    NOTI_UNLOCK(nctx);
+    return 0;
+  }
+
+  NOTI_UNLOCK(nctx);
+  return 1;
+}
+
+int
 notify_add_ent(void *ctx, int fd, notify_type_t type, void *priv)
 {
   notify_ctx_t *nctx = ctx;
@@ -138,7 +172,7 @@ notify_add_ent(void *ctx, int fd, notify_type_t type, void *priv)
 
   assert(ctx); 
 
-  if (fd <= 0 || fd >= MAX_NOTIFY_FDS) {
+  if (fd <= 0 || fd > MAX_NOTIFY_FDS) {
     return -EINVAL;
   }
 
@@ -152,11 +186,30 @@ notify_add_ent(void *ctx, int fd, notify_type_t type, void *priv)
   tslot = nctx->thr_sel % nctx->n_thrs;
   ent = &nctx->earr[fd];
   if (ent->fd > 0) {
+    pctx = &nctx->poll_ctx[ent->thr_id];
+    assert(pctx);
+    if (ent->priv == priv) {
+      if (pctx->pfds[ent->poll_slot].events != events) {
+        pctx->pfds[ent->poll_slot].events = events;
+      }
+      NOTI_UNLOCK(nctx);
+      return 0;
+    }
     NOTI_UNLOCK(nctx); 
+    //log_debug("events exist %d", fd);
     return -EEXIST;
   }
 
+  //nctx->thr_sel++;
+  //tslot = ctx->thr_sel % nctx->n_thrs;
+  tslot = fd % nctx->n_thrs;
   pctx = &nctx->poll_ctx[tslot];
+  if (pctx->n_pfds >= MAX_NOTIFY_POLL_FDS) {
+    NOTI_UNLOCK(nctx);
+    log_error("notify no slots exist %d", fd);
+    return -EINVAL;
+  }
+
   ent->type = type;
   ent->fd = fd;
   ent->poll_slot = pctx->n_pfds;
@@ -170,6 +223,8 @@ notify_add_ent(void *ctx, int fd, notify_type_t type, void *priv)
   pctx->n_pfds++;
 
   NOTI_UNLOCK(nctx); 
+
+  //log_debug("notify - add fd  %d tslot %d", fd, tslot);
   return 0;
 }
 
@@ -214,6 +269,8 @@ notify_delete_ent__(void *ctx, int fd)
     }
   }
 
+  //log_debug("notify del fd  %d tslot %d", fd, ent->thr_id);
+
   ent->fd = -1;
   ent->type = 0; 
   ent->poll_slot = -1;
@@ -251,6 +308,7 @@ notify_run(void *ctx, int thread)
   int i = 0;
   int n_pfds = 0;
   void *priv = NULL;
+  char estr[128];;
   struct pollfd pfds[MAX_NOTIFY_POLL_FDS];
   notify_ent_t *ent;
   notify_ctx_t *nctx = ctx;
@@ -263,18 +321,22 @@ notify_run(void *ctx, int thread)
 
   while(1) {
 
-    nproc = 0;
     /* This is seemingly expensive operation */
     NOTI_LOCK(nctx);
     memcpy(pfds, nctx->poll_ctx[thread].pfds, sizeof(pfds));
     n_pfds = nctx->poll_ctx[thread].n_pfds;
     NOTI_UNLOCK(nctx);
-    
-    //printf("n_pfds = %d\n", n_pfds);
-    rc = poll(pfds, n_pfds, 500);
+
+    nproc = 0;
+    rc = poll(pfds, n_pfds, MAX_NOTIFY_POLL_TIMEO);
     if (rc < 0) {
-      perror("poll");
-      goto end_of_loop;
+      log_error("poll :error(%s)", strerror_r(errno, estr, sizeof(estr)));
+      usleep(200*1000);
+      continue;
+    }
+
+    if (rc == 0) {
+      continue;
     }
 
     for (i = 0 ; i < n_pfds; i++) {
@@ -298,22 +360,50 @@ notify_run(void *ctx, int thread)
       NOTI_UNLOCK(nctx);
 
       if (nctx->cbs.notify) {
+        if (type & NOTI_TYPE_OUT) {
+          type |= NOTI_TYPE_IN;
+        }
         nctx->cbs.notify(fd, type, priv);
       }
 
       if (type & (NOTI_TYPE_HUP|NOTI_TYPE_ERROR)) {
-        log_debug("notify hup %d", fd);
+        //log_debug("notify hup %d", fd);
         notify_delete_ent__(nctx, fd); 
       }
-      if (type & NOTI_TYPE_IN) {
-        nproc++;
-      }
+      nproc++;
     }
+  }
+}
 
-end_of_loop:
-    if (nproc <= 0) {
-      usleep(200*1000);
-    }
+static void *
+notify_run_worker(void *arg)
+{
+  notify_thr_t *targ = arg;
+  notify_run(targ->ctx, targ->thrid);
+  return NULL;
+}
+
+int
+notify_start(void *ctx)
+{
+  int i = 0;
+  pthread_t *ptarr;
+  notify_thr_t *nthr;
+  notify_ctx_t *nctx = ctx;
+
+  ptarr = calloc(1, nctx->n_thrs*sizeof(pthread_t));
+
+  for (i = 0; i < nctx->n_thrs; i++) {
+    nthr = calloc(1, sizeof(*nthr));
+    assert(nthr);
+
+    nthr->ctx = ctx;
+    nthr->thrid = i;
+    pthread_create(&ptarr[i], NULL, notify_run_worker, nthr);
+  }
+
+  while (1) {
+    sleep(1);
   }
 }
 

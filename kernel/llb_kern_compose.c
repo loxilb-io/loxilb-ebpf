@@ -160,6 +160,7 @@ dp_parse_tcp(struct parser *p,
     xf->il34m.source = tcp->source;
     xf->il34m.dest = tcp->dest;
     xf->il34m.seq = tcp->seq;
+    xf->il34m.ack = tcp->ack_seq;
     xf->pm.itcp_flags = tcp_flags;
   } else {
     if (tcp_flags & (LLB_TCP_FIN|LLB_TCP_RST)) {
@@ -169,6 +170,7 @@ dp_parse_tcp(struct parser *p,
     xf->l34m.source = tcp->source;
     xf->l34m.dest = tcp->dest;
     xf->l34m.seq = tcp->seq;
+    xf->l34m.ack = tcp->ack_seq;
     xf->pm.tcp_flags = tcp_flags;
   }
 
@@ -999,22 +1001,7 @@ static int __always_inline
 dp_unparse_packet_always(void *ctx,  struct xfi *xf)
 {
 
-  if (xf->pm.nf & LLB_NAT_SRC && xf->nm.dsr == 0) {
-    LL_DBG_PRINTK("[DEPR] LL_SNAT 0x%lx:%x\n",
-                 xf->nm.nxip4, xf->nm.nxport);
-    if (xf->pm.rcode & (LLB_PIPE_RC_NODMAC|LLB_PIPE_RC_NH_UNK|LLB_PIPE_RC_RT_TRAP)) {
-      xf->pm.pten = DP_PTEN_ALL;
-      xf->pm.rcode |= LLB_PIPE_RC_RESOLVE;
-      dp_ring_event(ctx, xf, 1);
-    }
-    if (xf->l2m.dl_type == bpf_ntohs(ETH_P_IPV6) || xf->nm.nv6) {
-      dp_sunp_tcall(ctx, xf);
-    } else {
-      if (dp_do_snat(ctx, xf, xf->nm.nxip4, xf->nm.nxport) != 0) {
-        return DP_DROP;
-      }
-    }
-  } else if (xf->pm.nf & LLB_NAT_DST && xf->nm.dsr == 0) {
+  if (xf->pm.nf & LLB_NAT_DST && xf->nm.dsr == 0) {
     LL_DBG_PRINTK("[DEPR] LL_DNAT 0x%x\n",
                   xf->nm.nxip4, xf->nm.nxport);
     if (xf->l2m.dl_type == bpf_ntohs(ETH_P_IPV6)) {
@@ -1022,6 +1009,24 @@ dp_unparse_packet_always(void *ctx,  struct xfi *xf)
     } else {
       if (dp_do_dnat(ctx, xf, xf->nm.nxip4, xf->nm.nxport) != 0) {
         return DP_DROP;
+      }
+    }
+  }
+  if (xf->tm.new_tunnel_id) {
+    if (xf->pm.nf & LLB_NAT_SRC && xf->nm.dsr == 0) {
+      LL_DBG_PRINTK("[DEPR] LL_SNAT 0x%lx:%x\n",
+                   xf->nm.nxip4, xf->nm.nxport);
+      if (xf->pm.rcode & (LLB_PIPE_RC_NODMAC|LLB_PIPE_RC_NH_UNK|LLB_PIPE_RC_RT_TRAP)) {
+        xf->pm.pten = DP_PTEN_ALL;
+        xf->pm.rcode |= LLB_PIPE_RC_RESOLVE;
+        dp_ring_event(ctx, xf, 1);
+      }
+      if (xf->l2m.dl_type == bpf_ntohs(ETH_P_IPV6) || xf->nm.nv6) {
+        dp_sunp_tcall(ctx, xf);
+      } else {
+        if (dp_do_snat(ctx, xf, xf->nm.nxip4, xf->nm.nxport) != 0) {
+          return DP_DROP;
+        }
       }
     }
   }
@@ -1050,8 +1055,27 @@ dp_unparse_packet_always(void *ctx,  struct xfi *xf)
 }
 
 static int __always_inline
-dp_unparse_packet(void *ctx,  struct xfi *xf)
+dp_unparse_packet(void *ctx,  struct xfi *xf, int egr)
 {
+  if (xf->tm.new_tunnel_id == 0) {
+    if (xf->pm.nf & LLB_NAT_SRC && xf->nm.dsr == 0) {
+      LL_DBG_PRINTK("[DEPR] LL_SNAT 0x%lx:%x\n",
+               xf->nm.nxip4, xf->nm.nxport);
+      if (xf->pm.rcode & (LLB_PIPE_RC_NODMAC|LLB_PIPE_RC_NH_UNK|LLB_PIPE_RC_RT_TRAP)) {
+        xf->pm.pten = DP_PTEN_ALL;
+        xf->pm.rcode |= LLB_PIPE_RC_RESOLVE;
+        dp_ring_event(ctx, xf, 1);
+      }
+      if (xf->l2m.dl_type == bpf_ntohs(ETH_P_IPV6) || xf->nm.nv6) {
+        dp_sunp_tcall(ctx, xf);
+      } else {
+        if (dp_do_snat(ctx, xf, xf->nm.nxip4, xf->nm.nxport) != 0) {
+          return DP_DROP;
+        }
+      }
+    }
+  }
+
   if (xf->tm.tun_decap) {
     if (xf->tm.tun_type == LLB_TUN_VXLAN) {
       LL_DBG_PRINTK("[DEPR] LL STRIP-VXLAN\n");
@@ -1086,6 +1110,10 @@ dp_unparse_packet(void *ctx,  struct xfi *xf)
         return DP_DROP;
       }
     }
+  }
+
+  if (egr) {
+    return 0;
   }
 
   return dp_do_out_vlan(ctx, xf);

@@ -19,6 +19,7 @@ typedef struct notify_cbs {
   void (*pdestroy)(void *priv);
 } notify_cbs_t ;
 
+int notify_check_slot(void *ctx, int fd);
 int notify_delete_ent(void *ctx, int fd);
 int notify_add_ent(void *ctx, int fd, notify_type_t type, void *priv);
 int notify_start(void *ctx);

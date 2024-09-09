@@ -95,6 +95,7 @@ typedef struct llb_dp_struct
   int have_loader;
   int have_sockrwr;
   int have_sockmap;
+  int have_noebpf;
   struct llb_kern_mon *monp;
   const char *cgroup_dfl_path;
   int cgfd;
@@ -172,8 +173,8 @@ libbpf_print_fn(enum libbpf_print_level level,
                 va_list args)
 {
   /* Ignore debug-level libbpf logs */
-//  if (level == LIBBPF_DEBUG)
-//    return 0;
+  if (level == LIBBPF_DEBUG)
+    return 0;
   return vfprintf(stderr, format, args);
 }
 
@@ -398,6 +399,10 @@ llb_packet_trace_en(int en)
   struct intf_key nkey;
   struct dp_intf_tact l2a;
   void *next_key = &nkey;
+
+  if (xh->have_noebpf) {
+    return 0;
+  }
 
   if (en < 0 || en > 2) {
     return -1;
@@ -638,6 +643,10 @@ llb_setup_kern_sock(const char *cgroup_path)
   int cgfd = -1;
   int pfd;
 
+  if (xh->have_noebpf) {
+    return 0;
+  }
+
   if (xh->cgfd <= 0) {
     cgfd = cgroup_create_get(cgroup_path);
     if (cgfd < 0) {
@@ -708,6 +717,10 @@ llb_setup_kern_mon(void)
 {
   struct llb_kern_mon *prog;
   int err;
+
+  if (xh->have_noebpf) {
+    return 0;
+  }
 
   // Open and load eBPF Program
   prog = llb_kern_mon__open();
@@ -813,6 +826,10 @@ llb_setup_kern_sockmap_skmsg_helper(int map_fd)
   struct bpf_object *bpf_obj2;
   int pfd2;
 
+  if (xh->have_noebpf) {
+    return 0;
+  }
+
   bpf_obj2 = bpf_object__open(LLB_SOCK_DIR_IMG_BPF);
   map2 = bpf_object__find_map_by_name(bpf_obj2, "sock_proxy_map");
   if (map2 == NULL) {
@@ -871,6 +888,10 @@ llb_setup_kern_sockmap_strparser_helper(int sockmap_fd)
   struct bpf_object *bpf_obj2;
   int map_fd;
   int pfd2;
+
+  if (xh->have_noebpf) {
+    return 0;
+  }
 
   bpf_obj2 = bpf_object__open(LLB_SOCK_SP_IMG_BPF);
 #ifdef HAVE_SOCKOPS
@@ -940,6 +961,10 @@ err:
 static int
 llb_sockmap_op(struct llb_sockmap_key *key, int fd, int doadd)
 {
+  if (xh->have_noebpf) {
+    return 0;
+  }
+
   if (xh->smfd <= 0) {
     assert(0);
   }
@@ -965,6 +990,10 @@ llb_setup_kern_sockmap(const char *cgroup_path)
   int cgfd = -1;
   int map_fd = -1;
   int map_fd2 = -1;
+
+  if (xh->have_noebpf) {
+    return 0;
+  }
 
 #ifdef HAVE_SOCKOPS 
   if (xh->cgfd <= 0) {
@@ -1106,7 +1135,7 @@ llb_setup_cpu_map(int mapfd)
   unsigned int live_cpus = bpf_num_possible_cpus();
   int ret, i;
 
-  for (i = 0; i < live_cpus; i++) {
+  for (i = 0; i < live_cpus && i < MAX_REAL_CPUS; i++) {
     ret = bpf_map_update_elem(mapfd, &i, &qsz, BPF_ANY);
     if (ret < 0) {
       log_error("Failed to update cpu-map %d ent", i);
@@ -1119,6 +1148,10 @@ llb_setup_lcpu_map(int mapfd)
 {
   unsigned int live_cpus = bpf_num_online_cpus();
   int ret, i;
+
+  if (live_cpus > MAX_REAL_CPUS) {
+    live_cpus = MAX_REAL_CPUS;
+  }
 
   i = 0;
   ret = bpf_map_update_elem(mapfd, &i, &live_cpus, BPF_ANY);
@@ -1448,7 +1481,7 @@ llb_xh_init(llb_dp_struct_t *xh)
 
   xh->maps[LL_DP_PKT_PERF_RING].map_name = "pkt_ring";
   xh->maps[LL_DP_PKT_PERF_RING].has_pb   = 0;
-  xh->maps[LL_DP_PKT_PERF_RING].max_entries = 128;  /* MAX_CPUS */
+  xh->maps[LL_DP_PKT_PERF_RING].max_entries = MAX_REAL_CPUS;
 
   xh->maps[LL_DP_SESS4_MAP].map_name = "sess_v4_map";
   xh->maps[LL_DP_SESS4_MAP].has_pb   = 1;
@@ -1494,7 +1527,7 @@ llb_xh_init(llb_dp_struct_t *xh)
 
   xh->maps[LL_DP_CP_PERF_RING].map_name = "cp_ring";
   xh->maps[LL_DP_CP_PERF_RING].has_pb   = 0;
-  xh->maps[LL_DP_CP_PERF_RING].max_entries = 128;  /* MAX_CPUS */
+  xh->maps[LL_DP_CP_PERF_RING].max_entries = MAX_REAL_CPUS;
 
   xh->maps[LL_DP_NAT_EP_MAP].map_name = "nat_ep_map";
   xh->maps[LL_DP_NAT_EP_MAP].has_pb   = 0;
@@ -1523,7 +1556,9 @@ llb_xh_init(llb_dp_struct_t *xh)
       assert(0);
     }
   } else {
-    llb_dp_maps_attach(xh);
+    if (!xh->have_noebpf) {
+      llb_dp_maps_attach(xh);
+    }
   }
 
   if (xh->have_mtrace) {
@@ -1577,6 +1612,7 @@ ll_get_stats_pcpu_arr(int mfd, __u32 idx,
   __u64 sum_bytes = 0;
   __u64 sum_pkts = 0;
   __u64 opc = 0;
+  __u64 cts;
   int i;
 
   if ((bpf_map_lookup_elem(mfd, &idx, values)) != 0) {
@@ -1584,7 +1620,10 @@ ll_get_stats_pcpu_arr(int mfd, __u32 idx,
     return;
   }
   
+  cts = get_os_nsecs();
   opc = s->st.packets;
+  if (s->lts_used == 0)
+    s->lts_used = cts;
 
   /* Sum values from each CPU */
   for (i = 0; i < nr_cpus; i++) {
@@ -1602,6 +1641,9 @@ ll_get_stats_pcpu_arr(int mfd, __u32 idx,
        (unsigned long long)(s->st.bytes));
 #endif
     if (s->st.packets > opc) {
+      s->used = 1;
+      s->lts_used = cts;
+    } else if (cts - s->lts_used < DP_ST_LTO) {
       s->used = 1;
     }
     if (cb) {
@@ -1647,6 +1689,17 @@ llb_fetch_map_stats_cached(int tbl, uint32_t e, int raw,
   if (tbl < 0 || tbl >= LL_DP_MAX_MAP) 
     return -1;
 
+  if (tbl == LL_DP_NAT_STATS_MAP) {
+    uint64_t b = 0;
+    uint64_t p = 0;
+    proxy_get_entry_stats((uint32_t )((e >> 4) & 0xfff), (int)(e & 0xf), &p, &b);
+    *(uint64_t *)packets += p;
+    *(uint64_t *)bytes += b;
+  }
+
+  if (xh->have_noebpf)
+    return 0;
+
   t = &xh->maps[tbl];
   if (t->has_pb && t->pb_xtid > 0) { 
     if (t->pb_xtid >= LL_DP_MAX_MAP)
@@ -1666,8 +1719,8 @@ llb_fetch_map_stats_cached(int tbl, uint32_t e, int raw,
   }
 
   if (e < t->max_entries) {
-    *(uint64_t *)bytes = t->pbs[e].st.bytes;
-    *(uint64_t *)packets = t->pbs[e].st.packets;
+    *(uint64_t *)bytes += t->pbs[e].st.bytes;
+    *(uint64_t *)packets += t->pbs[e].st.packets;
   }
   pthread_rwlock_unlock(&t->stat_lock);
 
@@ -1716,6 +1769,10 @@ llb_fetch_map_stats_used(int tbl, uint32_t e, int clr, int *used)
 void 
 llb_collect_map_stats(int tid)
 {
+  if (xh->have_noebpf) {
+    return;
+  }
+
   return llb_fetch_map_stats_raw(tid, NULL, NULL);
 }
 
@@ -1724,6 +1781,10 @@ llb_fetch_pol_map_stats(int tid, uint32_t e, void *ppass, void *pdrop)
 {
   llb_dp_map_t *t;
   struct dp_pol_tact pa;
+
+  if (xh->have_noebpf) {
+    return 0;
+  }
 
   if (tid < 0 || tid >= LL_DP_MAX_MAP) 
     return -1;
@@ -1756,6 +1817,10 @@ llb_map_loop_and_delete(int tid, dp_map_walker_t cb, dp_map_ita_t *it)
   void *key = NULL;
   llb_dp_map_t *t;
   uint32_t n = 0;
+
+  if (xh->have_noebpf) {
+    return;
+  }
 
   if (!cb) return;
 
@@ -1791,6 +1856,9 @@ llb_clear_map_stats_internal(int tid, __u32 idx, bool wipe)
   llb_dp_map_t *t;
 
   if (tid < 0 || tid >= LL_DP_MAX_MAP) 
+    return;
+
+  if (xh->have_noebpf)
     return;
 
   t = &xh->maps[tid];
@@ -1831,7 +1899,7 @@ static void ll_map_ct_rm_related(uint32_t rid, uint32_t *aids, int naid);
 static int
 llb_add_map_elem_nat_post_proc(void *k, void *v)
 {
-  struct dp_nat_tacts *na = v;
+  struct dp_proxy_tacts *na = v;
   struct mf_xfrm_inf *ep_arm;
   uint32_t inact_aids[LLB_MAX_NXFRMS];
   int i = 0;
@@ -1858,7 +1926,7 @@ llb_add_map_elem_nat_post_proc(void *k, void *v)
 static int
 llb_del_map_elem_nat_post_proc(void *k, void *v)
 {
-  struct dp_nat_tacts *na = v;
+  struct dp_proxy_tacts *na = v;
   struct mf_xfrm_inf *ep_arm;
   uint32_t inact_aids[LLB_MAX_NXFRMS];
   int i = 0;
@@ -2046,16 +2114,27 @@ llb_add_mf_map_elem__(int tbl, void *k, void *v)
 }
 
 static int
-llb_conv_nat2proxy(void *k, void *v, struct proxy_ent *pent, struct proxy_val *pval)
+llb_conv_nat2proxy(void *k, void *v, struct proxy_ent *pent, struct proxy_arg *pval)
 {
   struct dp_nat_key *nat_key = k;
-  struct dp_nat_tacts *dat = v;
+  struct dp_proxy_tacts *dat = v;
   int i = 0;
   int j = 0;
 
   pent->xip = nat_key->daddr[0];
   pent->xport = nat_key->dport;
   pent->protocol = nat_key->l4proto;
+
+  strncpy(pval->host_url, (const char *)dat->host_url, sizeof(pval->host_url) - 1);
+  pval->host_url[sizeof(pval->host_url) - 1] = '\0';
+
+  if (!strcmp(pval->host_url, "")) {
+    char ab1[INET6_ADDRSTRLEN];
+    const char *host = inet_ntop(AF_INET, (struct in_addr *)&pent->xip, ab1, INET_ADDRSTRLEN);
+    if (host != NULL) {
+      sprintf(pval->host_url, "%s:%u", host, ntohs(pent->xport));
+    }
+  }
 
   for (i = 0; i < LLB_MAX_NXFRMS && i < MAX_PROXY_EP; i++) {
     struct mf_xfrm_inf *mf = &dat->nxfrms[i];
@@ -2081,6 +2160,9 @@ llb_conv_nat2proxy(void *k, void *v, struct proxy_ent *pent, struct proxy_val *p
 
   if (dat->sec_mode == SEC_MODE_HTTPS) {
     pval->have_ssl = 1;
+  } else if (dat->sec_mode == SEC_MODE_HTTPS_E2E) {
+    pval->have_ssl = 1;
+    pval->have_epssl = 1;
   }
 
   pval->_id = dat->ca.cidx;
@@ -2126,16 +2208,22 @@ llb_add_map_elem(int tbl, void *k, void *v)
 
   if (tbl == LL_DP_NAT_MAP) {
     struct dp_nat_key *nk = k;
-    struct dp_nat_tacts *nv = v;
+    struct dp_proxy_tacts *nv = v;
     struct proxy_ent pk = { 0 };
-    struct proxy_val pv = { 0 };
+    struct proxy_arg pv = { 0 };
 
     if (nv->ca.act_type == DP_SET_FULLPROXY &&
         (nk->l4proto == IPPROTO_TCP || nk->l4proto == IPPROTO_SCTP) && nk->v6 == 0) {
       llb_conv_nat2proxy(k, v, &pk, &pv);
+      // FIXME
       ret = proxy_add_entry(&pk, &pv);
       goto out;
     }
+  }
+
+  if (xh->have_noebpf) {
+    ret = 0;
+    goto ulock_out;
   }
 
   if (tbl == LL_DP_FW4_MAP) {
@@ -2152,6 +2240,7 @@ out:
       llb_add_map_elem_nat_post_proc(k, v);
     }
   }
+ulock_out:
   XH_UNLOCK();
 
   return ret;
@@ -2249,10 +2338,10 @@ llb_del_mf_map_elem__(int tbl, void *k)
 }
 
 int
-llb_del_map_elem(int tbl, void *k)
+llb_del_map_elem_wval(int tbl, void *k, void *v)
 {
   int ret = -EINVAL;
-  struct dp_nat_tacts t = { 0 };
+  struct dp_proxy_tacts t = { 0 };
 
   if (tbl < 0 || tbl >= LL_DP_MAX_MAP) {
     return ret;
@@ -2263,12 +2352,21 @@ llb_del_map_elem(int tbl, void *k)
   /* Need some pre-processing for certain maps */
   if (tbl == LL_DP_NAT_MAP) {
     struct dp_nat_key *nk = k;
+    struct dp_proxy_tacts *nv = v;
     struct proxy_ent pk = { 0 };
-    struct proxy_val pv = { 0 };
+    struct proxy_arg pa = { 0 };
 
-    if ((nk->l4proto == IPPROTO_TCP || nk->l4proto == IPPROTO_SCTP )&& nk->v6 == 0) {
-      llb_conv_nat2proxy(nk, &t, &pk, &pv);
-      proxy_delete_entry(&pk);
+    assert(nv);
+
+    if (nv->ca.act_type == DP_SET_FULLPROXY &&
+        (nk->l4proto == IPPROTO_TCP || nk->l4proto == IPPROTO_SCTP) && nk->v6 == 0) {
+      llb_conv_nat2proxy(nk, nv, &pk, &pa);
+      proxy_delete_entry(&pk, &pa);
+    }
+
+    if (xh->have_noebpf) {
+      XH_UNLOCK();
+      return 0;
     }
 
     ret = bpf_map_lookup_elem(llb_map2fd(tbl), k, &t);
@@ -2276,6 +2374,11 @@ llb_del_map_elem(int tbl, void *k)
       XH_UNLOCK();
       return -EINVAL;
     }
+  }
+
+  if (xh->have_noebpf) {
+    XH_UNLOCK();
+    return 0;
   }
 
   if (tbl == LL_DP_FW4_MAP) {
@@ -2295,6 +2398,12 @@ llb_del_map_elem(int tbl, void *k)
   XH_UNLOCK();
 
   return ret;
+}
+
+int
+llb_del_map_elem(int tbl, void *k)
+{
+  return llb_del_map_elem_wval(tbl, k, NULL);
 }
 
 unsigned long long
@@ -2341,6 +2450,10 @@ ll_age_fcmap(void)
   struct dp_fcv4_key next_key;
   struct dp_fc_tacts *fc_val;
   uint64_t ns = get_os_nsecs();
+
+  if (xh->have_noebpf) {
+    return;
+  }
 
   fc_val = calloc(1, sizeof(*fc_val));
   if (!fc_val) return;
@@ -2652,6 +2765,10 @@ ll_age_ctmap(void)
   struct dp_ct_tact *adat;
   ct_arg_struct_t *as;
   uint64_t ns = get_os_nsecs();
+
+  if (xh->have_noebpf) {
+    return;
+  }
 
   adat = calloc(1, sizeof(*adat));
   if (!adat) return;
@@ -3018,59 +3135,50 @@ llb_psec_setup(const char *psec, struct bpf_object *obj)
   return 0;
 }
 
-static void
-llb_sys_exec(char *str)
-{
-  (void)(system(str)+1);
-}
-
 static void * 
-llb_ebpf_link_attach(struct config *cfg)
+llb_ebpf_link_attach(struct libbpf_cfg *cfg)
 {
-  char cmd[PATH_MAX];
+  void *robj = NULL;
+
   if (cfg->tc_bpf) {
-    /* ntc is netlox's modified tc tool */
-    sprintf(cmd, "ntc qdisc add dev %s clsact 2>&1 >/dev/null", cfg->ifname);
-    llb_sys_exec(cmd);
-    log_debug("exec: %s", cmd);
-
-    sprintf(cmd, "ntc filter add dev %s ingress bpf da obj %s sec %s 2>&1",
-            cfg->ifname, cfg->filename, cfg->progsec);
-    llb_sys_exec(cmd);
-    log_debug("exec: %s", cmd);
-
-    if (cfg->tc_egr_bpf) {
-      sprintf(cmd, "ntc filter add dev %s egress bpf da obj %s sec %s 2>&1",
-            cfg->ifname, LLB_FP_IMG_BPF_EGR, cfg->progsec);
-      llb_sys_exec(cmd);
-      log_debug("exec: %s", cmd);
+    if (!(robj = libbpf_tc_attach(cfg, 0))) {
+      return NULL;
     }
 
-    return 0;
+    if (cfg->tc_egr_bpf) {
+      struct libbpf_cfg ecfg;
+      memcpy(&ecfg, cfg, sizeof(*cfg));
+      ecfg.ifname = ecfg.ifname_buf;
+      strcpy(ecfg.filename, LLB_FP_IMG_BPF_EGR);
+      if (!(libbpf_tc_attach(&ecfg, 1))) {
+        libbpf_tc_detach(cfg, 0);
+        return NULL;
+      }
+    }
+
+    return robj;
   } else {
-    return load_bpf_and_xdp_attach(cfg);
+    return libbpf_xdp_attach(cfg);
   }
 }
 
 static int
-llb_ebpf_link_detach(struct config *cfg)
+llb_ebpf_link_detach(struct libbpf_cfg *cfg)
 {
-  char cmd[PATH_MAX];
+
+  if (xh->have_noebpf) {
+    return 0;
+  }
 
   if (cfg->tc_bpf) {
-    /* ntc is netlox's modified tc tool */
     if (cfg->tc_egr_bpf) {
-      sprintf(cmd, "ntc filter del dev %s egress 2>&1 > /dev/null", cfg->ifname);
-      log_debug("exec: %s\n", cmd);
-      llb_sys_exec(cmd);
+      libbpf_tc_detach(cfg, 1);
     }
 
-    sprintf(cmd, "ntc filter del dev %s ingress 2>&1 > /dev/null", cfg->ifname);
-    log_debug("exec: %s", cmd);
-    llb_sys_exec(cmd);
+    libbpf_tc_detach(cfg, 0);
     return 0;
   } else {
-    return xdp_link_detach(cfg->ifindex, cfg->xdp_flags, 0);
+    return xdp_link_detach(cfg->ifindex, cfg->bpf_flags, 0);
   }
 }
 
@@ -3081,9 +3189,13 @@ llb_dp_link_attach(const char *ifname,
                    int unload)
 {
   struct bpf_object *bpf_obj;
-  struct config cfg;
+  struct libbpf_cfg cfg;
   int nr = 0;
   int must_load = 0;
+
+  if (xh->have_noebpf) {
+    return 0;
+  }
 
   assert(psec);
   assert(ifname);
@@ -3104,13 +3216,13 @@ llb_dp_link_attach(const char *ifname,
 
   strncpy(cfg.pin_dir,  xh->ll_dp_pdir,  sizeof(cfg.pin_dir));
   if (strcmp(ifname, LLB_MGMT_CHANNEL) == 0) {
-    cfg.xdp_flags |= XDP_FLAGS_SKB_MODE;
+    cfg.bpf_flags |= XDP_FLAGS_SKB_MODE;
     must_load = 1;
   }
 
   /* Large MTU not supported until kernel 5.18 */
-  cfg.xdp_flags |= XDP_FLAGS_SKB_MODE;
-  cfg.xdp_flags &= ~XDP_FLAGS_UPDATE_IF_NOEXIST;
+  cfg.bpf_flags |= XDP_FLAGS_SKB_MODE;
+  cfg.bpf_flags &= ~XDP_FLAGS_UPDATE_IF_NOEXIST;
   cfg.ifname = (char *)&cfg.ifname_buf;
   strncpy(cfg.ifname, ifname, IF_NAMESIZE);
 
@@ -3139,7 +3251,7 @@ llb_dp_link_attach(const char *ifname,
   }
 
   if (llb_link_prop_add(ifname, bpf_obj, mp_type) != 0) {
-    xdp_link_detach(cfg.ifindex, cfg.xdp_flags, 0);
+    xdp_link_detach(cfg.ifindex, cfg.bpf_flags, 0);
     llb_psec_del(psec);
     llb_link_prop_del(ifname, mp_type);
     return -1;
@@ -3172,7 +3284,10 @@ loxilb_main(struct ebpfcfg *cfg)
 {
   FILE *fp;
   libbpf_set_print(libbpf_print_fn);
-  llb_set_rlims();
+
+  if (!cfg->have_noebpf) {
+    llb_set_rlims();
+  }
 
   xh = calloc(1, sizeof(*xh));
   assert(xh);
@@ -3188,6 +3303,7 @@ loxilb_main(struct ebpfcfg *cfg)
     if (cfg->loglevel < 0 ||  cfg->loglevel >= LOG_FATAL) {
       cfg->loglevel = LOG_INFO;
     }
+    log_set_level(cfg->loglevel);
     log_add_fp(fp, cfg->loglevel);
 
     xh->have_loader = !cfg->no_loader;
@@ -3195,13 +3311,24 @@ loxilb_main(struct ebpfcfg *cfg)
     xh->have_ptrace = cfg->have_ptrace;
     xh->nodenum = cfg->nodenum;
     xh->logfp = fp;
+    xh->have_noebpf = cfg->have_noebpf;
 
     // FIXME - Experimental
     xh->have_sockrwr = cfg->have_sockrwr;
     xh->have_sockmap = cfg->have_sockmap;
+
     xh->egr_hooks = cfg->egr_hooks;
     if (xh->have_sockrwr != 0) {
       xh->cgroup_dfl_path = CGROUP_PATH;
+    }
+
+    if (xh->have_noebpf) {
+      xh->have_loader = 0;
+      xh->have_mtrace = 0;
+      xh->have_ptrace = 0;
+      xh->have_sockrwr = 0;
+      xh->have_sockmap = 0;
+      xh->egr_hooks = 0;
     }
   }
 

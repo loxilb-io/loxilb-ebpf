@@ -73,7 +73,7 @@ LIBBPF_DIR ?= ../libbpf/src/
 OBJECT_LIBBPF = $(LIBBPF_DIR)/libbpf.a
 
 # Extend if including Makefile already added some
-COMMON_OBJS += $(COMMON_DIR)/common_sum.o $(COMMON_DIR)/common_user_bpf_xdp.o $(COMMON_DIR)/common_pdi.o $(COMMON_DIR)/common_frame.o $(COMMON_DIR)/log.o $(COMMON_DIR)/throttler.o $(COMMON_DIR)/cgroup.o $(COMMON_DIR)/sockproxy.o $(COMMON_DIR)/notify.o $(COMMON_DIR)/ngap_helper.o
+COMMON_OBJS += $(COMMON_DIR)/common_sum.o $(COMMON_DIR)/common_libbpf.o $(COMMON_DIR)/common_pdi.o $(COMMON_DIR)/common_frame.o $(COMMON_DIR)/log.o $(COMMON_DIR)/throttler.o $(COMMON_DIR)/cgroup.o $(COMMON_DIR)/sockproxy.o $(COMMON_DIR)/notify.o $(COMMON_DIR)/picohttpparser.o $(COMMON_DIR)/llhttp.o $(COMMON_DIR)/httpapi.o $(COMMON_DIR)/http.o $(COMMON_DIR)/ngap_helper.o
 
 # Create expansions for dependencies
 COMMON_H := ${COMMON_OBJS:.o=.h}
@@ -83,7 +83,7 @@ EXTRA_DEPS +=
 # BPF-prog kern and userspace shares struct via header file:
 KERN_USER_H ?= $(wildcard common_kern_user.h)
 
-CFLAGS_ALL ?= -DHAVE_DP_FC=1 -DHAVE_DP_EXTCT=1 -DHAVE_DP_SCTP_SUM=1 -DHAVE_DP_CT_SYNC=1 -DMAX_REAL_CPUS=40 -DHAVE_DP_RSS=1
+CFLAGS_ALL ?= -DHAVE_DP_FC=1 -DHAVE_DP_EXTCT=1 -DHAVE_DP_SCTP_SUM=1 -DHAVE_DP_CT_SYNC=1 -DMAX_REAL_CPUS=16 -DHAVE_DP_RSS=1
 ifeq ($(CLANG), clang-13)
 CFLAGS_ALL += -DHAVE_CLANG13
 endif
