@@ -81,7 +81,6 @@ struct proxy_arg {
   int proxy_mode;
   int select;
   int n_eps;
-  int have_ssl;
   void *ssl_ctx;
   struct proxy_fd_ent *fdlist;
   proxy_ent_t eps[MAX_PROXY_EP];
