@@ -1571,6 +1571,7 @@ proxy_select_ep(proxy_fd_ent_t *pfe, void *inbuf, size_t insz, int *ep)
       }
       return PROXY_SEL_EP_BC;
     }
+    break;
   default:
     if (pfe->n_rfd > 1) {
       *ep = pfe->lsel % pfe->n_rfd;
