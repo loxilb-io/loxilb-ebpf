@@ -2030,7 +2030,7 @@ restart:
         npfe1->next = ent->val.fdlist;
         ent->val.fdlist = npfe1;
 
-        if (pfe->seltype == PROXY_SEL_N2) {
+        if (pfe->seltype == PROXY_SEL_N2 || protocol == IPPROTO_SCTP) {
           if (setup_proxy_path(&key, &rkey, npfe1, NULL)) {
             log_error("n2 proxy setup failed %d", fd);
             goto restart;
@@ -2051,7 +2051,7 @@ restart:
               pfe->http_hok = 0;
               pfe->http_hvok = 0;
 
-              if (pfe->seltype == PROXY_SEL_N2) {
+              if (pfe->seltype == PROXY_SEL_N2 || protocol == IPPROTO_SCTP) {
                 assert(0);
               }
 
