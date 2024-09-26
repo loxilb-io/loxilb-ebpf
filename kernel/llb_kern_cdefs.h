@@ -1441,6 +1441,8 @@ dp_do_dnat(void *ctx, struct xfi *xf, __be32 xip, __be16 xport)
 #ifdef HAVE_DP_SCTP_SUM
     if (!xf->nm.cdis) {
       dp_csum_tcall(ctx, xf);
+    } else {
+      DP_LLB_SET_CRC_OFF(ctx, 0);
     }
 #endif
   } else if (xf->l34m.nw_proto == IPPROTO_ICMP)  {
@@ -1520,6 +1522,8 @@ dp_do_dnat6(void *ctx, struct xfi *xf, __be32 *xip, __be16 xport)
 #ifdef HAVE_DP_SCTP_SUM
     if (!xf->nm.cdis) {
       dp_csum_tcall(ctx, xf);
+    } else {
+      DP_LLB_SET_CRC_OFF(ctx, 0);
     }
 #endif
   } else if (xf->l34m.nw_proto == IPPROTO_ICMP)  {
@@ -1599,6 +1603,8 @@ dp_do_snat(void *ctx, struct xfi *xf, __be32 xip, __be16 xport)
 #ifdef HAVE_DP_SCTP_SUM
     if (!xf->nm.cdis) {
       dp_csum_tcall(ctx, xf);
+    } else {
+      DP_LLB_SET_CRC_OFF(ctx, 0);
     }
 #endif
   } else if (xf->l34m.nw_proto == IPPROTO_ICMP)  {
@@ -1678,6 +1684,8 @@ dp_do_snat6(void *ctx, struct xfi *xf, __be32 *xip, __be16 xport)
 #ifdef HAVE_DP_SCTP_SUM
     if (!xf->nm.cdis) {
       dp_csum_tcall(ctx, xf);
+    } else {
+      DP_LLB_SET_CRC_OFF(ctx, 0);
     }
 #endif
   } else if (xf->l34m.nw_proto == IPPROTO_ICMP)  {

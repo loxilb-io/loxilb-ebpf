@@ -9,6 +9,11 @@
 #include <linux/kprobes.h>
 #include <linux/skbuff.h>
 #include <linux/netdevice.h>
+#include <linux/sctp.h>
+#include <linux/tcp.h>
+#include <linux/udp.h>
+#include <net/checksum.h>
+#include <net/sctp/checksum.h>
 
 /* For each probe you need to allocate a kprobe structure */
 static struct kprobe kp = {
@@ -17,11 +22,26 @@ static struct kprobe kp = {
 
 static int dev_hard_start_xmit_pre(struct kprobe *p, struct pt_regs *regs)
 {
+  struct sctphdr *sctph;
   struct sk_buff *skb = (struct sk_buff *)regs->di;
+  int err;
 
   if (skb->mark & 0x00000300) {
     __u16 off = skb->mark >> 16;
-    if (off < skb->len && skb->priority) {
+    if (off == 0 && (skb->protocol == htons(ETH_P_IP) || skb->protocol == htons(ETH_P_IPV6))) {
+
+      if (ip_hdr(skb)->protocol != IPPROTO_SCTP)
+        return 0;
+
+      off = skb_transport_offset(skb);
+      err = skb_ensure_writable(skb, off + sizeof(struct sctphdr));
+      if (unlikely(err))
+        return 0;
+
+      sctph = sctp_hdr(skb);
+      sctph->checksum = sctp_compute_cksum(skb, off);
+      skb->mark &= ~0x00000300;
+    } else if (off < skb->len && skb->priority) {
       *(__u32 *)(skb->data + off) = skb->priority;
       skb->priority = 0;
     }
