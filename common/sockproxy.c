@@ -1131,7 +1131,6 @@ proxy_add_entry(proxy_ent_t *new_ent, proxy_arg_t *arg)
       PROXY_UNLOCK();
       return -EINVAL;
     }
-    assert(0);
   }
 
   if (arg->have_epssl) {
@@ -1145,7 +1144,6 @@ proxy_add_entry(proxy_ent_t *new_ent, proxy_arg_t *arg)
       PROXY_UNLOCK();
       return -EINVAL;
     }
-    assert(0);
   }
 
   lsd = proxy_sock_init(node->key.xip, node->key.xport, node->key.protocol);
@@ -1931,7 +1929,7 @@ proxy_notifer(int fd, notify_type_t type, void *priv)
   struct llb_sockmap_key key = { 0 };
   struct llb_sockmap_key rkey = { 0 };
   proxy_ep_sel_t ep_sel = { 0 };
-  int j, seltype = 0;
+  int j;
   int protocol, retry;
   proxy_fd_ent_t *pfe = priv;
   proxy_fd_ent_t *npfe1 = NULL;
