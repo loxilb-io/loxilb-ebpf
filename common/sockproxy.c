@@ -569,10 +569,17 @@ proxy_sock_setnodelay(int fd)
 }
 
 static void
-proxy_sock_set_opts(int fd)
+proxy_sock_set_opts(int fd, uint8_t protocol)
 {
   proxy_sock_setnb(fd);
-  proxy_sock_setnodelay(fd);
+
+  switch (protocol) {
+  case IPPROTO_TCP:
+    proxy_sock_setnodelay(fd);
+    break;
+  default:
+    break;
+  }
 }
 
 static int
@@ -703,7 +710,7 @@ proxy_setup_ep_connect(uint32_t epip, uint16_t epport, uint8_t protocol,
 
   fd = get_mapped_proxy_fd(fd, 1);
 
-  proxy_sock_set_opts(fd);
+  proxy_sock_set_opts(fd, protocol);
 
   if (connect(fd, (struct sockaddr*)&epaddr, sizeof(epaddr)) < 0) {
     if (errno != EINPROGRESS) {
@@ -809,7 +816,7 @@ proxy_setup_ep__(uint32_t xip, uint16_t xport, uint8_t protocol,
         if (tepval == NULL) break;
 
         /* Do not support for this mode */
-        assert(ssl_ctx);
+        assert(ssl_ctx == NULL);
 
         for (ep = 0; ep < tepval->n_eps; ep++) {
           epip = tepval->eps[ep].xip;
@@ -1165,6 +1172,7 @@ proxy_add_entry(proxy_ent_t *new_ent, proxy_arg_t *arg)
   fd_ctx->head = node;
   fd_ctx->stype = PROXY_SOCK_LISTEN;
   fd_ctx->fd = lsd;
+  fd_ctx->seltype = arg->select;
   if (notify_add_ent(proxy_struct->ns, lsd, NOTI_TYPE_IN|NOTI_TYPE_HUP, fd_ctx)) {
     log_error("sockproxy : %s:%u notify failed",
         inet_ntoa(*(struct in_addr *)&node->key.xip), ntohs(node->key.xport));
@@ -1911,7 +1919,7 @@ proxy_notifer(int fd, notify_type_t type, void *priv)
   struct llb_sockmap_key key = { 0 };
   struct llb_sockmap_key rkey = { 0 };
   proxy_ep_sel_t ep_sel = { 0 };
-  int j, seltype = 0;
+  int j;
   int protocol, retry;
   proxy_fd_ent_t *pfe = priv;
   proxy_fd_ent_t *npfe1 = NULL;
@@ -1952,7 +1960,6 @@ restart:
           }
         }
 
-        proxy_sock_set_opts(new_sd);
 
         if (proxy_skmap_key_from_fd(new_sd, &key, &protocol)) {
           log_error("skmap key from fd failed");
@@ -1964,13 +1971,15 @@ restart:
           continue;
         }
 
+        proxy_sock_set_opts(new_sd, protocol);
+
         proxy_log("new accept()", &key);
 
         npfe1 = calloc(1, sizeof(*npfe1));
         assert(npfe1);
         npfe1->stype = PROXY_SOCK_ACTIVE;
         npfe1->fd = new_sd;
-        npfe1->seltype = seltype;
+        npfe1->seltype = pfe->seltype;
         npfe1->ep_num = -1;
         npfe1->head = ent;
         npfe1->ssl = ssl;
@@ -2008,6 +2017,13 @@ restart:
 
         npfe1->next = ent->val.fdlist;
         ent->val.fdlist = npfe1;
+
+        if (pfe->seltype == PROXY_SEL_N2 || protocol == IPPROTO_SCTP) {
+          if (setup_proxy_path(&key, &rkey, npfe1, NULL)) {
+            log_error("n2 proxy setup failed %d", fd);
+            goto restart;
+          }
+        }
       } else if (pfe->stype == PROXY_SOCK_ACTIVE) {
         for (j = 0; j < PROXY_NUM_BURST_RX; j++) {
           int sret;
