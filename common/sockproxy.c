@@ -2020,7 +2020,7 @@ restart:
 
         if (pfe->seltype == PROXY_SEL_N2 || protocol == IPPROTO_SCTP) {
           if (setup_proxy_path(&key, &rkey, npfe1, NULL)) {
-            log_error("n2 proxy setup failed %d", fd);
+            log_error("proxy setup failed %d - proto %d(sel %d)", fd, protocol, pfe->seltype);
             goto restart;
           }
         }
