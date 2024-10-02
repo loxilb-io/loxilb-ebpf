@@ -87,12 +87,10 @@ dp_sel_nat_ep(void *ctx, struct xfi *xf, struct dp_proxy_tacts *act)
       epa->ca.act_type = DP_SET_NACT_SESS;
       bpf_spin_lock(&epa->lock);
       for (i = 0; i < LLB_MAX_NXFRMS; i++) {
-        __u32 as = epa->active_sess[i];
-        if (sel < 0) {
-          sel = i;
-          lc = as;
-        } else {
-          if (lc > as) {
+        nxfrm_act = &act->nxfrms[i];
+        if (nxfrm_act->inactive == 0) {
+          __u32 as = epa->active_sess[i];
+          if (lc > as || sel < 0) {
             sel = i;
             lc = as;
           }
