@@ -273,6 +273,7 @@ proxy_add_xmitcache(proxy_fd_ent_t *ent, uint8_t *cache, size_t len)
   return 0;
 }
 
+#define HAVE_PROXY_DEBUG
 #ifdef HAVE_PROXY_DEBUG
 static void
 proxy_log(const char *str, smap_key_t *key)
@@ -282,7 +283,7 @@ proxy_log(const char *str, smap_key_t *key)
 
   inet_ntop(AF_INET, (struct in_addr *)&key->dip, ab1, INET_ADDRSTRLEN);
   inet_ntop(AF_INET, (struct in_addr *)&key->sip, ab2, INET_ADDRSTRLEN);
-  log_debug("%s %s:%u -> %s:%u", str,
+  log_trace("%s %s:%u -> %s:%u", str,
             ab1, ntohs((key->dport >> 16)), ab2, ntohs(key->sport >> 16));
 }
 #else
@@ -360,17 +361,27 @@ proxy_xmit_cache(proxy_fd_ent_t *ent)
         case SSL_ERROR_NONE:
           return 0;
         case SSL_ERROR_WANT_WRITE:
+          log_trace("ssl-want-wr %s",
+              ERR_error_string(ERR_get_error(), NULL));
           notify_add_ent(proxy_struct->ns, ent->fd,
             NOTI_TYPE_IN|NOTI_TYPE_HUP|NOTI_TYPE_OUT, ent);
           return -1;
         case SSL_ERROR_WANT_READ:
+          log_trace("ssl-want-rd %s",
+              ERR_error_string(ERR_get_error(), NULL));
           return -1;
         case SSL_ERROR_SYSCALL:
         case SSL_ERROR_SSL:
+          log_trace("ssl-err-sys/call %s",
+              ERR_error_string(ERR_get_error(), NULL));
           ent->ssl_err = 1;
           return -1;
         case SSL_ERROR_ZERO_RETURN:
+          log_trace("ssl-wr-zero-ret %s",
+              ERR_error_string(ERR_get_error(), NULL));
         default:
+          log_trace("ssl-err-ret %s",
+              ERR_error_string(ERR_get_error(), NULL));
           SSL_shutdown(ent->ssl);
           return -1;
         }
@@ -416,17 +427,23 @@ proxy_try_epxmit(proxy_fd_ent_t *ent, void *msg, size_t len, int sel)
       n = SSL_write(rfd_ent->ssl, msg, len);
       if (n <= 0) {
         int ssl_err;
-        switch ((ssl_err = SSL_get_error(ent->ssl, n))) {
+        switch ((ssl_err = SSL_get_error(rfd_ent->ssl, n))) {
           case SSL_ERROR_WANT_WRITE:
+            log_trace("ssl-want-wr %s",
+              ERR_error_string(ERR_get_error(), NULL));
             if (!sel) proxy_add_xmitcache(rfd_ent, msg, len);
             notify_add_ent(proxy_struct->ns, rfd_ent->fd,
               NOTI_TYPE_IN|NOTI_TYPE_HUP|NOTI_TYPE_OUT, rfd_ent);
             return 0;
           case SSL_ERROR_WANT_READ:
+            log_trace("ssl-want-rd %s",
+              ERR_error_string(ERR_get_error(), NULL));
             if (!sel) proxy_add_xmitcache(rfd_ent, msg, len);
             return 0;
           case SSL_ERROR_SSL:
           case SSL_ERROR_SYSCALL:
+            log_trace("ssl-err-sys/call %s",
+                ERR_error_string(ERR_get_error(), NULL));
           default:
             if (ssl_err != SSL_ERROR_SSL && ssl_err != SSL_ERROR_SYSCALL) {
               SSL_shutdown(rfd_ent->ssl);
@@ -1051,6 +1068,16 @@ proxy_ssl_cfg_opts(SSL_CTX *ctx, const char *site_path, int mtls_en)
       SSL_VERIFY_CLIENT_ONCE, 0);
   }
 
+  if (!SSL_CTX_set_options(ctx, SSL_OP_IGNORE_UNEXPECTED_EOF)) {
+    log_error("sockproxy: SSL_OP_IGNORE_UNEXPECTED_EOF failed");
+    return -EINVAL;
+  }
+
+  if (!SSL_CTX_set_mode(ctx, SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER)) {
+    log_error("sockproxy: SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER failed");
+    return -EINVAL;
+  }
+
   return 0;
 }
 
@@ -1418,7 +1445,7 @@ static void
 proxy_release_fd_ctx(proxy_fd_ent_t *fd_ent, int teardown)
 {
   if (fd_ent->fd > 0) {
-    //log_debug("proxy release: fd %d", fd_ent->fd);
+    log_trace("proxy release: fd %d", fd_ent->fd);
     proxy_destroy_xmitcache(fd_ent);
 
     if (fd_ent->ssl) {
@@ -1627,19 +1654,19 @@ proxy_sock_read_err(proxy_fd_ent_t *pfe, int rval)
         shutdown(pfe->fd, SHUT_RDWR);
         return -1;
       case SSL_ERROR_WANT_READ:
-        //log_error("ssl-want-rd %s",
-        //  ERR_error_string(ERR_get_error(), NULL));
+        log_trace("ssl-want-rd %s",
+          ERR_error_string(ERR_get_error(), NULL));
         return 1;
       case SSL_ERROR_WANT_WRITE:
-        //log_error("ssl-want-wr %s",
-        //  ERR_error_string(ERR_get_error(), NULL));
+        log_trace("ssl-want-wr %s",
+          ERR_error_string(ERR_get_error(), NULL));
         notify_add_ent(proxy_struct->ns, pfe->fd,
               NOTI_TYPE_IN|NOTI_TYPE_HUP|NOTI_TYPE_OUT, pfe);
         return 1;
       case SSL_ERROR_ZERO_RETURN:
       default:
-        //log_error("ssl-err %s",
-        //  ERR_error_string(ERR_get_error(), NULL));
+        log_trace("ssl-err %s",
+          ERR_error_string(ERR_get_error(), NULL));
         SSL_shutdown(pfe->ssl);
         shutdown(pfe->fd, SHUT_RDWR);
         return -1;
@@ -1751,6 +1778,7 @@ setup_proxy_path(smap_key_t *key, smap_key_t *rkey, proxy_fd_ent_t *pfe, const c
     }
 
     proxy_log("connected", rkey);
+    log_trace("rfd = %d", ep_cfd);
 
     if (protocol == IPPROTO_TCP && epprotocol == IPPROTO_TCP && n_eps == 1) {
       if (proxy_struct->sockmap_cb) {
@@ -1974,6 +2002,7 @@ restart:
         proxy_sock_set_opts(new_sd, protocol);
 
         proxy_log("new accept()", &key);
+        log_trace("newfd = %d", new_sd);
 
         npfe1 = calloc(1, sizeof(*npfe1));
         assert(npfe1);
