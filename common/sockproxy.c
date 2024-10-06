@@ -1068,10 +1068,12 @@ proxy_ssl_cfg_opts(SSL_CTX *ctx, const char *site_path, int mtls_en)
       SSL_VERIFY_CLIENT_ONCE, 0);
   }
 
+#if 0
   if (!SSL_CTX_set_options(ctx, SSL_OP_IGNORE_UNEXPECTED_EOF)) {
     log_error("sockproxy: SSL_OP_IGNORE_UNEXPECTED_EOF failed");
     return -EINVAL;
   }
+#endif
 
   if (!SSL_CTX_set_mode(ctx, SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER)) {
     log_error("sockproxy: SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER failed");
