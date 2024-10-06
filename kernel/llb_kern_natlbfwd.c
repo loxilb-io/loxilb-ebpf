@@ -35,13 +35,13 @@ dp_sel_nat_ep(void *ctx, struct xfi *xf, struct dp_proxy_tacts *act)
       if (i >= 0 && i < LLB_MAX_NXFRMS) {
         nxfrm_act = &act->nxfrms[i];
         if (nxfrm_act->inactive == 0) {
-          act->sel_hint = (i + 1) % act->nxfrm;
+          act->sel_hint = (i + 1) % LLB_MAX_NXFRMS;
           sel = i;
           break;
         }
       }
       i++;
-      i = i % act->nxfrm;
+      if (i >= LLB_MAX_NXFRMS)  i = 0;
       n++;
     }
     bpf_spin_unlock(&act->lock);
