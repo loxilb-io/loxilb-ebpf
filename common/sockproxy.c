@@ -43,7 +43,7 @@
 #include "sockproxy.h"
 
 #define PROXY_NUM_BURST_RX 1024
-#define PROXY_MAX_THREADS 2
+#define PROXY_MAX_THREADS 4
 
 #define PROXY_SSL_FNAME_SZ 128
 #define PROXY_SSL_CERT_DIR "/opt/loxilb/cert"
@@ -119,10 +119,6 @@ typedef struct proxy_struct {
 } proxy_struct_t;
 
 typedef struct llb_sockmap_key smap_key_t;
-
-#define PROXY_LOCK() pthread_rwlock_wrlock(&proxy_struct->lock)
-#define PROXY_RDLOCK() pthread_rwlock_rdlock(&proxy_struct->lock)
-#define PROXY_UNLOCK() pthread_rwlock_unlock(&proxy_struct->lock)
 
 static proxy_struct_t *proxy_struct;
 
@@ -246,8 +242,8 @@ static int
 proxy_add_xmitcache(proxy_fd_ent_t *ent, uint8_t *cache, size_t len)
 {
   struct proxy_cache *new;
-  struct proxy_cache *curr = ent->cache_head;
-  struct proxy_cache **prev = &ent->cache_head;
+  struct proxy_cache *curr;
+  struct proxy_cache **prev;
 
   new  = calloc(1, sizeof(struct proxy_cache)+len);
   assert(new);
@@ -261,6 +257,11 @@ proxy_add_xmitcache(proxy_fd_ent_t *ent, uint8_t *cache, size_t len)
         NOTI_TYPE_IN|NOTI_TYPE_OUT|NOTI_TYPE_HUP, ent);
   }
 
+  PROXY_ENT_CLOCK(ent);
+
+  curr = ent->cache_head;
+  prev = &ent->cache_head;
+
   while (curr) {
     prev = &curr->next;
     curr = curr->next;
@@ -269,6 +270,8 @@ proxy_add_xmitcache(proxy_fd_ent_t *ent, uint8_t *cache, size_t len)
   if (prev) {
     *prev = new;
   }
+
+  PROXY_ENT_CLOCK(ent);
 
   return 0;
 }
@@ -331,11 +334,14 @@ proxy_list_xmitcache(proxy_fd_ent_t *ent)
 static int
 proxy_xmit_cache(proxy_fd_ent_t *ent)
 {
-  struct proxy_cache *curr = ent->cache_head;
+  struct proxy_cache *curr;
   struct proxy_cache *tmp = NULL;
   int rstev = 0;
   int n = 0;
 
+  PROXY_ENT_CLOCK(ent);
+
+  curr = ent->cache_head;
   if (ent->cache_head != NULL) {
     rstev = 1;
   }
@@ -346,6 +352,7 @@ proxy_xmit_cache(proxy_fd_ent_t *ent)
       if (n <= 0) {
         /* errno == EAGAIN || errno == EWOULDBLOCK */
         //log_debug("Failed to send cache");
+        PROXY_ENT_CUNLOCK(ent);
         return -1;
       }
       if (n != curr->len) {
@@ -359,19 +366,23 @@ proxy_xmit_cache(proxy_fd_ent_t *ent)
       if (n <= 0) {
         switch (SSL_get_error(ent->ssl, n)) {
         case SSL_ERROR_NONE:
+          PROXY_ENT_CUNLOCK(ent);
           return 0;
         case SSL_ERROR_WANT_WRITE:
+          PROXY_ENT_CUNLOCK(ent);
           log_trace("ssl-want-wr %s",
               ERR_error_string(ERR_get_error(), NULL));
           notify_add_ent(proxy_struct->ns, ent->fd,
             NOTI_TYPE_IN|NOTI_TYPE_HUP|NOTI_TYPE_OUT, ent);
           return -1;
         case SSL_ERROR_WANT_READ:
+          PROXY_ENT_CUNLOCK(ent);
           log_trace("ssl-want-rd %s",
               ERR_error_string(ERR_get_error(), NULL));
           return -1;
         case SSL_ERROR_SYSCALL:
         case SSL_ERROR_SSL:
+          PROXY_ENT_CUNLOCK(ent);
           log_trace("ssl-err-sys/call %s",
               ERR_error_string(ERR_get_error(), NULL));
           ent->ssl_err = 1;
@@ -383,6 +394,7 @@ proxy_xmit_cache(proxy_fd_ent_t *ent)
           log_trace("ssl-err-ret %s",
               ERR_error_string(ERR_get_error(), NULL));
           SSL_shutdown(ent->ssl);
+          PROXY_ENT_CUNLOCK(ent);
           return -1;
         }
       }
@@ -401,6 +413,8 @@ proxy_xmit_cache(proxy_fd_ent_t *ent)
           NOTI_TYPE_IN|NOTI_TYPE_HUP, ent);
   }
   ent->cache_head = NULL;
+  PROXY_ENT_CUNLOCK(ent);
+
   return 0;
 }
 
@@ -487,20 +501,20 @@ proxy_skmap_key_from_fd(int fd, smap_key_t *skmap_key, int *protocol)
   socklen_t optsize = sizeof(int);
 
   if (getsockopt(fd, SOL_SOCKET, SO_PROTOCOL, protocol, &optsize)) {
-    perror("");
+    log_error("getsockopt failed %s\n", strerror(errno));
     return -1;
   }
 
   sin_len = sizeof(struct sockaddr);
   if (getsockname(fd, (struct sockaddr*)&sin_addr, &sin_len)) {
-    perror("");
+    log_error("getsockname failed %s\n", strerror(errno));
     return -1;
   }
   skmap_key->sip = sin_addr.sin_addr.s_addr;
   skmap_key->sport = sin_addr.sin_port << 16;
 
   if (getpeername(fd, (struct sockaddr*)&sin_addr, &sin_len)) {
-    perror("");
+    log_error("getpeername failed %s\n", strerror(errno));
     return -1;
   }
   skmap_key->dip = sin_addr.sin_addr.s_addr;
@@ -605,7 +619,7 @@ proxy_server_setup(int fd, uint32_t server, uint16_t port, uint8_t protocol)
   struct sockaddr_in addr;
   int rc, on = 1, flags;
 
-#if 0
+#ifdef HAVE_SCTP_STREAM_CONF 
   struct sctp_initmsg im;
   if (protocol == IPPROTO_SCTP) {
     memset(&im, 0, sizeof(im));
@@ -642,14 +656,14 @@ proxy_server_setup(int fd, uint32_t server, uint16_t port, uint8_t protocol)
   addr.sin_addr.s_addr = server;
   rc = bind(fd, (struct sockaddr *)&addr, sizeof(addr));
   if (rc < 0) {
-    perror("bind");
+    log_error("bind failed %s", strerror(errno));
     close(fd);
     return -1; 
   }
 
   rc = listen(fd, 32);
   if (rc < 0) {
-    perror("listen");
+    log_error("listen failed %s", strerror(errno));
     close(fd);
     return -1;
   }
@@ -933,6 +947,21 @@ proxy_find_ep(uint32_t xip, uint16_t xport, uint8_t protocol,
   return -1;
 }
 
+static void
+proxy_free_fd_ctx(proxy_fd_ent_t *pfe)
+{
+  if (pfe->used <= 0) {
+    free(pfe);
+  }
+}
+
+static void
+proxy_try_free_fd_ctx(proxy_fd_ent_t *pfe)
+{
+  pfe->used--;
+  proxy_free_fd_ctx(pfe);
+}
+
 static int
 proxy_delete_entry__(proxy_ent_t *ent, proxy_arg_t *arg, int *mfd,
                      void **ssl_ctx, void **ssl_epctx)
@@ -1213,6 +1242,7 @@ proxy_add_entry(proxy_ent_t *new_ent, proxy_arg_t *arg)
     }
     return -1; 
   }
+  fd_ctx->used++;
 
   tepval = calloc(1, sizeof(*tepval));
   assert(tepval);
@@ -1258,6 +1288,7 @@ proxy_delete_entry(proxy_ent_t *ent, proxy_arg_t *arg)
     close(fd);
   }
 
+#if 0
   if (ssl_ctx) {
     SSL_CTX_free(ssl_ctx);
   }
@@ -1265,6 +1296,7 @@ proxy_delete_entry(proxy_ent_t *ent, proxy_arg_t *arg)
   if (ssl_epctx) {
     SSL_CTX_free(ssl_epctx);
   }
+#endif
 
   return ret;
 }
@@ -1502,6 +1534,7 @@ proxy_release_rfd_ctx(proxy_fd_ent_t *pfe)
   for (int i = 0; i < pfe->n_rfd; i++) {
     fd_ent = pfe->rfd_ent[i];
     if (fd_ent) {
+      PROXY_ENT_LOCK(fd_ent);
       if (fd_ent->head != NULL) {
         proxy_reset_fd_list(fd_ent->head, fd_ent);
       }
@@ -1512,6 +1545,7 @@ proxy_release_rfd_ctx(proxy_fd_ent_t *pfe)
         fd_ent->rfd_ent[j] = NULL;
       }
       fd_ent->n_rfd = 0;
+      PROXY_ENT_UNLOCK(fd_ent);
     }
     pfe->rfd[i] = -1;
   }
@@ -1528,9 +1562,11 @@ proxy_pdestroy(void *priv)
 
   PROXY_LOCK();
   if (pfe) {
+    PROXY_ENT_LOCK(pfe);
     ent = pfe->head;
     if (!ent) {
-      free(pfe);
+      PROXY_ENT_UNLOCK(pfe);
+      proxy_try_free_fd_ctx(pfe);
       PROXY_UNLOCK();
       return;
     }
@@ -1557,9 +1593,19 @@ proxy_pdestroy(void *priv)
     if (!is_listener) {
       proxy_release_rfd_ctx(pfe);
     }
-
-    free(pfe);
+    PROXY_ENT_UNLOCK(pfe);
+    proxy_try_free_fd_ctx(pfe);
     if (is_listener) {
+      if (ent->val.fdlist == NULL) {
+        log_info("sockproxy: %s:%u ssl-ctx freed(if any)",
+            inet_ntoa(*(struct in_addr *)&ent->key.xip), ntohs(ent->key.xport));
+        if (ent->val.ssl_ctx)
+          SSL_CTX_free(ent->val.ssl_ctx);
+        if (ent->val.ssl_epctx)
+          SSL_CTX_free(ent->val.ssl_epctx);
+      }
+      log_info("sockproxy: %s:%u ent freed",
+            inet_ntoa(*(struct in_addr *)&ent->key.xip), ntohs(ent->key.xport));
       free(ent);
     }
   }
@@ -1649,9 +1695,8 @@ proxy_sock_read_err(proxy_fd_ent_t *pfe, int rval)
         return 0;
       case SSL_ERROR_SSL:
       case SSL_ERROR_SYSCALL:
-        log_error("ssl-syscall-failed %s",
+        log_trace("ssl-syscall-failed %s",
           ERR_error_string(ERR_get_error(), NULL));
-        perror("ssl");
         pfe->ssl_err = 1;
         shutdown(pfe->fd, SHUT_RDWR);
         return -1;
@@ -1827,6 +1872,7 @@ setup_proxy_path(smap_key_t *key, smap_key_t *rkey, proxy_fd_ent_t *pfe, const c
         SSL_set_fd(npfe2->ssl, ep_cfd);
       }
     }
+    npfe2->used++;
 
     if (retry >= PROXY_MAPFD_RETRIES) {
       proxy_destroy_eps(pfe->fd, &ep_sel);
@@ -1960,8 +2006,8 @@ proxy_notifer(int fd, notify_type_t type, void *priv)
     return 0;
   }
 
+  PROXY_ENT_LOCK(pfe);
   //log_debug("Fd = %d type 0x%x", fd, type);
-  PROXY_LOCK();
   ent = pfe->head;
 restart:
   while (type) {
@@ -2037,6 +2083,7 @@ restart:
             SSL_set_fd(npfe1->ssl, new_sd);
           }
         }
+        npfe1->used++;
 
         if (retry >= PROXY_MAPFD_RETRIES) {
           proxy_destroy_eps(new_sd, &ep_sel);
@@ -2046,15 +2093,14 @@ restart:
           continue;
         }
 
-        npfe1->next = ent->val.fdlist;
-        ent->val.fdlist = npfe1;
-
         if (pfe->seltype == PROXY_SEL_N2 || protocol == IPPROTO_SCTP) {
           if (setup_proxy_path(&key, &rkey, npfe1, NULL)) {
             log_error("proxy setup failed %d - proto %d(sel %d)", fd, protocol, pfe->seltype);
             goto restart;
           }
         }
+        npfe1->next = ent->val.fdlist;
+        ent->val.fdlist = npfe1;
       } else if (pfe->stype == PROXY_SOCK_ACTIVE) {
         for (j = 0; j < PROXY_NUM_BURST_RX; j++) {
           int sret;
@@ -2066,56 +2112,6 @@ restart:
             const char *phurl = "";
 
             if (pfe->rfd[0] <= 0) {
-#ifdef HAVE_PICOPARSER
-              const char *method, *path;
-              char host_url[256];
-              int pret, minor_version;
-              size_t  method_len, path_len, num_headers;
-              struct phr_header headers[64];
-
-              num_headers = sizeof(headers) / sizeof(headers[0]);
-              //pret = phr_parse_headers((char *)rcvbuf, sizeof(rcvbuf)-1, headers, &num_headers, prevbuflen);
-              pret = phr_parse_request ((char *)(pfe->rcvbuf + pfe->rcv_off), SP_SOCK_MSG_LEN-pfe->rcv_off-1,
-                              &method, &method_len, &path, &path_len, &minor_version,
-                              headers, &num_headers, pfe->rcv_off);
-              if (pret == -1) {
-                log_debug("http parse error\n");
-                pfe->rcv_off = 0;
-                phurl = NULL;
-                //goto restart;
-              } else if (pret < 0) {
-                if (pfe->rcv_off + rc >= SP_SOCK_MSG_LEN) {
-                  pfe->rcv_off = 0;
-                } else {
-                  pfe->rcv_off += rc;
-                }
-                goto restart;
-              }
-
-              pfe->rcv_off = 0;
-
-              for (int nh = 0; nh != num_headers; nh++) {
-                if (headers[nh].name_len >= 4 && headers[nh].name_len < 256) {
-                  if (!strncasecmp("Host", headers[nh].name, headers[nh].name_len)) {
-                    strncpy(host_url, headers[nh].value, headers[nh].value_len);
-                    host_url[headers[nh].value_len] = '\0';
-                    phurl = host_url;
-                  }
-                }
-              }
-
-#ifdef HAVE_PROXY_EXTRA_DEBUG
-              log_debug("method is %.*s\n", (int)method_len, method);
-              log_debug("path is %.*s\n", (int)path_len, path);
-              log_debug("HTTP version is 1.%d\n", minor_version);
-              log_debug("headers:\n");
-              for (int i = 0; i != num_headers; ++i) {
-                log_debug("%.*s: %.*s\n", (int)headers[i].name_len, headers[i].name,
-                  (int)headers[i].value_len, headers[i].value);
-              }
-#endif
-
-#else
               pfe->http_pok = 0;
               pfe->http_hok = 0;
               pfe->http_hvok = 0;
@@ -2136,18 +2132,19 @@ restart:
                   goto restart;
                 }
               } else {
-                log_debug("http parse error: %s %s\n", llhttp_errno_name(err), pfe->parser.reason);
+                log_debug("http parse error: %s %s", llhttp_errno_name(err), pfe->parser.reason);
                 pfe->rcv_off = 0;
                 llhttp_init(&pfe->parser, HTTP_BOTH, &pfe->settings);
                 phurl = NULL;
               }
-#endif
+
               if (setup_proxy_path(&key, &rkey, pfe, phurl)) {
                 log_error("proxy setup failed %d", fd);
                 goto restart;
               }
             }
           }
+
 
           pfe_ent_accouting(pfe, rc, 0);
           if (proxy_multiplexor(pfe, pfe->rcvbuf, rc)) {
@@ -2162,11 +2159,11 @@ restart:
       }
     } else {
       /* Unhandled */
-      PROXY_UNLOCK();
+      PROXY_ENT_UNLOCK(pfe);
       return 0;
     }
   }
-  PROXY_UNLOCK();
+  PROXY_ENT_UNLOCK(pfe);
   return 0;
 }
 
