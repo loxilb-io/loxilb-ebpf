@@ -85,6 +85,7 @@ struct proxy_val {
   int main_fd;
   int have_ssl;
   int have_epssl;
+  int sched_free;
   void *ssl_ctx;
   void *ssl_epctx;
   struct proxy_epval *ephash;
@@ -1009,12 +1010,9 @@ proxy_delete_entry__(proxy_ent_t *ent, proxy_arg_t *arg, int *mfd,
     }
     if (node->val.ssl_ctx) {
       *ssl_ctx = node->val.ssl_ctx;
-      node->val.ssl_ctx = NULL;
     }
-
     if (node->val.ssl_epctx) {
       *ssl_epctx = node->val.ssl_epctx;
-      node->val.ssl_epctx = NULL;
     }
 
     /* This node is freed after cleanup in proxy_pdestroy() */
@@ -1288,16 +1286,6 @@ proxy_delete_entry(proxy_ent_t *ent, proxy_arg_t *arg)
     close(fd);
   }
 
-#if 0
-  if (ssl_ctx) {
-    SSL_CTX_free(ssl_ctx);
-  }
-
-  if (ssl_epctx) {
-    SSL_CTX_free(ssl_epctx);
-  }
-#endif
-
   return ret;
 }
 
@@ -1476,33 +1464,14 @@ proxy_selftests()
 }
 
 static void
-proxy_release_fd_ctx(proxy_fd_ent_t *fd_ent, int teardown)
-{
-  if (fd_ent->fd > 0) {
-    log_trace("proxy release: fd %d", fd_ent->fd);
-    proxy_destroy_xmitcache(fd_ent);
-
-    if (fd_ent->ssl) {
-      if (!fd_ent->ssl_err)
-        SSL_shutdown(fd_ent->ssl);
-      SSL_free(fd_ent->ssl);
-      fd_ent->ssl = NULL;
-    }
-
-    if (teardown) {
-      shutdown(fd_ent->fd, SHUT_RDWR);
-    }
-
-    close(fd_ent->fd);
-    fd_ent->fd = -1;
-  }
-}
-
-static void
 proxy_reset_fd_list(proxy_map_ent_t *ent, void *match_pfe)
 {
-  proxy_fd_ent_t *fd_ent = ent->val.fdlist;
+  proxy_fd_ent_t *fd_ent;
   proxy_fd_ent_t *pfd_ent = NULL;
+
+  if (!ent) return;
+
+  fd_ent = ent->val.fdlist;
 
   if (match_pfe == NULL) {
     while (fd_ent) {
@@ -1527,6 +1496,33 @@ proxy_reset_fd_list(proxy_map_ent_t *ent, void *match_pfe)
 }
 
 static void
+proxy_release_fd_ctx(proxy_fd_ent_t *fd_ent, int teardown, int reset)
+{
+  if (fd_ent->fd > 0) {
+    proxy_destroy_xmitcache(fd_ent);
+
+    if (reset)
+      proxy_reset_fd_list(fd_ent->head, fd_ent);
+
+    if (fd_ent->ssl) {
+      if (!fd_ent->ssl_err)
+        SSL_shutdown(fd_ent->ssl);
+      if (reset)
+        SSL_free(fd_ent->ssl);
+      fd_ent->ssl = NULL;
+    }
+
+    if (teardown)
+      shutdown(fd_ent->fd, SHUT_RDWR);
+
+    close(fd_ent->fd);
+    if (reset)
+      fd_ent->fd = -1;
+  }
+}
+
+
+static void
 proxy_release_rfd_ctx(proxy_fd_ent_t *pfe)
 {
   proxy_fd_ent_t *fd_ent;
@@ -1535,11 +1531,8 @@ proxy_release_rfd_ctx(proxy_fd_ent_t *pfe)
     fd_ent = pfe->rfd_ent[i];
     if (fd_ent) {
       PROXY_ENT_LOCK(fd_ent);
-      if (fd_ent->head != NULL) {
-        proxy_reset_fd_list(fd_ent->head, fd_ent);
-      }
       //log_debug("proxy destroy: rfd %d", fd_ent->fd);
-      proxy_release_fd_ctx(fd_ent, 1);
+      proxy_release_fd_ctx(fd_ent, 1, 0);
       pfe->rfd_ent[i] = NULL;
       for (int j = 0; j < fd_ent->n_rfd; j++) {
         fd_ent->rfd_ent[j] = NULL;
@@ -1578,7 +1571,7 @@ proxy_pdestroy(void *priv)
         if (fd_ent->odir == 0) {
           proxy_release_rfd_ctx(fd_ent);
           if (fd_ent->fd != ent->val.main_fd) {
-            proxy_release_fd_ctx(fd_ent, 1);
+            proxy_release_fd_ctx(fd_ent, 1, 0);
           }
         }
         fd_ent = fd_ent->next;
@@ -1587,25 +1580,21 @@ proxy_pdestroy(void *priv)
       proxy_release_rfd_ctx(pfe);
     }*/
 
-    //log_debug("proxy destroy: fd %d", pfe->fd);
-    proxy_reset_fd_list(ent, is_listener ? NULL : pfe);
-    proxy_release_fd_ctx(pfe, 1);
+    proxy_release_fd_ctx(pfe, 1, 1);
     if (!is_listener) {
       proxy_release_rfd_ctx(pfe);
     }
     PROXY_ENT_UNLOCK(pfe);
     proxy_try_free_fd_ctx(pfe);
+
     if (is_listener) {
-      if (ent->val.fdlist == NULL) {
-        log_info("sockproxy: %s:%u ssl-ctx freed(if any)",
-            inet_ntoa(*(struct in_addr *)&ent->key.xip), ntohs(ent->key.xport));
-        if (ent->val.ssl_ctx)
-          SSL_CTX_free(ent->val.ssl_ctx);
-        if (ent->val.ssl_epctx)
-          SSL_CTX_free(ent->val.ssl_epctx);
-      }
+      ent->val.sched_free = 1;
+    }
+
+    if (ent->val.sched_free && ent->val.fdlist == NULL) {
       log_info("sockproxy: %s:%u ent freed",
-            inet_ntoa(*(struct in_addr *)&ent->key.xip), ntohs(ent->key.xport));
+              inet_ntoa(*(struct in_addr *)&ent->key.xip),
+              ntohs(ent->key.xport));
       free(ent);
     }
   }
@@ -1876,11 +1865,12 @@ setup_proxy_path(smap_key_t *key, smap_key_t *rkey, proxy_fd_ent_t *pfe, const c
 
     if (retry >= PROXY_MAPFD_RETRIES) {
       proxy_destroy_eps(pfe->fd, &ep_sel);
-      proxy_release_fd_ctx(npfe2, 1);
-      free(npfe2);
+      proxy_release_fd_ctx(npfe2, 1, 0);
       if (npfe2->ssl) {
         SSL_shutdown(npfe2->ssl);
+        SSL_free(npfe2->ssl);
       }
+      free(npfe2);
       shutdown(pfe->fd, SHUT_RDWR);
       log_error("failed to add epcfd %d", ep_cfd);
       return -1;
@@ -2036,7 +2026,6 @@ restart:
           }
         }
 
-
         if (proxy_skmap_key_from_fd(new_sd, &key, &protocol)) {
           log_error("skmap key from fd failed");
           if (ssl) {
@@ -2087,7 +2076,8 @@ restart:
 
         if (retry >= PROXY_MAPFD_RETRIES) {
           proxy_destroy_eps(new_sd, &ep_sel);
-          proxy_release_fd_ctx(npfe1, 1);
+          proxy_release_fd_ctx(npfe1, 1, 0);
+          // Context to be defer freed
           free(npfe1);
           log_error("failed to add new_sd %d", new_sd);
           continue;
