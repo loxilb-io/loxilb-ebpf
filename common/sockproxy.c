@@ -272,7 +272,7 @@ proxy_add_xmitcache(proxy_fd_ent_t *ent, uint8_t *cache, size_t len)
     *prev = new;
   }
 
-  PROXY_ENT_CLOCK(ent);
+  PROXY_ENT_CUNLOCK(ent);
 
   return 0;
 }
