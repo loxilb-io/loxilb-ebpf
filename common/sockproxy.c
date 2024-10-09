@@ -1496,31 +1496,30 @@ proxy_reset_fd_list(proxy_map_ent_t *ent, void *match_pfe)
 }
 
 static void
-proxy_release_fd_ctx(proxy_fd_ent_t *fd_ent, int teardown, int reset)
+proxy_release_fd_ctx(proxy_fd_ent_t *fd_ent, int reset)
 {
+  proxy_destroy_xmitcache(fd_ent);
+
+  if (fd_ent->ssl) {
+    if (!fd_ent->ssl_err)
+      SSL_shutdown(fd_ent->ssl);
+  }
+
   if (fd_ent->fd > 0) {
-    proxy_destroy_xmitcache(fd_ent);
+    shutdown(fd_ent->fd, SHUT_RDWR);
 
-    if (reset)
+    if (reset) {
+      log_trace("fd %d reset", fd_ent->fd);
       proxy_reset_fd_list(fd_ent->head, fd_ent);
-
-    if (fd_ent->ssl) {
-      if (!fd_ent->ssl_err)
-        SSL_shutdown(fd_ent->ssl);
-      if (reset)
-        SSL_free(fd_ent->ssl);
-      fd_ent->ssl = NULL;
-    }
-
-    if (teardown)
-      shutdown(fd_ent->fd, SHUT_RDWR);
-
-    close(fd_ent->fd);
-    if (reset)
+      close(fd_ent->fd);
       fd_ent->fd = -1;
+      if (fd_ent->ssl) {
+        SSL_free(fd_ent->ssl);
+        fd_ent->ssl = NULL;
+      }
+    }
   }
 }
-
 
 static void
 proxy_release_rfd_ctx(proxy_fd_ent_t *pfe)
@@ -1531,8 +1530,8 @@ proxy_release_rfd_ctx(proxy_fd_ent_t *pfe)
     fd_ent = pfe->rfd_ent[i];
     if (fd_ent) {
       PROXY_ENT_LOCK(fd_ent);
-      //log_debug("proxy destroy: rfd %d", fd_ent->fd);
-      proxy_release_fd_ctx(fd_ent, 1, 0);
+      log_trace("rfd %d release", fd_ent->fd);
+      proxy_release_fd_ctx(fd_ent, 0);
       pfe->rfd_ent[i] = NULL;
       for (int j = 0; j < fd_ent->n_rfd; j++) {
         fd_ent->rfd_ent[j] = NULL;
@@ -1571,7 +1570,7 @@ proxy_pdestroy(void *priv)
         if (fd_ent->odir == 0) {
           proxy_release_rfd_ctx(fd_ent);
           if (fd_ent->fd != ent->val.main_fd) {
-            proxy_release_fd_ctx(fd_ent, 1, 0);
+            proxy_release_fd_ctx(fd_ent, 0);
           }
         }
         fd_ent = fd_ent->next;
@@ -1580,7 +1579,7 @@ proxy_pdestroy(void *priv)
       proxy_release_rfd_ctx(pfe);
     }*/
 
-    proxy_release_fd_ctx(pfe, 1, 1);
+    proxy_release_fd_ctx(pfe, 1);
     if (!is_listener) {
       proxy_release_rfd_ctx(pfe);
     }
@@ -1595,6 +1594,10 @@ proxy_pdestroy(void *priv)
       log_info("sockproxy: %s:%u ent freed",
               inet_ntoa(*(struct in_addr *)&ent->key.xip),
               ntohs(ent->key.xport));
+      if (ent->val.ssl_ctx)
+        SSL_CTX_free(ent->val.ssl_ctx);
+      if (ent->val.ssl_epctx)
+        SSL_CTX_free(ent->val.ssl_epctx);
       free(ent);
     }
   }
@@ -1865,7 +1868,7 @@ setup_proxy_path(smap_key_t *key, smap_key_t *rkey, proxy_fd_ent_t *pfe, const c
 
     if (retry >= PROXY_MAPFD_RETRIES) {
       proxy_destroy_eps(pfe->fd, &ep_sel);
-      proxy_release_fd_ctx(npfe2, 1, 0);
+      proxy_release_fd_ctx(npfe2, 0);
       if (npfe2->ssl) {
         SSL_shutdown(npfe2->ssl);
         SSL_free(npfe2->ssl);
@@ -1997,8 +2000,19 @@ proxy_notifer(int fd, notify_type_t type, void *priv)
   }
 
   PROXY_ENT_LOCK(pfe);
-  //log_debug("Fd = %d type 0x%x", fd, type);
+  if (pfe->fd <= 0) {
+    PROXY_ENT_UNLOCK(pfe);
+    return 0;
+  }
+
   ent = pfe->head;
+  if (ent->val.sched_free) {
+    PROXY_ENT_UNLOCK(pfe);
+    return 0;
+  }
+
+  log_trace("notify fd = %d(%d) type 0x%x", fd, pfe->fd, type);
+
 restart:
   while (type) {
     if (type & NOTI_TYPE_IN) {
@@ -2076,7 +2090,7 @@ restart:
 
         if (retry >= PROXY_MAPFD_RETRIES) {
           proxy_destroy_eps(new_sd, &ep_sel);
-          proxy_release_fd_ctx(npfe1, 1, 0);
+          proxy_release_fd_ctx(npfe1, 0);
           // Context to be defer freed
           free(npfe1);
           log_error("failed to add new_sd %d", new_sd);
