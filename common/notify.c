@@ -303,6 +303,7 @@ notify_delete_ent__(void *ctx, int fd)
   return 0;
 }
 
+#ifdef HAVE_NOTIFY_EVICT
 static int
 notify_delete_ent_evict__(void *ctx, int fd)
 {
@@ -356,11 +357,20 @@ notify_delete_ent_evict__(void *ctx, int fd)
   return 0;
 }
 
+#else
+
+static int
+notify_delete_ent_evict__(void *ctx, int fd)
+{
+  return 0;
+}
+
+#endif
+
 int
 notify_delete_ent(void *ctx, int fd, int evict)
 {
   int rc;
-  notify_ctx_t *nctx = ctx;
 
   if (evict) {
     rc = notify_delete_ent_evict__(ctx, fd);
@@ -413,6 +423,8 @@ notify_run(void *ctx, int thread)
 
     if (rc == 0) {
       int evict = 0;
+
+#ifdef HAVE_NOTIFY_EVICT
       for (i = 0; i < n_pfds; i++) {
         NOTI_LOCK(nctx);
         if (nctx->poll_ctx[thread].npfds[i].evict &&
@@ -422,7 +434,7 @@ notify_run(void *ctx, int thread)
         }
         NOTI_UNLOCK(nctx);
       }
-
+#endif
       if (!evict) {
         //log_trace("notify:poll:timeout (n_pfds %d)", n_pfds);
         continue;

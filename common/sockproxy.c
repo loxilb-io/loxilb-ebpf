@@ -678,7 +678,6 @@ proxy_server_setup(int fd, uint32_t server, uint16_t port, uint8_t protocol)
 static int
 proxy_ssl_connect(int fd, void *ssl)
 {
-  fd_set fds;
   int to = 10;
   int err;
   int ssl_err;
