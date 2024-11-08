@@ -116,6 +116,10 @@ dp_do_nat(void *ctx, struct xfi *xf)
   struct dp_proxy_tacts *act;
   int sel;
 
+  if (xf->pm.l4fin || xf->pm.il4fin) {
+    return 0;
+  }
+
   memset(&key, 0, sizeof(key));
   key.mark = (__u16)(xf->pm.dp_mark & 0xffff);
 
