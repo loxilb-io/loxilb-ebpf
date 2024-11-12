@@ -2485,6 +2485,8 @@ ctm_proto_xfk_init(struct dp_ct_key *key,
   xkey->l4proto = key->l4proto;
   xkey->zone = key->zone;
   xkey->v6 = key->v6;
+  xkey->ident = key->ident;
+  xkey->type = key->type;
 
   xi = &adat->ctd.xi;
 

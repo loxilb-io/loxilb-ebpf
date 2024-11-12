@@ -1896,6 +1896,14 @@ dp_get_pkt_hash(void *md)
   return bpf_get_hash_recalc(md);
 }
 
+static __u32 __always_inline
+dp_get_tun_hash(struct xfi *xf)
+{
+  __u32 hash = ((xf->tm.tunnel_id  >> 16) & 0xffff) ^
+                (xf->tm.tunnel_id & 0xffff);
+  return hash;
+}
+
 static int __always_inline
 dp_pktbuf_read(void *md, __u32 off, void *tobuf, __u32 tolen)
 {
@@ -2155,6 +2163,13 @@ dp_do_snat46(void *ctx, struct xfi *xf)
 
 static __u32 __always_inline
 dp_get_pkt_hash(void *md)
+{
+  /* FIXME - TODO */
+  return 0;
+}
+
+static __u32 __always_inline
+dp_get_tun_hash(struct xfi *xf)
 {
   /* FIXME - TODO */
   return 0;
