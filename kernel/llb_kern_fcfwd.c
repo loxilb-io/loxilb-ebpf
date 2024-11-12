@@ -23,6 +23,8 @@ dp_mk_fcv4_key(struct xfi *xf, struct dp_fcv4_key *key)
   key->l4proto    = xf->l34m.nw_proto;
   key->pad        = 0;
   key->in_port    = 0;
+  key->ident      = xf->tm.tunnel_id;
+  key->type       = xf->tm.tun_type;
 
 #ifdef HAVE_DP_EXTFC
   key->in_daddr   = xf->il34m.daddr4;

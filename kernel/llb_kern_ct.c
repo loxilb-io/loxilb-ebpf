@@ -40,6 +40,8 @@ do {                                         \
   (k)->l4proto = xf->l34m.nw_proto;          \
   (k)->zone = xf->pm.zone;                   \
   (k)->v6 = xf->l2m.dl_type == bpf_ntohs(ETH_P_IPV6) ? 1: 0; \
+  (k)->ident = xf->tm.tunnel_id;             \
+  (k)->type = xf->tm.tun_type;               \
 }while(0)
 
 #define dp_run_ctact_helper(x, a) \
@@ -129,6 +131,8 @@ dp_ct_proto_xfk_init(struct dp_ct_key *key,
   xkey->l4proto = key->l4proto;
   xkey->zone = key->zone;
   xkey->v6 = key->v6;
+  xkey->ident = key->ident;
+  xkey->type = key->type;
 
   if (xi->dsr) {
     if (xi->nat_flags & LLB_NAT_DST) {
@@ -520,7 +524,7 @@ dp_ct_udp_sm(void *ctx, struct xfi *xf,
 
     break;
   case CT_UDP_UEST:
-    if (us->rpkts_seen)
+    if (us->rpkts_seen || us->pkts_seen > 2*CT_UDP_CONN_THRESHOLD)
       nstate = CT_UDP_EST;
     break;
   case CT_UDP_EST:
@@ -1606,6 +1610,8 @@ dp_ct_in(void *ctx, struct xfi *xf)
   key.l4proto = xf->l34m.nw_proto;
   key.zone = xf->pm.zone;
   key.v6 = xf->l2m.dl_type == bpf_ntohs(ETH_P_IPV6) ? 1: 0;
+  key.ident = xf->tm.tunnel_id;
+  key.type = xf->tm.tun_type;
 
   if (key.l4proto != IPPROTO_TCP &&
       key.l4proto != IPPROTO_UDP &&
