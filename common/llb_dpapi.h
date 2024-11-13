@@ -728,6 +728,8 @@ struct dp_ct_key {
   __u16 zone;
   __u8  l4proto;
   __u8  v6;
+  __u32 ident;
+  __u32 type;
 };
 
 struct dp_proxy_ct_ent {
@@ -773,6 +775,7 @@ struct dp_nat_key {
 #define NAT_LB_SEL_RR_PERSIST 3
 #define NAT_LB_SEL_LC 4
 #define NAT_LB_SEL_N2 5
+#define NAT_LB_SEL_N3 6
 
 #define NAT_LB_PERSIST_TIMEOUT (10800000000000ULL)
 

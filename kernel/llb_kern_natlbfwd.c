@@ -58,6 +58,21 @@ dp_sel_nat_ep(void *ctx, struct xfi *xf, struct dp_proxy_tacts *act)
         }
       }
     }
+  } else if (act->sel_type == NAT_LB_SEL_N3) {
+    if (xf->tm.tun_type == LLB_TUN_GTP) {
+      sel = dp_get_tun_hash(xf) % act->nxfrm;
+      if (sel >= 0 && sel < LLB_MAX_NXFRMS) {
+        /* Fall back if hash selection gives us a deadend */
+        if (act->nxfrms[sel].inactive) {
+          for (i = 0; i < LLB_MAX_NXFRMS; i++) {
+            if (act->nxfrms[i].inactive == 0) {
+              sel = i;
+              break;
+            }
+          }
+        }
+      }
+    }
   } else if (act->sel_type == NAT_LB_SEL_RR_PERSIST) {
     __u64 now = bpf_ktime_get_ns();
     __u64 base;

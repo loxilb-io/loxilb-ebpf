@@ -372,6 +372,8 @@ dp_do_ing_ct(void *ctx, struct xfi *xf, void *fa_)
   LL_DBG_PRINTK("[CT] sport %d", key.sport);
   LL_DBG_PRINTK("[CT] dport %d", key.dport);
   LL_DBG_PRINTK("[CT] l4proto %d", key.l4proto);
+  LL_DBG_PRINTK("[CT] ident %lu", key.ident);
+  LL_DBG_PRINTK("[CT] type %lu", key.type);
 
   xf->pm.table_id = LL_DP_CT_MAP;
   act = bpf_map_lookup_elem(&ct_map, &key);
