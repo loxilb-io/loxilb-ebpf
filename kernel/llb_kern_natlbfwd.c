@@ -61,7 +61,6 @@ dp_sel_nat_ep(void *ctx, struct xfi *xf, struct dp_proxy_tacts *act)
   } else if (act->sel_type == NAT_LB_SEL_N3) {
     if (xf->tm.tun_type == LLB_TUN_GTP) {
       sel = dp_get_tun_hash(xf) % act->nxfrm;
-      bpf_printk("tun-id %lu sel %d", xf->tm.tunnel_id, sel);
       if (sel >= 0 && sel < LLB_MAX_NXFRMS) {
         /* Fall back if hash selection gives us a deadend */
         if (act->nxfrms[sel].inactive) {
