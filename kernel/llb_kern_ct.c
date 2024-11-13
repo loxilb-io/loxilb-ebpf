@@ -40,8 +40,8 @@ do {                                         \
   (k)->l4proto = xf->l34m.nw_proto;          \
   (k)->zone = xf->pm.zone;                   \
   (k)->v6 = xf->l2m.dl_type == bpf_ntohs(ETH_P_IPV6) ? 1: 0; \
-  (k)->ident = xf->tm.tunnel_id;             \
-  (k)->type = xf->tm.tun_type;               \
+  (k)->ident = xf->tm.tun_decap ? 0 : xf->tm.tunnel_id;      \
+  (k)->type = xf->tm.tun_decap ? 0 : xf->tm.tun_type;        \
 }while(0)
 
 #define dp_run_ctact_helper(x, a) \
@@ -1610,8 +1610,8 @@ dp_ct_in(void *ctx, struct xfi *xf)
   key.l4proto = xf->l34m.nw_proto;
   key.zone = xf->pm.zone;
   key.v6 = xf->l2m.dl_type == bpf_ntohs(ETH_P_IPV6) ? 1: 0;
-  key.ident = xf->tm.tunnel_id;
-  key.type = xf->tm.tun_type;
+  key.ident = xf->tm.tun_decap ? 0 : xf->tm.tunnel_id;
+  key.type = xf->tm.tun_decap ? 0 : xf->tm.tun_type;
 
   if (key.l4proto != IPPROTO_TCP &&
       key.l4proto != IPPROTO_UDP &&
