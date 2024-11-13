@@ -390,7 +390,7 @@ dp_insert_fcv4(void *ctx, struct xfi *xf, struct dp_fc_tacts *acts)
     return 1;
   }
   
-  if (xf->tun_decap) {
+  if (xf->tm.tun_decap) {
     key->ident = 0;
     key->type = 0;
   }
