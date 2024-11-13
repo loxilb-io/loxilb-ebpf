@@ -325,8 +325,6 @@ struct dp_fcv4_key {
   __u8  l4proto;
   __u8  pad;
   __u16 in_port;
-  __u32 ident;
-  __u32 type;
 
 #ifdef HAVE_DP_EXTFC
   __u8  pad2;
