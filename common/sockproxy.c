@@ -1517,8 +1517,9 @@ static void
 proxy_release_rfd_ctx(proxy_fd_ent_t *pfe)
 {
   proxy_fd_ent_t *fd_ent;
+  int n = 0;
 
-  for (int i = 0; i < pfe->n_rfd; i++) {
+  for (int i = 0; n < pfe->n_rfd && i < MAX_PROXY_EP; i++) {
     fd_ent = pfe->rfd_ent[i];
     if (fd_ent) {
       PROXY_ENT_LOCK(fd_ent);
@@ -1526,11 +1527,21 @@ proxy_release_rfd_ctx(proxy_fd_ent_t *pfe)
       proxy_release_fd_ctx(fd_ent, 0);
       notify_delete_ent(proxy_struct->ns, fd_ent->fd, 1);
       pfe->rfd_ent[i] = NULL;
-      for (int j = 0; j < fd_ent->n_rfd; j++) {
-        fd_ent->rfd_ent[j] = NULL;
+      if (!pfe->odir) {
+        for (int j = 0; j < fd_ent->n_rfd; j++) {
+          fd_ent->rfd_ent[j] = NULL;
+        }
+        fd_ent->n_rfd = 0;
+      } else {
+        for (int j = 0; j < fd_ent->n_rfd; j++) {
+          if (fd_ent->rfd_ent[j] == pfe) {
+            fd_ent->rfd_ent[j] = NULL;
+            fd_ent->n_rfd--;
+          }
+        }
       }
-      fd_ent->n_rfd = 0;
       PROXY_ENT_UNLOCK(fd_ent);
+      n++;
     }
     pfe->rfd[i] = -1;
   }
