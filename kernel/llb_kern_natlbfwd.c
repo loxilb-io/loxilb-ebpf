@@ -138,7 +138,7 @@ dp_do_nat(void *ctx, struct xfi *xf)
   memset(&key, 0, sizeof(key));
   key.mark = (__u16)(xf->pm.dp_mark & 0xffff);
 
-  if (!(key.mark & 0x1000)) {
+  if (!(key.mark & 0x8000)) {
     DP_XADDR_CP(key.daddr, xf->l34m.daddr);
     if (xf->l34m.nw_proto != IPPROTO_ICMP) {
       key.dport = xf->l34m.dest;
@@ -150,6 +150,7 @@ dp_do_nat(void *ctx, struct xfi *xf)
     if (xf->l2m.dl_type == bpf_ntohs(ETH_P_IPV6)) {
       key.v6 = 1;
     }
+    key.mark = 0;
   }
 
   LL_DBG_PRINTK("[NAT] Lookup");
@@ -166,6 +167,16 @@ dp_do_nat(void *ctx, struct xfi *xf)
   xf->pm.phit |= LLB_DP_NAT_HIT;
   LL_DBG_PRINTK("[NAT] action %d pipe %x\n",
                  act->ca.act_type, xf->pm.pipe_act);
+
+  if (act->chksrc) {
+    __u32 bm = (1 << act->ca.cidx) & 0xffffff;
+    bpf_printk("src check enabled");
+    if (!(xf->pm.dp_mark & bm)) {
+      bpf_printk("Failed src check 0x%x:0x%x", xf->pm.dp_mark, bm);
+      LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_ACT_UNK);
+      return 1;
+    }
+  }
 
   if (act->ca.act_type == DP_SET_SNAT || 
       act->ca.act_type == DP_SET_DNAT) {
@@ -200,6 +211,7 @@ dp_do_nat(void *ctx, struct xfi *xf)
     } else {
       xf->pm.nf = 0;
     }
+
   } else { 
     LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_ACT_UNK);
   }

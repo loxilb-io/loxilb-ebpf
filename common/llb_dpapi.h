@@ -788,7 +788,8 @@ struct dp_proxy_tacts {
   uint64_t ito;
   uint64_t pto;
   struct bpf_spin_lock lock;
-  uint16_t nxfrm;
+  uint8_t nxfrm;
+  uint8_t chksrc;
   uint8_t cdis;
   uint8_t npmhh;
   uint16_t sel_hint;
