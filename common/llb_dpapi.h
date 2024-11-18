@@ -764,9 +764,9 @@ struct dp_nat_key {
   __u32 daddr[4];
   __u16 dport;
   __u16 zone;
-  __u16 mark;
-  __u8  l4proto;
-  __u8  v6;
+  __u32 mark;
+  __u16 l4proto;
+  __u16 v6;
 };
 
 #define NAT_LB_SEL_RR   0

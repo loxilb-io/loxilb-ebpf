@@ -136,9 +136,9 @@ dp_do_nat(void *ctx, struct xfi *xf)
   }
 
   memset(&key, 0, sizeof(key));
-  key.mark = (__u16)(xf->pm.dp_mark & 0xffff);
+  key.mark = xf->pm.dp_mark;
 
-  if (!(key.mark & 0x8000)) {
+  if (!(key.mark & 0x80000000)) {
     DP_XADDR_CP(key.daddr, xf->l34m.daddr);
     if (xf->l34m.nw_proto != IPPROTO_ICMP) {
       key.dport = xf->l34m.dest;

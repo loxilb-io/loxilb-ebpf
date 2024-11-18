@@ -162,7 +162,7 @@ pdi_rule_delete(struct pdi_map *map, struct pdi_key *key, uint32_t pref, int *nr
 
   node = pdi_rule_delete__(map, key, pref, nr);
   if (node != NULL) {
-    pdi_rule2str(node);
+    //pdi_rule2str(node);
     HASH_ITER(hh, node->hash, val, tmp) {
       HASH_DEL(node->hash, val);
       if (map->pdi_del_map_em) {
