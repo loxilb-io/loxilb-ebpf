@@ -179,9 +179,9 @@ struct dp_cmn_act {
   __u8 ftrap;
   __u16 oaux;
   __u32 cidx;
-  __u32 fwrid;
-  __u16 mark;
+  __u16 fwrid;
   __u16 record;
+  __u32 mark;
 };
 
 struct dp_rt_l2nh_act {
@@ -764,9 +764,9 @@ struct dp_nat_key {
   __u32 daddr[4];
   __u16 dport;
   __u16 zone;
-  __u16 mark;
-  __u8  l4proto;
-  __u8  v6;
+  __u32 mark;
+  __u16 l4proto;
+  __u16 v6;
 };
 
 #define NAT_LB_SEL_RR   0
@@ -788,7 +788,8 @@ struct dp_proxy_tacts {
   uint64_t ito;
   uint64_t pto;
   struct bpf_spin_lock lock;
-  uint16_t nxfrm;
+  uint8_t nxfrm;
+  uint8_t chksrc;
   uint8_t cdis;
   uint8_t npmhh;
   uint16_t sel_hint;
