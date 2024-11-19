@@ -170,9 +170,7 @@ dp_do_nat(void *ctx, struct xfi *xf)
 
   if (act->chksrc) {
     __u32 bm = (1 << act->ca.cidx) & 0xffffff;
-    bpf_printk("src check enabled");
     if (!(xf->pm.dp_mark & bm)) {
-      bpf_printk("Failed src check 0x%x:0x%x", xf->pm.dp_mark, bm);
       LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_ACT_UNK);
       return 1;
     }

@@ -64,13 +64,13 @@ struct pdi_gen_key {
 #define PDI_SET_RDR    0x80
 
 struct pdi_opts {
-  uint32_t qfi; 
+  uint32_t qfi;
+  uint32_t mark;
   uint16_t polid;
   uint16_t qid;
-  uint16_t mark;
   uint16_t record;
   uint16_t mirrid;
-  uint16_t port;
+  uint32_t port;
   uint32_t teid;
 };
 
