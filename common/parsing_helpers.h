@@ -359,6 +359,27 @@ struct sctp_cookie {
   __be32 cookie;
 };
 
+struct proxy_hdr_v2 {
+  __u8 sig[12];  /* hex 0D 0A 0D 0A 00 0D 0A 51 55 49 54 0A */
+  __u8 ver_cmd;  /* protocol version and command */
+  __u8 family;   /* protocol family and address */
+  __be16 len;    /* number of following bytes part of the header */
+};
+
+struct proxy_ipv4_hdr { /* for TCP/UDP over IPv4, len = 12 */
+  __be32 src_addr;
+  __be32 dst_addr;
+  __be16 src_port;
+  __be16 dst_port;
+};
+
+struct proxy_ipv6_hdr { /* for TCP/UDP over IPv4, len = 36 */
+  __u8 src_addr[16];
+  __u8 dst_addr[16];
+  __be16 src_port;
+  __be16 dst_port;
+};
+
 struct mkrt_args {
   uint32_t seq;
   uint8_t fin:1;
