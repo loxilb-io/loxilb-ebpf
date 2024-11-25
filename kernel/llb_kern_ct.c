@@ -309,6 +309,15 @@ dp_ct_tcp_sm(void *ctx, struct xfi *xf,
 
   if (tcp_flags & LLB_TCP_RST) {
     nstate = CT_TCP_CW;
+    if (dir == CT_DIR_IN) {
+      if (td->ppv2) {
+        xf->pm.oppv2 = 1;
+      }
+    } else {
+      if (td->ppv2) {
+        xf->pm.ippv2 = 1;
+      }
+    }
     goto end;
   }
 
@@ -415,7 +424,28 @@ dp_ct_tcp_sm(void *ctx, struct xfi *xf,
     }
 
     td->seq = seq;
-    nstate = CT_TCP_EST;
+    nstate = CT_TCP_PEST;
+    break;
+
+  case CT_TCP_PEST:
+    if (tcp_flags & LLB_TCP_FIN) {
+      ts->fndir = dir;
+      nstate = CT_TCP_FINI;
+      td->seq = seq;
+    } else {
+      nstate = CT_TCP_PEST;
+      if (dir == CT_DIR_IN) {
+        if (td->ppv2 == 0) {
+          xf->pm.ppv2 = 1;
+          td->ppv2 = 1;
+        } else {
+          xf->pm.oppv2 = 1;
+        }
+      } else {
+        if (td->ppv2)
+          xf->pm.ippv2 = 1;
+      }
+    }
     break;
 
   case CT_TCP_EST:
@@ -425,6 +455,9 @@ dp_ct_tcp_sm(void *ctx, struct xfi *xf,
       td->seq = seq;
     } else {
       nstate = CT_TCP_EST;
+      if (dir == CT_DIR_IN) {
+        xf->pm.ppv2 = 1;
+      }
     }
     break;
 

@@ -901,6 +901,20 @@ dp_buf_delete_room(void *md, int delta, __u64 flags)
 }
 
 static int __always_inline
+dp_buf_add_room3(void *md, int delta, __u64 flags)
+{
+  return bpf_skb_adjust_room(md, delta, BPF_ADJ_ROOM_NET,
+                            flags);
+}
+
+static int __always_inline
+dp_buf_delete_room3(void *md, int delta, __u64 flags)
+{
+  return bpf_skb_adjust_room(md, -delta, BPF_ADJ_ROOM_NET, 
+                            flags);
+}
+
+static int __always_inline
 dp_redirect_port_in(void *tbl, struct xfi *xf)
 {
   int *oif;
@@ -941,6 +955,172 @@ dp_rewire_port(void *tbl, struct xfi *xf)
 }
 
 static int __always_inline
+dp_populate_ppv2(void *md, struct xfi *xf, void *start)
+{
+  struct proxy_hdr_v2 *ppv2h;
+  __u8 sig[12] = { 0x0D, 0x0A, 0x0D, 0x0A, 0x00, 0x0D,
+                   0x0A, 0x51, 0x55, 0x49, 0x54, 0x0A };
+  void *dend = DP_TC_PTR(DP_PDATA_END(md));
+
+  ppv2h = start; 
+  if (ppv2h + 1 > dend) {
+    LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLERR);
+    return -1;
+  }
+  memcpy(ppv2h->sig, sig, 12);
+  ppv2h->ver_cmd = 0x21;
+  ppv2h->family = 0x11;
+  ppv2h->len = bpf_htons(sizeof(struct proxy_ipv4_hdr));
+
+  struct proxy_ipv4_hdr *piph = (void *)(ppv2h + 1);
+  if (piph + 1 > dend) {
+    LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLERR);
+    return -1;
+  }
+  piph->src_addr = xf->l34m.saddr[0];
+  piph->dst_addr = xf->l34m.daddr[0];
+  piph->src_port = xf->l34m.source;
+  piph->dst_port = xf->l34m.dest;
+
+  return 0;
+}
+
+static int __always_inline
+dp_fixup_ppv2(void *md, struct xfi *xf)
+{
+  struct tcphdr *tcp;
+  void *dend;
+
+  if (xf->l2m.dl_type != bpf_htons(ETH_P_IP) || xf->l34m.nw_proto != IPPROTO_TCP) {
+    return 0;
+  }
+
+  dend = DP_TC_PTR(DP_PDATA_END(md));
+  tcp = DP_ADD_PTR(DP_PDATA(md), xf->pm.l4_off);
+  if (tcp + 1 > dend) {
+    LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLERR);
+    return -1;
+  }
+
+  if (xf->pm.oppv2) {
+    __u32 seq = bpf_ntohl(tcp->seq);
+    seq += sizeof(struct proxy_hdr_v2) + sizeof(struct proxy_ipv4_hdr);
+    tcp->seq = bpf_htonl(seq);
+  } else if (xf->pm.ippv2) {
+    __u32 ack = bpf_ntohl(tcp->ack_seq);
+    ack -= sizeof(struct proxy_hdr_v2) + sizeof(struct proxy_ipv4_hdr);
+    tcp->ack_seq = bpf_htonl(ack);
+  }
+  return 0;
+}
+
+static int __always_inline
+dp_ins_ppv2(void *md, struct xfi *xf)
+{ 
+  struct iphdr *iph;
+  void *dend;
+  struct proxy_hdr_v2 *ppv2h;
+  __u64 flags;
+
+  int len = sizeof(struct proxy_hdr_v2);
+
+  if (xf->l2m.dl_type == bpf_htons(ETH_P_IP) && xf->l34m.nw_proto == IPPROTO_TCP) {
+    len += sizeof(struct proxy_ipv4_hdr);
+  } else {
+    // FIXME - not supported now
+    return 0;
+  }
+
+  flags = BPF_F_ADJ_ROOM_FIXED_GSO;
+
+  dp_llb_add_crc_off(md, xf, len);
+
+  /* add room between mac and network header */
+  if (dp_buf_add_room3(md, len, flags)) {
+    LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLERR);
+    return -1;
+  }
+
+  if (xf->l34m.nw_proto == IPPROTO_TCP)  {
+    dend = DP_TC_PTR(DP_PDATA_END(md));
+    iph = DP_ADD_PTR(DP_PDATA(md), xf->pm.l3_off);
+    if (iph + 1 > dend) {
+      LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLERR);
+      return -1;
+    }
+
+    iph->tot_len  = bpf_htons(xf->pm.l3_len + len);
+    dp_ipv4_new_csum((void *)iph);
+
+    struct tcphdr *tcp = DP_ADD_PTR(DP_PDATA(md), xf->pm.l4_off + len);
+    bpf_printk("tcp off %lu", xf->pm.l4_off + len);
+    if (tcp + 1 > dend) {
+      LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLERR);
+      return -1;
+    }
+
+    __u16 doff = tcp->doff << 2;
+
+    struct tcphdr *ntcp = DP_ADD_PTR(DP_PDATA(md), xf->pm.l4_off);
+    if (ntcp + 1 > dend) {
+      LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLERR);
+      return -1;
+    }
+
+    __builtin_memmove(ntcp, tcp, sizeof(*tcp));
+
+    if (doff == 24) {
+      __u8 *top =  (void *)(tcp + 1);
+      if (top + 4 > dend) {
+        LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLERR);
+        return -1;
+      }
+      __u8 *ntop =  (void *)(ntcp + 1);
+      if (ntop + 4 > dend) { 
+        LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLERR);
+        return -1;
+      }
+      memcpy(ntop, top, 4);
+      ppv2h = (void *)(ntop + 4);
+      dp_populate_ppv2(md, xf, ppv2h);
+    } else if (doff == 28) {
+      __u8 *top =  (void *)(tcp + 1);
+      if (top + 8 > dend) { 
+        LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLERR);
+        return -1;
+      }
+      __u8 *ntop =  (void *)(ntcp + 1);
+      if (ntop + 8 > dend) {
+        LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLERR);
+        return -1;
+      }
+      memcpy(ntop, top, 8);
+      ppv2h = (void *)(ntop + 8);
+      dp_populate_ppv2(md, xf, ppv2h);
+    } else if (doff == 32) {
+      __u8 *top =  (void *)(tcp + 1);
+      if (top + 12 > dend) {
+        LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLERR);
+        return -1;
+      }
+      __u8 *ntop =  (void *)(ntcp + 1);
+      if (ntop + 12 > dend) {
+        LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLERR);
+        return -1;
+      }
+      memcpy(ntop, top, 12);
+      ppv2h = (void *)(ntop + 12);
+      bpf_printk("ntop ----\n");
+      dp_populate_ppv2(md, xf, ppv2h);
+    } else if (doff != 20) {
+      LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLERR);
+      return -1;
+    }
+  }
+  return 0;
+}
+
+static int __always_inline
 dp_record_it(void *skb, struct xfi *xf)
 {
   int *oif;
@@ -956,7 +1136,7 @@ dp_record_it(void *skb, struct xfi *xf)
 static int __always_inline
 dp_remove_vlan_tag(void *ctx, struct xfi *xf)
 {
-  void *dend = DP_TC_PTR(DP_PDATA_END(ctx));
+  void *dend;
   struct ethhdr *eth;
 
   bpf_skb_vlan_pop(ctx);
@@ -1889,6 +2069,7 @@ dp_do_snat46(void *md, struct xfi *xf)
   return 0;
 }
 
+
 static __u32 __always_inline
 dp_get_pkt_hash(void *md)
 {
@@ -2004,6 +2185,18 @@ dp_buf_delete_room(void *md, int delta, __u64 flags)
 }
 
 static int __always_inline
+dp_buf_add_room3(void *md, int delta, __u64 flags)
+{
+  return bpf_xdp_adjust_head(md, -delta);
+}
+
+static int __always_inline
+dp_buf_delete_room3(void *md, int delta, __u64 flags)
+{
+  return bpf_xdp_adjust_head(md, delta);
+}
+
+static int __always_inline
 dp_redirect_port_in(void *tbl, struct xfi *xf)
 {
   return 0;
@@ -2024,6 +2217,20 @@ dp_rewire_port(void *tbl, struct xfi *xf)
 
 static int __always_inline
 dp_record_it(void *ctx, struct xfi *xf)
+{
+  /* Not supported */
+  return 0;
+}
+
+static int __always_inline
+dp_fixup_ppv2(void *md, struct xfi *xf)
+{
+  /* Not supported */
+  return 0;
+}
+
+static int __always_inline
+dp_ins_ppv2(void *md, struct xfi *xf)
 {
   /* Not supported */
   return 0;

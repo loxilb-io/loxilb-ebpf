@@ -541,13 +541,15 @@ typedef enum {
   CT_TCP_FINI2  = 0x20,
   CT_TCP_FINI3  = 0x40,
   CT_TCP_CW     = 0x80,
-  CT_TCP_ERR    = 0x100
+  CT_TCP_ERR    = 0x100,
+  CT_TCP_PEST   = 0x200,
 } ct_tcp_state_t;
 
 typedef struct {
   __u16 hstate;
 #define CT_TCP_INIT_ACK_THRESHOLD 3
-  __u16 init_acks;
+  __u8 init_acks;
+  __u8 ppv2;
   __u32 seq;
   __be32 pack;
   __be32 pseq;
