@@ -239,6 +239,7 @@ struct dp_nat_act {
   __u8 dsr;
   __u8 cdis;
   __u8 nmh;
+  __u8 ppv2;
 };
 
 #define MIN_DP_POLICER_RATE  (8*1000*1000)  /* 1 MBps = 8 Mbps */
@@ -785,18 +786,21 @@ struct dp_nat_key {
 #define SEC_MODE_HTTPS 1
 #define SEC_MODE_HTTPS_E2E 2
 
+#define NAT_LB_OP_CHKSRC 0x1
+
 struct dp_proxy_tacts {
   struct dp_cmn_act ca;
   uint64_t ito;
   uint64_t pto;
   struct bpf_spin_lock lock;
   uint8_t nxfrm;
-  uint8_t chksrc;
+  uint8_t opflags;
   uint8_t cdis;
   uint8_t npmhh;
   uint16_t sel_hint;
   uint8_t sel_type;
   uint8_t sec_mode;
+  uint8_t ppv2;
   uint32_t pmhh[LLB_MAX_MHOSTS];
   struct mf_xfrm_inf nxfrms[LLB_MAX_NXFRMS];
   uint8_t host_url[LLB_MAX_HOSTURL_LEN];

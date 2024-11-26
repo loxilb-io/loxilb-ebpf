@@ -307,17 +307,18 @@ dp_ct_tcp_sm(void *ctx, struct xfi *xf,
 
   rtd = &ts->tcp_cts[dir == CT_DIR_IN ? CT_DIR_OUT:CT_DIR_IN];
 
+  if (dir == CT_DIR_IN) {
+    if (td->ppv2) {
+      xf->pm.oppv2 = 1;
+    }
+  } else {
+    if (td->ppv2) {
+      xf->pm.ippv2 = 1;
+    }
+  }
+
   if (tcp_flags & LLB_TCP_RST) {
     nstate = CT_TCP_CW;
-    if (dir == CT_DIR_IN) {
-      if (td->ppv2) {
-        xf->pm.oppv2 = 1;
-      }
-    } else {
-      if (td->ppv2) {
-        xf->pm.ippv2 = 1;
-      }
-    }
     goto end;
   }
 
@@ -424,7 +425,10 @@ dp_ct_tcp_sm(void *ctx, struct xfi *xf,
     }
 
     td->seq = seq;
-    nstate = CT_TCP_PEST;
+    if (xf->nm.ppv2)
+      nstate = CT_TCP_PEST;
+    else
+      nstate = CT_TCP_EST;
     break;
 
   case CT_TCP_PEST:
@@ -438,12 +442,8 @@ dp_ct_tcp_sm(void *ctx, struct xfi *xf,
         if (td->ppv2 == 0) {
           xf->pm.ppv2 = 1;
           td->ppv2 = 1;
-        } else {
-          xf->pm.oppv2 = 1;
+          rtd->ppv2 = 1;
         }
-      } else {
-        if (td->ppv2)
-          xf->pm.ippv2 = 1;
       }
     }
     break;
@@ -455,9 +455,6 @@ dp_ct_tcp_sm(void *ctx, struct xfi *xf,
       td->seq = seq;
     } else {
       nstate = CT_TCP_EST;
-      if (dir == CT_DIR_IN) {
-        xf->pm.ppv2 = 1;
-      }
     }
     break;
 
@@ -1702,6 +1699,7 @@ dp_ct_in(void *ctx, struct xfi *xf)
       adat->nat_act.dsr = xf->nm.dsr;
       adat->nat_act.cdis = xf->nm.cdis;
       adat->nat_act.nmh = xf->nm.npmhh;
+      adat->nat_act.ppv2 = xf->nm.ppv2;
       adat->ito = xf->nm.ito;
     } else {
       adat->ito = 0;
@@ -1739,6 +1737,7 @@ dp_ct_in(void *ctx, struct xfi *xf)
       axdat->nat_act.dsr = xf->nm.dsr;
       axdat->nat_act.cdis = xf->nm.cdis;
       axdat->nat_act.nmh = xf->nm.npmhh;
+      axdat->nat_act.ppv2 = xf->nm.ppv2;
       axdat->ito = xf->nm.ito;
     } else {
       axdat->ito = 0;

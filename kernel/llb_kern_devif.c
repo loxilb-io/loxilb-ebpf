@@ -300,10 +300,8 @@ dp_pipe_check_res(void *ctx, struct xfi *xf, void *fa)
     }
 
     if (xf->pm.ppv2) { 
-      bpf_printk("PPPv2");
       dp_ins_ppv2(ctx, xf);
     } else if (xf->pm.oppv2 | xf->pm.ippv2) {
-      bpf_printk("PPPv2 fix %d:%d", xf->pm.oppv2, xf->pm.ippv2);
       dp_fixup_ppv2(ctx, xf);
     }
 
