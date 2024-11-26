@@ -1053,7 +1053,6 @@ dp_ins_ppv2(void *md, struct xfi *xf)
     dp_ipv4_new_csum((void *)iph);
 
     struct tcphdr *tcp = DP_ADD_PTR(DP_PDATA(md), xf->pm.l4_off + len);
-    bpf_printk("tcp off %lu", xf->pm.l4_off + len);
     if (tcp + 1 > dend) {
       LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLERR);
       return -1;
@@ -1110,7 +1109,6 @@ dp_ins_ppv2(void *md, struct xfi *xf)
       }
       memcpy(ntop, top, 12);
       ppv2h = (void *)(ntop + 12);
-      bpf_printk("ntop ----\n");
       dp_populate_ppv2(md, xf, ppv2h);
     } else if (doff != 20) {
       LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLERR);
