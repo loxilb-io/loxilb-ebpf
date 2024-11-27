@@ -1285,7 +1285,7 @@ dp_set_tcp_dst_ip6(void *md, struct xfi *xf, __be32 *xip)
   bpf_l4_csum_replace(md, tcp_csum_off, old_dip[3], xip[3], BPF_F_PSEUDO_HDR |sizeof(*xip));
   bpf_skb_store_bytes(md, ip_dst_off, xip, sizeof(xf->l34m.saddr), 0);
 
-  DP_XADDR_CP(xf->l34m.daddr, xip);
+  //DP_XADDR_CP(xf->l34m.daddr, xip);
 
   return 0;
 }
@@ -1301,7 +1301,7 @@ dp_set_tcp_dst_ip(void *md, struct xfi *xf, __be32 xip)
   bpf_l4_csum_replace(md, tcp_csum_off, old_dip, xip, BPF_F_PSEUDO_HDR | sizeof(xip));
   bpf_l3_csum_replace(md, ip_csum_off, old_dip, xip, sizeof(xip));
   bpf_skb_store_bytes(md, ip_dst_off, &xip, sizeof(xip), 0);
-  xf->l34m.daddr4 = xip;
+  //xf->l34m.daddr4 = xip;
 
   return 0;
 }
@@ -1317,7 +1317,7 @@ dp_set_tcp_sport(void *md, struct xfi *xf, __be16 xport)
 
   bpf_l4_csum_replace(md, tcp_csum_off, old_sport, xport, sizeof(xport));
   bpf_skb_store_bytes(md, tcp_sport_off, &xport, sizeof(xport), 0);
-  xf->l34m.source = xport;
+ // xf->l34m.source = xport;
 
   return 0;
 }
@@ -1333,7 +1333,7 @@ dp_set_tcp_dport(void *md, struct xfi *xf, __be16 xport)
 
   bpf_l4_csum_replace(md, tcp_csum_off, old_dport, xport, sizeof(xport));
   bpf_skb_store_bytes(md, tcp_dport_off, &xport, sizeof(xport), 0);
-  xf->l34m.dest = xport;
+  //xf->l34m.dest = xport;
 
   return 0;
 }
@@ -1354,7 +1354,7 @@ dp_set_udp_src_ip6(void *md, struct xfi *xf, __be32 *xip)
   bpf_l4_csum_replace(md, udp_csum_off, old_sip[3], xip[3], BPF_F_PSEUDO_HDR |sizeof(*xip));
 
   bpf_skb_store_bytes(md, ip_src_off, xip, sizeof(xf->l34m.saddr), 0);
-  DP_XADDR_CP(xf->l34m.saddr, xip);
+  //DP_XADDR_CP(xf->l34m.saddr, xip);
 
   return 0;
 }
@@ -1393,7 +1393,7 @@ dp_set_udp_dst_ip6(void *md, struct xfi *xf, __be32 *xip)
   bpf_l4_csum_replace(md, udp_csum_off, old_dip[2], xip[2], BPF_F_PSEUDO_HDR |sizeof(*xip));
   bpf_l4_csum_replace(md, udp_csum_off, old_dip[3], xip[3], BPF_F_PSEUDO_HDR |sizeof(*xip));
   bpf_skb_store_bytes(md, ip_dst_off, xip, sizeof(xf->l34m.daddr), 0);
-  DP_XADDR_CP(xf->l34m.daddr, xip);
+  //DP_XADDR_CP(xf->l34m.daddr, xip);
 
   return 0;
 }
@@ -1412,7 +1412,7 @@ dp_set_udp_dst_ip(void *md, struct xfi *xf, __be32 xip)
   bpf_l4_csum_replace(md, udp_csum_off, old_dip, xip, BPF_F_PSEUDO_HDR | sizeof(xip));
   bpf_l3_csum_replace(md, ip_csum_off, old_dip, xip, sizeof(xip));
   bpf_skb_store_bytes(md, ip_dst_off, &xip, sizeof(xip), 0);
-  xf->l34m.daddr4 = xip;
+  //xf->l34m.daddr4 = xip;
 
   return 0;
 }
@@ -1431,7 +1431,7 @@ dp_set_udp_sport(void *md, struct xfi *xf, __be16 xport)
   //bpf_skb_store_bytes(md, udp_csum_off, &csum, sizeof(csum), 0);
   bpf_l4_csum_replace(md, udp_csum_off, old_sport, xport, sizeof(xport));
   bpf_skb_store_bytes(md, udp_sport_off, &xport, sizeof(xport), 0);
-  xf->l34m.source = xport;
+  //xf->l34m.source = xport;
 
   return 0;
 }
@@ -1450,7 +1450,7 @@ dp_set_udp_dport(void *md, struct xfi *xf, __be16 xport)
   //bpf_skb_store_bytes(md, udp_csum_off, &csum, sizeof(csum), 0);
   bpf_l4_csum_replace(md, udp_csum_off, old_dport, xport, sizeof(xport));
   bpf_skb_store_bytes(md, udp_dport_off, &xport, sizeof(xport), 0);
-  xf->l34m.dest = xport;
+  //xf->l34m.dest = xport;
 
   return 0;
 }
@@ -1461,7 +1461,7 @@ dp_set_icmp_src_ip6(void *md, struct xfi *xf, __be32 *xip)
   int ip_src_off = xf->pm.l3_off + offsetof(struct ipv6hdr, saddr);
  
   bpf_skb_store_bytes(md, ip_src_off, xip, sizeof(struct in6_addr), 0);
-  DP_XADDR_CP(xf->l34m.saddr, xip);
+  //DP_XADDR_CP(xf->l34m.saddr, xip);
 
   return 0;
 }
@@ -1475,7 +1475,7 @@ dp_set_icmp_src_ip(void *md, struct xfi *xf, __be32 xip)
  
   bpf_l3_csum_replace(md, ip_csum_off, old_sip, xip, sizeof(xip));
   bpf_skb_store_bytes(md, ip_src_off, &xip, sizeof(xip), 0);
-  xf->l34m.saddr4 = xip;
+  //xf->l34m.saddr4 = xip;
 
   return 0;
 }
@@ -1486,7 +1486,7 @@ dp_set_icmp_dst_ip6(void *md, struct xfi *xf, __be32 *xip)
   int ip_dst_off = xf->pm.l3_off + offsetof(struct ipv6hdr, daddr);
 
   bpf_skb_store_bytes(md, ip_dst_off, xip, sizeof(struct in6_addr), 0);
-  DP_XADDR_CP(xf->l34m.daddr, xip);
+  //DP_XADDR_CP(xf->l34m.daddr, xip);
 
   return 0;
 }
@@ -1500,7 +1500,7 @@ dp_set_icmp_dst_ip(void *md, struct xfi *xf, __be32 xip)
   
   bpf_l3_csum_replace(md, ip_csum_off, old_dip, xip, sizeof(xip));
   bpf_skb_store_bytes(md, ip_dst_off, &xip, sizeof(xip), 0);
-  xf->l34m.daddr4 = xip;
+  //xf->l34m.daddr4 = xip;
 
   return 0;
 }
@@ -1511,7 +1511,7 @@ dp_set_sctp_src_ip6(void *md, struct xfi *xf, __be32 *xip)
   int ip_src_off = xf->pm.l3_off + offsetof(struct ipv6hdr, saddr);
 
   bpf_skb_store_bytes(md, ip_src_off, xip, sizeof(struct in6_addr), 0);
-  DP_XADDR_CP(xf->l34m.saddr, xip);
+  //DP_XADDR_CP(xf->l34m.saddr, xip);
 
   return 0;
 }
@@ -1535,7 +1535,7 @@ dp_set_sctp_src_ip(void *md, struct xfi *xf, __be32 xip)
   }
   bpf_l3_csum_replace(md, ip_csum_off, old_sip, xip, sizeof(xip));
   bpf_skb_store_bytes(md, ip_src_off, &xip, sizeof(xip), 0);
-  xf->l34m.saddr4 = xip;
+  //xf->l34m.saddr4 = xip;
 
   return 0;
 }
@@ -1546,7 +1546,7 @@ dp_set_sctp_dst_ip6(void *md, struct xfi *xf, __be32 *xip)
   int ip_dst_off = xf->pm.l3_off + offsetof(struct ipv6hdr, daddr);
  
   bpf_skb_store_bytes(md, ip_dst_off, xip, sizeof(struct in6_addr), 0);
-  DP_XADDR_CP(xf->l34m.daddr, xip);
+  //DP_XADDR_CP(xf->l34m.daddr, xip);
 
   return 0;
 }
@@ -1571,7 +1571,7 @@ dp_set_sctp_dst_ip(void *md, struct xfi *xf, __be32 xip)
 
   bpf_l3_csum_replace(md, ip_csum_off, old_dip, xip, sizeof(xip));
   bpf_skb_store_bytes(md, ip_dst_off, &xip, sizeof(xip), 0);
-  xf->l34m.daddr4 = xip;
+  //xf->l34m.daddr4 = xip;
 
   return 0;
 }
@@ -1587,7 +1587,7 @@ dp_set_sctp_sport(void *md, struct xfi *xf, __be16 xport)
 
   bpf_skb_store_bytes(md, sctp_csum_off, &csum , sizeof(csum), 0);
   bpf_skb_store_bytes(md, sctp_sport_off, &xport, sizeof(xport), 0);
-  xf->l34m.source = xport;
+  //xf->l34m.source = xport;
 
   return 0;
 }
@@ -1603,7 +1603,7 @@ dp_set_sctp_dport(void *md, struct xfi *xf, __be16 xport)
 
   bpf_skb_store_bytes(md, sctp_csum_off, &csum , sizeof(csum), 0);
   bpf_skb_store_bytes(md, sctp_dport_off, &xport, sizeof(xport), 0);
-  xf->l34m.dest = xport;
+  //xf->l34m.dest = xport;
 
   return 0;
 }
