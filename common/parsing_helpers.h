@@ -178,7 +178,17 @@ static inline int ipv6_addr_is_multicast(const struct in6_addr *addr)
 static __always_inline __be16
 csum_fold_helper(__be32 csum)
 {
-  return ~((csum & 0xffff) + (csum >> 16));
+  csum = (csum & 0xffff) + (csum >> 16);
+  csum = (csum & 0xffff) + (csum >> 16);
+  return (__u16)~csum;
+}
+
+static __always_inline __be16
+csum_fold_helper_diff(__be32 csum)
+{
+  csum = (csum & 0xffff) + (csum >> 16);
+  csum = (csum & 0xffff) + (csum >> 16);
+  return (__u16)csum;
 }
 
 static __always_inline void
