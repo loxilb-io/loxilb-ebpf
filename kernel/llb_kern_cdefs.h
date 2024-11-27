@@ -1250,7 +1250,7 @@ dp_set_tcp_src_ip6(void *md, struct xfi *xf, __be32 *xip)
   bpf_l4_csum_replace(md, tcp_csum_off, old_sip[3], xip[3], BPF_F_PSEUDO_HDR |sizeof(*xip));
   bpf_skb_store_bytes(md, ip_src_off, xip, sizeof(xf->l34m.saddr), 0);
 
-  DP_XADDR_CP(xf->l34m.saddr, xip);
+  //DP_XADDR_CP(xf->l34m.saddr, xip);
 
   return 0;
 }
@@ -1267,7 +1267,7 @@ dp_set_tcp_src_ip(void *md, struct xfi *xf, __be32 xip)
   bpf_l3_csum_replace(md, ip_csum_off, old_sip, xip, sizeof(xip));
   bpf_skb_store_bytes(md, ip_src_off, &xip, sizeof(xip), 0);
 
-  xf->l34m.saddr4 = xip;
+  //xf->l34m.saddr4 = xip;
 
   return 0;
 }
