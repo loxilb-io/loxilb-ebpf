@@ -239,6 +239,7 @@ struct dp_nat_act {
   __u8 dsr;
   __u8 cdis;
   __u8 nmh;
+  __u8 ppv2;
 };
 
 #define MIN_DP_POLICER_RATE  (8*1000*1000)  /* 1 MBps = 8 Mbps */
@@ -541,13 +542,15 @@ typedef enum {
   CT_TCP_FINI2  = 0x20,
   CT_TCP_FINI3  = 0x40,
   CT_TCP_CW     = 0x80,
-  CT_TCP_ERR    = 0x100
+  CT_TCP_ERR    = 0x100,
+  CT_TCP_PEST   = 0x200,
 } ct_tcp_state_t;
 
 typedef struct {
   __u16 hstate;
 #define CT_TCP_INIT_ACK_THRESHOLD 3
-  __u16 init_acks;
+  __u8 init_acks;
+  __u8 ppv2;
   __u32 seq;
   __be32 pack;
   __be32 pseq;
@@ -783,18 +786,21 @@ struct dp_nat_key {
 #define SEC_MODE_HTTPS 1
 #define SEC_MODE_HTTPS_E2E 2
 
+#define NAT_LB_OP_CHKSRC 0x1
+
 struct dp_proxy_tacts {
   struct dp_cmn_act ca;
   uint64_t ito;
   uint64_t pto;
   struct bpf_spin_lock lock;
   uint8_t nxfrm;
-  uint8_t chksrc;
+  uint8_t opflags;
   uint8_t cdis;
   uint8_t npmhh;
   uint16_t sel_hint;
   uint8_t sel_type;
   uint8_t sec_mode;
+  uint8_t ppv2;
   uint32_t pmhh[LLB_MAX_MHOSTS];
   struct mf_xfrm_inf nxfrms[LLB_MAX_NXFRMS];
   uint8_t host_url[LLB_MAX_HOSTURL_LEN];

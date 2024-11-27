@@ -246,6 +246,7 @@ dp_pipe_set_nat(void *ctx, struct xfi *xf,
   xf->nm.nv6 = na->nv6 ? 1 : 0;
   xf->nm.dsr = na->dsr;
   xf->nm.cdis = na->cdis;
+  xf->nm.ppv2 = na->ppv2 ? 1 : 0;
   xf->nm.npmhh = na->nmh;
   LL_DBG_PRINTK("[CT] NAT ACT %x", xf->pm.nf);
 

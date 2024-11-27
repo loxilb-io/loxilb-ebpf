@@ -2585,7 +2585,8 @@ ll_ct_get_state(struct dp_ct_key *key, struct dp_ct_tact *adat, bool *est, uint6
         ts->state & CT_TCP_SYNC_MASK ||
         ts->state == CT_TCP_CLOSED) {
       *to = CT_TCP_FN_CPTO;
-    } else if (ts->state == CT_TCP_EST) {
+    } else if (ts->state == CT_TCP_EST ||
+               ts->state == CT_TCP_PEST ) {
       *est = true;
     }
   } else if (key->l4proto == IPPROTO_UDP) {

@@ -99,7 +99,7 @@ dp_sctp_csum(void *ctx, struct xfi *xf)
         DP_LLB_SET_CRC_OFF(ctx, (sctp_csum_off<<16));
       }
         
-      RETURN_TO_MP_OUT();
+      RETURN_TO_MP_OUT(ctx);
   }
 
   /* Update state-variables */

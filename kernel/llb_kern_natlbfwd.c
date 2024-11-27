@@ -171,7 +171,7 @@ dp_do_nat(void *ctx, struct xfi *xf)
   LL_DBG_PRINTK("[NAT] action %d pipe %x\n",
                  act->ca.act_type, xf->pm.pipe_act);
 
-  if (act->chksrc) {
+  if (act->opflags & NAT_LB_OP_CHKSRC) {
     __u32 bm = (1 << act->ca.cidx) & 0xffffff;
     if (!(xf->pm.dp_mark & bm)) {
       LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_ACT_UNK);
@@ -185,6 +185,7 @@ dp_do_nat(void *ctx, struct xfi *xf)
 
     xf->nm.dsr = act->ca.oaux ? 1: 0;
     xf->nm.cdis = act->cdis ? 1: 0;
+    xf->nm.ppv2 = act->ppv2 ? 1: 0;
     xf->pm.nf = act->ca.act_type == DP_SET_SNAT ? LLB_NAT_SRC : LLB_NAT_DST;
     xf->nm.npmhh = act->npmhh;
     xf->nm.pmhh[0] = act->pmhh[0];

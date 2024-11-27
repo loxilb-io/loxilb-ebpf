@@ -299,6 +299,12 @@ dp_pipe_check_res(void *ctx, struct xfi *xf, void *fa)
         return DP_DROP;
     }
 
+    if (xf->pm.ppv2) { 
+      dp_ins_ppv2(ctx, xf);
+    } else if (xf->pm.oppv2 | xf->pm.ippv2) {
+      dp_fixup_ppv2(ctx, xf);
+    }
+
     if (DP_LLB_IS_EGR(ctx)) {
       if (xf->pm.nf == 0 && xf->pm.nfc == 0) {
         return DP_PASS;

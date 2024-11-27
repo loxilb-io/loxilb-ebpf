@@ -992,7 +992,7 @@ dp_unparse_packet_always_slow(void *ctx,  struct xfi *xf)
 
   xf->pm.nf = 0;
 
-  RETURN_TO_MP_OUT();
+  RETURN_TO_MP_OUT(ctx);
 
   return DP_DROP;
 }
