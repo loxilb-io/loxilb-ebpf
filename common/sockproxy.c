@@ -1743,16 +1743,16 @@ proxy_ssl_accept(void *ssl, int fd)
     sel_rc = 0;
     switch (SSL_get_error(ssl, ssl_rc)) {
       case SSL_ERROR_WANT_READ:
-        log_error("ssl-accept want-read %s",
+        log_trace("ssl-accept want-read %s",
           ERR_error_string(ERR_get_error(), NULL));
         pfds.events = POLLIN;
-        sel_rc = poll(&pfds, 1, 30);
+        sel_rc = poll(&pfds, 1, 100);
         break;
       case SSL_ERROR_WANT_WRITE:
-        log_error("ssl-accept want-write %s",
+        log_trace("ssl-accept want-write %s",
           ERR_error_string(ERR_get_error(), NULL));
         pfds.events = POLLOUT;
-        sel_rc = poll(&pfds, 1, 30);
+        sel_rc = poll(&pfds, 1, 100);
         break;
       default:
         log_error("ssl-accept failed %s",
@@ -2031,17 +2031,6 @@ restart:
 
         new_sd = get_mapped_proxy_fd(new_sd, 1);
 
-        if (ent->val.ssl_ctx) {
-          ssl = SSL_new(ent->val.ssl_ctx);
-          assert(ssl);
-          SSL_set_fd(ssl, new_sd);
-          if (proxy_ssl_accept(ssl, new_sd) < 0) {
-            SSL_free(ssl);
-            close(new_sd);
-            continue;
-          }
-        }
-
         if (proxy_skmap_key_from_fd(new_sd, &key, &protocol)) {
           log_error("skmap key from fd failed");
           if (ssl) {
@@ -2053,6 +2042,17 @@ restart:
         }
 
         proxy_sock_set_opts(new_sd, protocol);
+
+        if (ent->val.ssl_ctx) {
+          ssl = SSL_new(ent->val.ssl_ctx);
+          assert(ssl);
+          SSL_set_fd(ssl, new_sd);
+          if (proxy_ssl_accept(ssl, new_sd) < 0) {
+            SSL_free(ssl);
+            close(new_sd);
+            continue;
+          }
+        }
 
         proxy_log("new accept()", &key);
         log_trace("newfd = %d", new_sd);
