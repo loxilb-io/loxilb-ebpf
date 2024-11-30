@@ -323,6 +323,8 @@ dp_do_ctops(void *ctx, struct xfi *xf, void *fa_,
       goto ct_trk;
     }
 
+    xf->pm.phit |= LLB_DP_NAT_HIT;
+
   } else if (act->ca.act_type == DP_SET_TOCP) {
     LLBS_PPLN_PASSC(xf, LLB_PIPE_RC_ACL_TRAP);
   } else {

@@ -206,6 +206,8 @@ dp_ing_fc_main(void *ctx, struct xfi *xf)
         DP_EG_ACCOUNTING(ctx, xf);
         oif = xf->pm.oport;
         return bpf_redirect(oif, 0);         
+      } else if (xf->pm.pipe_act & LLB_PIPE_TRAP) {
+        return DP_PASS;
       }
     }
   }

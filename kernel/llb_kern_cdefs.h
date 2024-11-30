@@ -1151,7 +1151,22 @@ dp_ins_ppv2(void *md, struct xfi *xf)
       memcpy(ntop, top, 16);
       ppv2h = (void *)(ntop + 16);
       dp_populate_ppv2(md, xf, ppv2h, &csum);
+    } else if (doff == 40) {
+      __u8 *top =  (void *)(tcp + 1);
+      if (top + 20 > dend) {
+        LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLERR);
+        return -1;
+      }
+      __u8 *ntop =  (void *)(ntcp + 1);
+      if (ntop + 20 > dend) {
+        LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLERR);
+        return -1;
+      }
+      memcpy(ntop, top, 20);
+      ppv2h = (void *)(ntop + 20);
+      dp_populate_ppv2(md, xf, ppv2h, &csum);
     } else if (doff != 20) {
+      /* Max of 20 bytes of options */
       LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLERR);
       return -1;
     }
