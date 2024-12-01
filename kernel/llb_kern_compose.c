@@ -1113,6 +1113,7 @@ dp_unparse_packet(void *ctx,  struct xfi *xf, int egr)
   }
 
   if (egr) {
+    dp_set_qmap(ctx, 0);
     return 0;
   }
 

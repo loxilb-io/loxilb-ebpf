@@ -2138,6 +2138,23 @@ dp_do_snat46(void *md, struct xfi *xf)
   return 0;
 }
 
+static void __always_inline
+dp_set_qmap(void *md, __u32 qnum)
+{
+  ((struct __sk_buff *)md)->queue_mapping = qnum;
+}
+
+static __u32 __always_inline
+dp_get_qmap(void *md)
+{
+  return ((struct __sk_buff *)md)->queue_mapping;
+}
+
+static void __always_inline
+dp_reset_pkt_hash(void *md)
+{
+  bpf_set_hash_invalid(md);
+}
 
 static __u32 __always_inline
 dp_get_pkt_hash(void *md)
@@ -2435,6 +2452,27 @@ dp_do_snat46(void *ctx, struct xfi *xf)
 {
   /* FIXME - TBD */
   return 0;
+}
+
+static void __always_inline
+dp_set_qmap(void *md, __u32 qnum)
+{
+  /* FIXME - TODO */
+  return;
+}
+
+static __u32 __always_inline
+dp_get_qmap(void *md)
+{
+  /* FIXME - TODO */
+  return 0;
+}
+
+static void __always_inline
+dp_reset_pkt_hash(void *md)
+{
+  /* FIXME - TODO */
+  return;
 }
 
 static __u32 __always_inline
