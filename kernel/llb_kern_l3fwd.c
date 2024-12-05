@@ -273,6 +273,7 @@ dp_do_ctops(void *ctx, struct xfi *xf, void *fa_,
   fa->ca.cidx = act->ca.cidx;
   fa->ca.fwrid = act->ca.fwrid;
 #endif
+  xf->pm.fw_rid = act->ca.fwrid;
 
   if (act->ca.act_type == DP_SET_DO_CT) {
     goto ct_trk;

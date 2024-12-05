@@ -499,6 +499,10 @@ dp_ing_ct_main(void *ctx,  struct xfi *xf)
       return DP_PASS;
     }
 #endif
+  } else {
+    if (xf->pm.fw_rid != 0) {
+      dp_do_map_stats(ctx, xf, LL_DP_FW4_STATS_MAP, xf->pm.fw_rid);
+    }
   }
 
   LL_DBG_PRINTK("[CTRK] start");
