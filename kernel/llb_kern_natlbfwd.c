@@ -207,7 +207,7 @@ dp_do_nat(void *ctx, struct xfi *xf)
       xf->pm.rule_id =  act->ca.cidx;
       LL_DBG_PRINTK("[NAT] ACT %x", xf->pm.nf);
       /* Special case related to host-dnat */
-      if (xf->l34m.saddr4 == xf->nm.nxip4 && xf->pm.nf == LLB_NAT_DST) {
+      if (!xf->nm.nv6 && xf->l34m.saddr4 == xf->nm.nxip4 && xf->pm.nf == LLB_NAT_DST) {
         xf->nm.nxip4 = 0;
       }
     } else {
