@@ -140,7 +140,8 @@ struct dp_pi_mdi {
     __u32            rcode;
 
     __u8             tc:4;
-    __u8             ppv2:2;
+    __u8             dflrt:1;
+    __u8             ppv2:1;
     __u8             oppv2:1;
     __u8             ippv2:1;
 #define LLB_DP_PORT_UPP       0x1

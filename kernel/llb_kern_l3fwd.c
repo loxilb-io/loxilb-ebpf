@@ -120,7 +120,8 @@ dp_do_rtops(void *ctx, struct xfi *xf, void *fa_, struct dp_rt_tact *act)
     struct dp_rdr_act *ra = &act->port_act;
     LLBS_PPLN_RDR(xf);
     xf->pm.oport = ra->oport;
-  } else if (act->ca.act_type == DP_SET_RT_NHNUM) {
+  } else if (act->ca.act_type == DP_SET_RT_NHNUM ||
+             act->ca.act_type == DP_SET_RT_NHNUM_DFLT) {
     struct dp_rt_nh_act *rnh = &act->rt_nh;
 
     if (rnh->naps > 1) {
@@ -130,6 +131,9 @@ dp_do_rtops(void *ctx, struct xfi *xf, void *fa_, struct dp_rt_tact *act)
       }
     } else {
       xf->pm.nh_num = rnh->nh_num[0];
+    }
+    if (act->ca.act_type == DP_SET_RT_NHNUM_DFLT) {
+      xf->pm.dflrt = 1;
     }
     return dp_do_rt_fwdops(ctx, xf);
   } /*else if (act->ca.act_type == DP_SET_L3RT_TUN_NH) {
