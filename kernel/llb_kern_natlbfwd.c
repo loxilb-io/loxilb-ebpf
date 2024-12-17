@@ -80,7 +80,7 @@ dp_sel_nat_ep(void *ctx, struct xfi *xf, struct dp_proxy_tacts *act)
 
     bpf_spin_lock(&act->lock);
     if (act->base_to == 0 || now - act->lts > act->pto) {
-      act->base_to = (now/act->pto) * act->pto;
+      act->base_to = now;
     }
     base = act->base_to;
     if (act->pto) {
@@ -89,10 +89,35 @@ dp_sel_nat_ep(void *ctx, struct xfi *xf, struct dp_proxy_tacts *act)
       act->pto = NAT_LB_PERSIST_TIMEOUT;
       tfc = base/NAT_LB_PERSIST_TIMEOUT;
     }
+#ifdef HAVE_DP_PERSIST_TFC
     sel = (xf->l34m.saddr4 & 0xff) ^  ((xf->l34m.saddr4 >> 24) & 0xff) ^ (tfc & 0xff);
+#else
+    sel = (xf->l34m.saddr4 & 0xff) ^ ((xf->l34m.saddr4 >> 24) & 0xff);
+#endif
     sel %= act->nxfrm;
     act->lts = now;
     bpf_spin_unlock(&act->lock);
+    if (sel >= 0 && sel < LLB_MAX_NXFRMS) {
+      if (act->nxfrms[sel].inactive) {
+#ifdef HAVE_DP_PERSIST_TFC
+        sel = ((xf->l34m.saddr4 >> 8) & 0xff) ^  ((xf->l34m.saddr4 >> 16) & 0xff) ^ (tfc & 0xff);
+#else
+        sel = ((xf->l34m.saddr4 >> 8) & 0xff) ^  ((xf->l34m.saddr4 >> 16) & 0xff);
+#endif
+        sel %= act->nxfrm;
+        if (sel >= 0 && sel < LLB_MAX_NXFRMS) {
+          /* Fall back if two-level hash selection gives us a deadend */
+          if (act->nxfrms[sel].inactive) {
+            for (i = 0; i < LLB_MAX_NXFRMS; i++) {
+              if (act->nxfrms[i].inactive == 0) {
+                sel = i;
+                break;
+              }
+            }
+          }
+        }
+      }
+    }
   } else if (act->sel_type == NAT_LB_SEL_LC) {
     struct dp_nat_epacts *epa;
     __u32 key = rule_num;
