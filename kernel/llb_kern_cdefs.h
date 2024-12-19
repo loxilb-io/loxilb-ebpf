@@ -3196,4 +3196,12 @@ dp_swap_mac_header(void *ctx, struct xfi *xf)
   return 0;
 }
 
+#define GET_IP_HASH(x)  ((x) >> 24 & 0xff) ^ \
+                        ((x) >> 16 & 0xff) ^ \
+                        ((x) >> 8 & 0xff)  ^ \
+                        ((x) & 0xff)
+
+#define GET_IP_HASH2(x) ((x) >> 16 & 0xff) ^ \
+                        ((x) >> 8 & 0xff)
+
 #endif
