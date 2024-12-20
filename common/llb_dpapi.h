@@ -44,7 +44,8 @@
 #define LLB_SESS_MAP_ENTRIES  (20*1024)
 #define LLB_PPLAT_MAP_ENTRIES (2048)
 #define LLB_PSECS             (8)
-#define LLB_MAX_NXFRMS        (32)
+#define LLB_MAX_NXFRMS        (256)
+#define LLB_MIN_NXFRMS        (32)
 #define LLB_CRC32C_ENTRIES    (256)
 #define LLB_MAX_MHOSTS        (3)
 #define LLB_MAX_SCTP_CHUNKS_INIT (8)
@@ -793,14 +794,15 @@ struct dp_proxy_tacts {
   uint64_t ito;
   uint64_t pto;
   struct bpf_spin_lock lock;
-  uint8_t nxfrm;
+  uint16_t nxfrm;
+  uint16_t sel_hint;
   uint8_t opflags;
   uint8_t cdis;
   uint8_t npmhh;
-  uint16_t sel_hint;
   uint8_t sel_type;
   uint8_t sec_mode;
   uint8_t ppv2;
+  uint16_t res;
   uint32_t pmhh[LLB_MAX_MHOSTS];
   struct mf_xfrm_inf nxfrms[LLB_MAX_NXFRMS];
   uint8_t host_url[LLB_MAX_HOSTURL_LEN];

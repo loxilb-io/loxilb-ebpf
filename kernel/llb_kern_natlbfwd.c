@@ -22,7 +22,7 @@ static int __always_inline
 dp_sel_nat_ep(void *ctx, struct xfi *xf, struct dp_proxy_tacts *act)
 {
   int sel = -1;
-  uint8_t n = 0;
+  uint16_t n = 0;
   uint16_t i = 0;
   struct mf_xfrm_inf *nxfrm_act;
   __u16 rule_num = act->ca.cidx;
@@ -31,17 +31,17 @@ dp_sel_nat_ep(void *ctx, struct xfi *xf, struct dp_proxy_tacts *act)
     bpf_spin_lock(&act->lock);
     i = act->sel_hint; 
 
-    while (n < LLB_MAX_NXFRMS) {
+    while (n < LLB_MIN_NXFRMS) {
       if (i >= 0 && i < LLB_MAX_NXFRMS) {
         nxfrm_act = &act->nxfrms[i];
         if (nxfrm_act->inactive == 0) {
-          act->sel_hint = (i + 1) % LLB_MAX_NXFRMS;
+          act->sel_hint = (i + 1) % LLB_MIN_NXFRMS;
           sel = i;
           break;
         }
       }
       i++;
-      if (i >= LLB_MAX_NXFRMS)  i = 0;
+      if (i >= LLB_MIN_NXFRMS)  i = 0;
       n++;
     }
     bpf_spin_unlock(&act->lock);
@@ -50,7 +50,7 @@ dp_sel_nat_ep(void *ctx, struct xfi *xf, struct dp_proxy_tacts *act)
     if (sel >= 0 && sel < LLB_MAX_NXFRMS) {
       /* Fall back if hash selection gives us a deadend */
       if (act->nxfrms[sel].inactive) {
-        for (i = 0; i < LLB_MAX_NXFRMS; i++) {
+        for (i = 0; i < LLB_MIN_NXFRMS; i++) {
           if (act->nxfrms[i].inactive == 0) {
             sel = i;
             break;
@@ -64,7 +64,7 @@ dp_sel_nat_ep(void *ctx, struct xfi *xf, struct dp_proxy_tacts *act)
       if (sel >= 0 && sel < LLB_MAX_NXFRMS) {
         /* Fall back if hash selection gives us a deadend */
         if (act->nxfrms[sel].inactive) {
-          for (i = 0; i < LLB_MAX_NXFRMS; i++) {
+          for (i = 0; i < LLB_MIN_NXFRMS; i++) {
             if (act->nxfrms[i].inactive == 0) {
               sel = i;
               break;
@@ -108,7 +108,7 @@ dp_sel_nat_ep(void *ctx, struct xfi *xf, struct dp_proxy_tacts *act)
         if (sel >= 0 && sel < LLB_MAX_NXFRMS) {
           /* Fall back if two-level hash selection gives us a deadend */
           if (act->nxfrms[sel].inactive) {
-            for (i = 0; i < LLB_MAX_NXFRMS; i++) {
+            for (i = 0; i < LLB_MIN_NXFRMS; i++) {
               if (act->nxfrms[i].inactive == 0) {
                 sel = i;
                 break;
@@ -126,7 +126,7 @@ dp_sel_nat_ep(void *ctx, struct xfi *xf, struct dp_proxy_tacts *act)
     if (epa != NULL) {
       epa->ca.act_type = DP_SET_NACT_SESS;
       bpf_spin_lock(&epa->lock);
-      for (i = 0; i < LLB_MAX_NXFRMS; i++) {
+      for (i = 0; i < LLB_MIN_NXFRMS; i++) {
         nxfrm_act = &act->nxfrms[i];
         if (nxfrm_act->inactive == 0) {
           __u32 as = epa->active_sess[i];
