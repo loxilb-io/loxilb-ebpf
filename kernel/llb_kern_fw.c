@@ -42,8 +42,8 @@ dp_do_fw4_main(void *ctx, struct xfi *xf)
   LL_DBG_PRINTK("[FW4] -- Lookup\n");
   LL_DBG_PRINTK("[FW4] key-sz %d\n", sizeof(key));
   LL_DBG_PRINTK("[FW4] port %x\n", key.inport);
-  LL_DBG_PRINTK("[FW4] daddr %x\n", key.dest);
-  LL_DBG_PRINTK("[FW4] saddr %d\n", key.source);
+  LL_DBG_PRINTK("[FW4] daddr 0x%x", key.dest);
+  LL_DBG_PRINTK("[FW4] saddr 0x%x", key.source);
   LL_DBG_PRINTK("[FW4] sport %d\n", key.sport);
   LL_DBG_PRINTK("[FW4] dport %d\n", key.dport);
   LL_DBG_PRINTK("[FW4] l4proto %d\n", key.protocol);
@@ -122,14 +122,6 @@ dp_do_fw4_main(void *ctx, struct xfi *xf)
 done:
   dp_do_map_stats(ctx, xf, LL_DP_FW4_STATS_MAP, act->ca.cidx);
   xf->pm.fw_rid = act->ca.cidx;
-
-  if (xf->pm.dp_mark & LLB_MARK_SNAT_EGR) {
-    if (xf->pm.dflrt) {
-      xf->pm.dp_mark = LLB_MARK_SNAT;
-    } else {
-      xf->pm.dp_mark = 0;
-    }
-  }
 
   RETURN_TO_MP();
   xf->pm.rcode |= LLB_PIPE_RC_TCALL_ERR;

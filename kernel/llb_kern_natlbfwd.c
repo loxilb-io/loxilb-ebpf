@@ -192,6 +192,8 @@ dp_do_nat(void *ctx, struct xfi *xf)
     xf->nm.pmhh[1] = act->pmhh[1];
     xf->nm.pmhh[2] = act->pmhh[2];  // LLB_MAX_MHOSTS
 
+    xf->pm.dp_mark &= ~LLB_MARK_SNAT_EGR;
+
     /* FIXME - Do not select inactive end-points 
      * Need multi-passes for selection
      */

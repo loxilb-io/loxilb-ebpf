@@ -53,6 +53,7 @@
 #define LLB_SOCKID_MAP_SZ     (17*1024)
 #define LLB_MAX_HOSTURL_LEN   (256)
 
+#define LLB_DP_MASQ_PGM_ID     (7)
 #define LLB_DP_SUNP_PGM_ID2    (6)
 #define LLB_DP_CRC_PGM_ID2     (5)
 #define LLB_DP_CRC_PGM_ID1     (4)
