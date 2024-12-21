@@ -44,7 +44,7 @@
 #define LLB_SESS_MAP_ENTRIES  (20*1024)
 #define LLB_PPLAT_MAP_ENTRIES (2048)
 #define LLB_PSECS             (8)
-#define LLB_MAX_NXFRMS        (256)
+#define LLB_MAX_NXFRMS        (1600)
 #define LLB_MIN_NXFRMS        (32)
 #define LLB_CRC32C_ENTRIES    (256)
 #define LLB_MAX_MHOSTS        (3)

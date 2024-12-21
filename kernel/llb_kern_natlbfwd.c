@@ -90,9 +90,9 @@ dp_sel_nat_ep(void *ctx, struct xfi *xf, struct dp_proxy_tacts *act)
       tfc = base/NAT_LB_PERSIST_TIMEOUT;
     }
 #ifdef HAVE_DP_PERSIST_TFC
-    sel = GET_IP_HASH(xf->l34m.saddr4) ^ (tfc & 0xff);
+    sel = get_ip4_hash(xf->l34m.saddr4) ^ (tfc & 0xff);
 #else
-    sel = GET_IP_HASH(xf->l34m.saddr4);
+    sel = get_ip4_hash(xf->l34m.saddr4);
 #endif
     sel %= act->nxfrm;
     act->lts = now;
@@ -100,9 +100,9 @@ dp_sel_nat_ep(void *ctx, struct xfi *xf, struct dp_proxy_tacts *act)
     if (sel >= 0 && sel < LLB_MAX_NXFRMS) {
       if (act->nxfrms[sel].inactive) {
 #ifdef HAVE_DP_PERSIST_TFC
-        sel = GET_IP_HASH2(xf->l34m.saddr4) ^ (tfc & 0xff);
+        sel = get_ip4_hash2(xf->l34m.saddr4) ^ (tfc & 0xff);
 #else
-        sel = GET_IP_HASH2(xf->l34m.saddr4);
+        sel = get_ip4_hash2(xf->l34m.saddr4);
 #endif
         sel %= act->nxfrm;
         if (sel >= 0 && sel < LLB_MAX_NXFRMS) {
