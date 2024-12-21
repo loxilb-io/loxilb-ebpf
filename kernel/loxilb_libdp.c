@@ -1893,11 +1893,12 @@ llb_add_map_elem_nat_post_proc(void *k, void *v)
 {
   struct dp_proxy_tacts *na = v;
   struct mf_xfrm_inf *ep_arm;
-  uint32_t inact_aids[LLB_MAX_NXFRMS];
+  uint32_t *inact_aids;
   int i = 0;
   int j = 0;
 
-  memset(inact_aids, 0, sizeof(inact_aids));
+  inact_aids = calloc(1, sizeof(uint32_t)*LLB_MAX_NXFRMS);
+  assert(inact_aids);
 
   for (i = 0; i < na->nxfrm && i < LLB_MAX_NXFRMS; i++) {
     ep_arm = &na->nxfrms[i];
@@ -1911,6 +1912,8 @@ llb_add_map_elem_nat_post_proc(void *k, void *v)
     ll_map_ct_rm_related(na->ca.cidx, inact_aids, j);
   }
 
+  free(inact_aids);
+
   return 0;
 
 }
@@ -1920,11 +1923,12 @@ llb_del_map_elem_nat_post_proc(void *k, void *v)
 {
   struct dp_proxy_tacts *na = v;
   struct mf_xfrm_inf *ep_arm;
-  uint32_t inact_aids[LLB_MAX_NXFRMS];
+  uint32_t *inact_aids;
   int i = 0;
   int j = 0;
 
-  memset(inact_aids, 0, sizeof(inact_aids));
+  inact_aids = calloc(1, sizeof(uint32_t)*LLB_MAX_NXFRMS);
+  assert(inact_aids);
 
   for (i = 0; i < na->nxfrm && i < LLB_MAX_NXFRMS; i++) {
     ep_arm = &na->nxfrms[i];
@@ -1937,6 +1941,8 @@ llb_del_map_elem_nat_post_proc(void *k, void *v)
   if (j > 0) {
     ll_map_ct_rm_related(na->ca.cidx, inact_aids, j);
   }
+
+  free(inact_aids);
 
   return 0;
 
@@ -2333,7 +2339,7 @@ int
 llb_del_map_elem_wval(int tbl, void *k, void *v)
 {
   int ret = -EINVAL;
-  struct dp_proxy_tacts t = { 0 };
+  struct dp_proxy_tacts *t = NULL;
 
   if (tbl < 0 || tbl >= LL_DP_MAX_MAP) {
     return ret;
@@ -2342,7 +2348,7 @@ llb_del_map_elem_wval(int tbl, void *k, void *v)
   XH_LOCK();
 
   /* Need some pre-processing for certain maps */
-  if (tbl == LL_DP_NAT_MAP) {
+  if (tbl == LL_DP_NAT_MAP && v != NULL) {
     struct dp_nat_key *nk = k;
     struct dp_proxy_tacts *nv = v;
     struct proxy_ent pk = { 0 };
@@ -2359,12 +2365,6 @@ llb_del_map_elem_wval(int tbl, void *k, void *v)
     if (xh->have_noebpf) {
       XH_UNLOCK();
       return 0;
-    }
-
-    ret = bpf_map_lookup_elem(llb_map2fd(tbl), k, &t);
-    if (ret != 0) {
-      XH_UNLOCK();
-      return -EINVAL;
     }
   }
 
@@ -2384,7 +2384,17 @@ llb_del_map_elem_wval(int tbl, void *k, void *v)
 
   /* Need some post-processing for certain maps */
   if (tbl == LL_DP_NAT_MAP) {
-    llb_del_map_elem_nat_post_proc(k, &t);
+    t = calloc(1, sizeof(struct dp_proxy_tacts));
+    assert(t);
+    ret = bpf_map_lookup_elem(llb_map2fd(tbl), k, t);
+    if (ret != 0) {
+      XH_UNLOCK();
+      free(t);
+      return -EINVAL;
+    }
+
+    llb_del_map_elem_nat_post_proc(k, t);
+    free(t);
   }
 
   XH_UNLOCK();
