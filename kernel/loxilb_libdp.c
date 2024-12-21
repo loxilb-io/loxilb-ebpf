@@ -2475,7 +2475,7 @@ typedef struct ct_arg_struct
 {
   uint64_t curr_ns;
   uint32_t rid;
-  uint32_t aid[32];
+  uint32_t aid[LLB_MAX_NXFRMS];
   int n_aids;
   int n_aged;
 } ct_arg_struct_t;
