@@ -402,10 +402,6 @@ dp_do_ing_ct(void *ctx, struct xfi *xf, void *fa_)
 static void __always_inline
 dp_do_ipv4_fwd(void *ctx,  struct xfi *xf, void *fa_)
 {
-  /* Check tunnel initiation */
-  if (xf->tm.tunnel_id == 0 ||  xf->tm.tun_type != LLB_TUN_GTP) {
-    dp_do_sess4_lkup(ctx, xf);
-  }
 #ifndef HAVE_DP_LBMODE_ONLY
   if (xf->pm.phit & LLB_DP_TMAC_HIT) {
 #else
@@ -413,7 +409,7 @@ dp_do_ipv4_fwd(void *ctx,  struct xfi *xf, void *fa_)
 #endif
 
     /* If some pipeline block already set a redirect before this,
-     * we honor this and dont do further l3 processing 
+     * we honor this and dont do further l3 processing
      */
     if ((xf->pm.pipe_act & LLB_PIPE_RDR_MASK) == 0) {
       dp_do_rtv4(ctx, xf, fa_);
@@ -438,6 +434,34 @@ dp_do_ipv6_fwd(void *ctx,  struct xfi *xf, void *fa_)
       dp_do_rtv6(ctx, xf, fa_);
     }
   }
+}
+
+static int __always_inline
+dp_l3tun_fwd(void *ctx,  struct xfi *xf, void *fa)
+{
+  if (xf->l2m.dl_type == bpf_htons(ETH_P_IP)) {
+    /* Check tunnel initiation */
+    if (xf->tm.tunnel_id == 0 ||  xf->tm.tun_type != LLB_TUN_GTP) {
+      dp_do_sess4_lkup(ctx, xf);
+      if (xf->tm.new_tunnel_id == 0) {
+        return 0;
+      }
+    }
+#ifndef HAVE_DP_LBMODE_ONLY
+    if (xf->pm.phit & LLB_DP_TMAC_HIT) {
+#else
+    if (1) {
+#endif
+
+      /* If some pipeline block already set a redirect before this,
+       * we honor this and dont do further l3 processing
+       */
+      if ((xf->pm.pipe_act & LLB_PIPE_RDR_MASK) == 0) {
+        dp_do_rtv4(ctx, xf, fa);
+      }
+    }
+  }
+  return 0;
 }
 
 static int __always_inline
@@ -472,8 +496,9 @@ dp_ing_l3(void *ctx,  struct xfi *xf, void *fa)
     }
   }
 
-  dp_do_ing_ct(ctx, xf, fa);
   dp_l3_fwd(ctx, xf, fa);
+  dp_do_ing_ct(ctx, xf, fa);
+  dp_l3tun_fwd(ctx, xf, fa);
 
   return 0;
 }

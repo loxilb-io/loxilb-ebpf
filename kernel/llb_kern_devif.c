@@ -537,6 +537,7 @@ ct_start:
   }
   xf->nm.ct_sts = LLB_PIPE_CT_INP;
 
+  dp_l3tun_fwd(ctx, xf, fa);
   dp_eg_l2(ctx, xf, fa);
 
 res_end:
