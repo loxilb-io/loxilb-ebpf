@@ -53,6 +53,7 @@
 #define LLB_SOCKID_MAP_SZ     (17*1024)
 #define LLB_MAX_HOSTURL_LEN   (256)
 
+#define LLB_DP_MASQ_PGM_ID     (7)
 #define LLB_DP_SUNP_PGM_ID2    (6)
 #define LLB_DP_CRC_PGM_ID2     (5)
 #define LLB_DP_CRC_PGM_ID1     (4)
@@ -80,6 +81,11 @@
 #define CT_ICMP_EST_CPTO      (20000000000)
 #define CT_ICMP_FN_CPTO       (5000000000)
 #define CT_MISMATCH_FN_CPTO   (180000000000)
+
+/* FW Mark values */
+#define LLB_MARK_SNAT         (0x80000000)
+#define LLB_MARK_SRC          (0x40000000)
+#define LLB_MARK_SNAT_EGR     (0x20000000)
 
 #define DP_XADDR_ISZR(a) ((a)[0] == 0 && \
                           (a)[1] == 0 && \
@@ -171,7 +177,8 @@ enum {
   DP_SET_NEIGH_IPIP      = 23,
   DP_SET_RM_IPIP         = 24,
   DP_SET_NACT_SESS       = 25,
-  DP_SET_FULLPROXY       = 26
+  DP_SET_FULLPROXY       = 27,
+  DP_SET_RT_NHNUM_DFLT   = 28
 };
 
 struct dp_cmn_act {

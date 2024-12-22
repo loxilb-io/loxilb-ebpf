@@ -477,6 +477,10 @@ dp_ing_ct_main(void *ctx,  struct xfi *xf)
     goto res_end;
   }
 
+  if (xf->pm.phit & LLB_DP_NAT_HIT) {
+    goto ct_start;
+  }
+
   /* If ACL is hit, and packet arrives here 
    * it only means that we need CT processing.
    * In such a case, we skip nat lookup
@@ -492,7 +496,9 @@ dp_ing_ct_main(void *ctx,  struct xfi *xf)
       dp_record_it(ctx, xf);
     }
 
-    dp_do_nat(ctx, xf);
+    if (!(xf->pm.dp_mark & LLB_MARK_SNAT)) {
+      dp_do_nat(ctx, xf);
+    }
 
 #ifdef HAVE_DP_LBMODE_ONLY
     if ((xf->pm.phit & LLB_DP_NAT_HIT) == 0) {
@@ -505,15 +511,6 @@ dp_ing_ct_main(void *ctx,  struct xfi *xf)
     }
   }
 
-  LL_DBG_PRINTK("[CTRK] start");
-
-  val = dp_ct_in(ctx, xf);
-  if (val < 0) {
-    return DP_PASS;
-  }
-
-  xf->nm.ct_sts = LLB_PIPE_CT_INP;
-
   /* CT pipeline is hit after acl lookup fails 
    * So, after CT processing we continue the rest
    * of the stack. We could potentially make 
@@ -522,6 +519,24 @@ dp_ing_ct_main(void *ctx,  struct xfi *xf)
    * complexity for now 
    */
   dp_l3_fwd(ctx, xf, fa);
+
+  /* Perform masquerading if necessary */
+  if ((xf->pm.phit & LLB_DP_CTM_HIT) == 0) {
+    if (xf->pm.dp_mark & LLB_MARK_SNAT) {
+      bpf_tail_call(ctx, &pgm_tbl, LLB_DP_MASQ_PGM_ID);
+      return DP_PASS;
+    }
+  }
+
+ct_start:
+  /* Perform conntrack */
+  LL_DBG_PRINTK("[CTRK] start");
+  val = dp_ct_in(ctx, xf);
+  if (val < 0) {
+    return DP_PASS;
+  }
+  xf->nm.ct_sts = LLB_PIPE_CT_INP;
+
   dp_eg_l2(ctx, xf, fa);
 
 res_end:

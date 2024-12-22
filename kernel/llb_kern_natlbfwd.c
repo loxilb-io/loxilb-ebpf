@@ -163,7 +163,7 @@ dp_do_nat(void *ctx, struct xfi *xf)
   memset(&key, 0, sizeof(key));
   key.mark = xf->pm.dp_mark;
 
-  if (!(key.mark & 0x80000000)) {
+  if (!(key.mark & LLB_MARK_SNAT)) {
     DP_XADDR_CP(key.daddr, xf->l34m.daddr);
     if (xf->l34m.nw_proto != IPPROTO_ICMP) {
       key.dport = xf->l34m.dest;
@@ -176,7 +176,7 @@ dp_do_nat(void *ctx, struct xfi *xf)
       key.v6 = 1;
     }
 
-    if (key.mark & 0x40000000) {
+    if (key.mark & LLB_MARK_SNAT_EGR) {
       key.mark = 0;
     }
   }
@@ -216,6 +216,8 @@ dp_do_nat(void *ctx, struct xfi *xf)
     xf->nm.pmhh[0] = act->pmhh[0];
     xf->nm.pmhh[1] = act->pmhh[1];
     xf->nm.pmhh[2] = act->pmhh[2];  // LLB_MAX_MHOSTS
+
+    xf->pm.dp_mark &= ~LLB_MARK_SNAT_EGR;
 
     /* FIXME - Do not select inactive end-points 
      * Need multi-passes for selection

@@ -42,8 +42,8 @@ dp_do_fw4_main(void *ctx, struct xfi *xf)
   LL_DBG_PRINTK("[FW4] -- Lookup\n");
   LL_DBG_PRINTK("[FW4] key-sz %d\n", sizeof(key));
   LL_DBG_PRINTK("[FW4] port %x\n", key.inport);
-  LL_DBG_PRINTK("[FW4] daddr %x\n", key.dest);
-  LL_DBG_PRINTK("[FW4] saddr %d\n", key.source);
+  LL_DBG_PRINTK("[FW4] daddr 0x%x", key.dest);
+  LL_DBG_PRINTK("[FW4] saddr 0x%x", key.source);
   LL_DBG_PRINTK("[FW4] sport %d\n", key.sport);
   LL_DBG_PRINTK("[FW4] dport %d\n", key.dport);
   LL_DBG_PRINTK("[FW4] l4proto %d\n", key.protocol);

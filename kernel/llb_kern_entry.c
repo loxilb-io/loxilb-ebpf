@@ -189,7 +189,7 @@ int tc_packet_func_slow(struct __sk_buff *md)
 }
 
 SEC("tc_packet_hook3")
-int tc_packet_func_fw(struct __sk_buff *md)
+int tc_packet_func_fw(struct __sk_buff *ctx)
 {
   int val = 0;
   struct xfi *xf;
@@ -199,7 +199,7 @@ int tc_packet_func_fw(struct __sk_buff *md)
     return DP_DROP;
   }
 
-  return dp_do_fw_main(md, xf);
+  return dp_do_fw_main(ctx, xf);
 }
 
 SEC("tc_packet_hook4")
@@ -257,6 +257,27 @@ int tc_slow_unp_func(struct __sk_buff *md)
     TRACER_CALL(md, xf);
   }
   return val;
+}
+
+SEC("tc_packet_hook7")
+int tc_packet_func_masq(struct __sk_buff *ctx)
+{
+  int val = 0;
+  struct xfi *xf;
+
+  xf = bpf_map_lookup_elem(&xfis, &val);
+  if (!xf) {
+    return DP_DROP;
+  }
+
+  if (xf->pm.dp_mark & LLB_MARK_SNAT) {
+    /* Do masquerade */
+    dp_do_nat(ctx, xf);
+    RETURN_TO_MP();
+    /* Not reached */
+    return DP_DROP;
+  }
+  return DP_DROP;
 }
 
 #endif
