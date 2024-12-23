@@ -4,22 +4,46 @@
  * 
  * SPDX-License-Identifier: (GPL-2.0 OR BSD-2-Clause)
  */
+
+#define EP_DPTO            (30000000000)
+
 static void __always_inline
 dp_do_dec_nat_sess(void *ctx, struct xfi *xf, __u32 rule, __u16 aid)
 {
   struct dp_nat_epacts *epa;
   epa = bpf_map_lookup_elem(&nat_ep_map, &rule);
-  if (epa != NULL && epa->ca.act_type == DP_SET_NACT_SESS) {
+  //if (epa != NULL && epa->ca.act_type == DP_SET_NACT_SESS) {
+  if (epa != NULL) {
     bpf_spin_lock(&epa->lock);
     if (aid < LLB_MAX_NXFRMS) {
-      epa->active_sess[aid]--;
+      epa->active_sess[aid].tcp = 0;
+      epa->active_sess[aid].udp = 0;
+    }
+    bpf_spin_unlock(&epa->lock);
+  }
+}
+
+static void __always_inline
+dp_update_ep_sess(void *ctx, struct xfi *xf, __u32 rule, int aid)
+{
+  struct dp_nat_epacts *epa;
+  
+  __u64 cts = bpf_ktime_get_ns();
+  epa = bpf_map_lookup_elem(&nat_ep_map, &rule);
+  if (epa != NULL) {
+    bpf_spin_lock(&epa->lock);
+    if (aid >= 0 && aid < LLB_MAX_NXFRMS) {
+      struct epsess *eps = &epa->active_sess[aid];
+      if (eps != NULL) {
+        eps->lts = cts; 
+      }
     }
     bpf_spin_unlock(&epa->lock);
   }
 }
 
 static int __always_inline
-dp_sel_nat_ep(void *ctx, struct xfi *xf, struct dp_proxy_tacts *act)
+dp_sel_nat_ep(void *ctx, struct xfi *xf, struct dp_proxy_tacts *act, int is_udp)
 {
   int sel = -1;
   uint16_t n = 0;
@@ -98,7 +122,7 @@ dp_sel_nat_ep(void *ctx, struct xfi *xf, struct dp_proxy_tacts *act)
     act->lts = now;
     bpf_spin_unlock(&act->lock);
     if (sel >= 0 && sel < LLB_MAX_NXFRMS) {
-      if (act->nxfrms[sel].inactive) {
+      if (0) { //act->nxfrms[sel].inactive) {
 #ifdef HAVE_DP_PERSIST_TFC
         sel = get_ip4_hash2(xf->l34m.saddr4) ^ (tfc & 0xff);
 #else
@@ -116,6 +140,58 @@ dp_sel_nat_ep(void *ctx, struct xfi *xf, struct dp_proxy_tacts *act)
             }
           }
         }
+      } else {
+        struct dp_nat_epacts *epa;
+        __u32 key = rule_num;
+        __u64 cts = bpf_ktime_get_ns();
+        epa = bpf_map_lookup_elem(&nat_ep_map, &key);
+        if (epa != NULL) {
+          bpf_spin_lock(&epa->lock);
+          if (sel >= 0 && sel < LLB_MAX_NXFRMS) {
+            struct epsess *eps = &epa->active_sess[sel];
+            if (eps->lts == 0 || (cts - eps->lts > EP_DPTO) || (eps->tcp == 0 && !is_udp) ||
+                (eps->udp == 0 && is_udp)) {
+              if (cts - eps->lts > EP_DPTO) {
+                eps->udp = 0;
+                eps->tcp = 0;
+              }
+
+              if (is_udp)
+                eps->udp = 1;
+              else
+                eps->tcp = 1;
+
+              eps->lts = cts;
+              //bpf_printk("use sel %u:%d", sel, is_udp);
+            } else {
+              //sel = get_ip4_hash3(xf->l34m.saddr4);
+              //sel %= act->nxfrm;
+              for (sel = 0; sel < LLB_MIN_NXFRMS; sel++) {
+                //bpf_printk("try use sel %u:%d", sel, is_udp);
+                if (sel >= 0 && sel < LLB_MAX_NXFRMS) {
+                  eps = &epa->active_sess[sel];
+                  if (act->nxfrms[sel].inactive == 0) {
+                    if (eps->lts == 0 || (cts - eps->lts > EP_DPTO) || (eps->tcp == 0 && !is_udp) ||
+                        (eps->udp == 0 && is_udp)) {
+                      if (cts - eps->lts > EP_DPTO) {
+                        eps->udp = 0;
+                        eps->tcp = 0;
+                      }
+                      if (is_udp)
+                        eps->udp = 1;
+                      else
+                        eps->tcp = 1;
+                      eps->lts = cts;
+                      break;
+                    }
+                  }
+                 // bpf_printk("use new sel %u:%d", sel, is_udp);
+                }
+              }
+            }
+          } 
+          bpf_spin_unlock(&epa->lock);
+        }
       }
     }
   } else if (act->sel_type == NAT_LB_SEL_LC) {
@@ -129,7 +205,7 @@ dp_sel_nat_ep(void *ctx, struct xfi *xf, struct dp_proxy_tacts *act)
       for (i = 0; i < LLB_MIN_NXFRMS; i++) {
         nxfrm_act = &act->nxfrms[i];
         if (nxfrm_act->inactive == 0) {
-          __u32 as = epa->active_sess[i];
+          __u32 as = epa->active_sess[i].csess;
           if (lc > as || sel < 0) {
             sel = i;
             lc = as;
@@ -137,7 +213,7 @@ dp_sel_nat_ep(void *ctx, struct xfi *xf, struct dp_proxy_tacts *act)
         }
       }
       if (sel >= 0 && sel < LLB_MAX_NXFRMS) {
-        epa->active_sess[sel]++;
+        epa->active_sess[sel].csess++;
       }
       bpf_spin_unlock(&epa->lock);
     }
@@ -160,6 +236,8 @@ dp_do_nat(void *ctx, struct xfi *xf)
     return 0;
   }
 
+  int is_udp = xf->l34m.nw_proto == IPPROTO_UDP ? 1:0;
+
   memset(&key, 0, sizeof(key));
   key.mark = xf->pm.dp_mark;
 
@@ -172,6 +250,10 @@ dp_do_nat(void *ctx, struct xfi *xf)
     }
     key.zone = xf->pm.zone;
     key.l4proto = xf->l34m.nw_proto;
+    // FIXME - Use same rule for UDP as TCP
+    if (key.l4proto == IPPROTO_UDP) {
+      key.l4proto = IPPROTO_TCP;
+    }
     if (xf->l2m.dl_type == bpf_ntohs(ETH_P_IPV6)) {
       key.v6 = 1;
     }
@@ -206,7 +288,7 @@ dp_do_nat(void *ctx, struct xfi *xf)
 
   if (act->ca.act_type == DP_SET_SNAT || 
       act->ca.act_type == DP_SET_DNAT) {
-    sel = dp_sel_nat_ep(ctx, xf, act);
+    sel = dp_sel_nat_ep(ctx, xf, act, is_udp);
 
     xf->nm.dsr = act->ca.oaux ? 1: 0;
     xf->nm.cdis = act->cdis ? 1: 0;

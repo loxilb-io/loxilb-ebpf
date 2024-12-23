@@ -3213,5 +3213,13 @@ get_ip4_hash2(uint32_t x) {
           (x  & 0xffff);
 }
 
+static uint16_t __always_inline
+get_ip4_hash3(uint32_t x) {
+    // Combine rotations, XOR, and a prime multiplier for mixing
+    x = (x ^ (x >> 15)) * 0x85ebca6b; // XOR and multiply with a prime
+    x = (x ^ (x >> 13)) * 0xc2b2ae35; // Further mixing
+    x = x ^ (x >> 16);                // Final XOR
+    return (uint16_t)(x & 0xffff);    // Extract lower 16 bits
+}
 
 #endif

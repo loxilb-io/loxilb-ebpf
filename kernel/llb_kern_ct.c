@@ -59,7 +59,7 @@ do {                              \
 } while(0)
 
 static int __always_inline
-dp_run_ct_helper(struct xfi *xf)
+dp_run_ct_helper(void *ctx, struct xfi *xf)
 {
   struct dp_ct_key key;
   struct dp_ct_tact *act;
@@ -75,15 +75,19 @@ dp_run_ct_helper(struct xfi *xf)
   /* We dont do much strict tracking after EST state.
    * But need to maintain minimal ctinfo
    */
-  dp_run_ctact_helper(xf, act);
+  if (xf->l34m.nw_proto == IPPROTO_TCP) {
+    dp_run_ctact_helper(xf, act);
+  }
+  volatile int sel = (int)(act->ctd.aid);
+  dp_update_ep_sess(ctx, xf, act->ctd.rid, sel);
   return 0;
 }
 
 #ifdef HAVE_DP_EXTCT
-#define DP_RUN_CT_HELPER(x)                \
+#define DP_RUN_CT_HELPER(ctx, x)           \
 do {                                       \
   if ((x)->l34m.nw_proto == IPPROTO_TCP) { \
-    dp_run_ct_helper(x);                   \
+    dp_run_ct_helper(ctx, x);              \
   }                                        \
 } while(0)
 #else
@@ -1806,7 +1810,8 @@ dp_ct_in(void *ctx, struct xfi *xf)
       }
 
       if (xi->nat_flags) {
-        dp_do_dec_nat_sess(ctx, xf, atdat->ctd.rid, atdat->ctd.aid);
+        if (xf->l34m.nw_proto == IPPROTO_TCP)
+          dp_do_dec_nat_sess(ctx, xf, atdat->ctd.rid, atdat->ctd.aid);
       }
     }
   }

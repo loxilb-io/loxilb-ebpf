@@ -673,7 +673,8 @@ typedef struct mf_xfrm_inf nxfrm_inf_t;
 
 struct dp_ct_dat {
   __u16 rid;
-  __u16 aid;
+  //__u16 aid;
+  int aid;
   __u32 nid;
   ct_pinf_t pi;
   ct_dir_t dir;
@@ -810,10 +811,17 @@ struct dp_proxy_tacts {
   uint64_t base_to;
 };
 
+struct epsess {
+  uint64_t lts;
+  uint32_t csess;
+  uint8_t tcp;
+  uint8_t udp;
+};
+
 struct dp_nat_epacts {
   struct dp_cmn_act ca;
   struct bpf_spin_lock lock;
-  uint32_t active_sess[LLB_MAX_NXFRMS];
+  struct epsess active_sess[LLB_MAX_NXFRMS];
 };
 
 /* This is currently based on ULCL classification scheme */

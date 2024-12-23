@@ -1959,8 +1959,10 @@ llb_nat_dec_act_sessions(uint32_t rid, uint32_t aid)
   if (t != NULL) {
     memset(&epa, 0, sizeof(epa));
     if ((bpf_map_lookup_elem_flags(t->map_fd, &rid, &epa, BPF_F_LOCK)) != 0) {
-      if (epa.active_sess[aid] > 0) {
-        epa.active_sess[aid]--;
+      if (epa.active_sess[aid].csess > 0) {
+        epa.active_sess[aid].csess = 0;
+        epa.active_sess[aid].tcp = 0;
+        epa.active_sess[aid].udp = 0;
         bpf_map_update_elem(t->map_fd, &rid, &epa, BPF_F_LOCK);
       }
     }
@@ -1981,7 +1983,9 @@ llb_nat_rst_act_sessions(uint32_t rid)
     if ((bpf_map_lookup_elem_flags(t->map_fd, &rid, &epa, BPF_F_LOCK)) != 0) {
       epa.ca.act_type = 0;
       for (i = 0; i < LLB_MAX_NXFRMS; i++) {
-        epa.active_sess[i] = 0;
+        epa.active_sess[i].csess = 0;
+        epa.active_sess[i].udp = 0;
+        epa.active_sess[i].tcp = 0;
       }
       bpf_map_update_elem(t->map_fd, &rid, &epa, BPF_F_LOCK);
     }

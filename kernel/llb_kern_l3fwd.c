@@ -336,6 +336,8 @@ dp_do_ctops(void *ctx, struct xfi *xf, void *fa_,
 #ifdef HAVE_DP_EXTCT
   if (xf->l34m.nw_proto == IPPROTO_TCP) {
     dp_run_ctact_helper(xf, act);
+    int sel = (int)(act->ctd.aid);
+    dp_update_ep_sess(ctx, xf, act->ctd.rid, sel);
   }
 #endif
 

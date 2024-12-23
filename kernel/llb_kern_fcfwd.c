@@ -170,7 +170,7 @@ dp_do_fcv4_lkup(void *ctx, struct xfi *xf)
     goto del_out;
   }
 
-  DP_RUN_CT_HELPER(xf);
+  dp_run_ct_helper(ctx, xf);
 
   if (acts->ca.fwrid != 0) {
     dp_do_map_stats(ctx, xf, LL_DP_FW4_STATS_MAP, acts->ca.fwrid);
