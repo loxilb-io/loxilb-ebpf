@@ -195,6 +195,7 @@ dp_do_rtv6(void *ctx, struct xfi *xf, void *fa_)
 
   act = bpf_map_lookup_elem(&rt_v6_map, key);
   if (!act) {
+    // Dont masquerade before doing PASS
     xf->pm.nf &= ~LLB_NAT_SRC;
     if (!DP_LLB_IS_EGR(ctx)) {
       LLBS_PPLN_TRAPC(xf, LLB_PIPE_RC_RT_TRAP);
@@ -400,8 +401,26 @@ dp_do_ing_ct(void *ctx, struct xfi *xf, void *fa_)
 }
 
 static void __always_inline
-dp_do_ipv4_fwd(void *ctx,  struct xfi *xf, void *fa_)
+dp_do_ipv4_fwd(void *ctx,  struct xfi *xf, void *fa_, int dir)
 {
+  if (dir == 1) {
+    if (xf->l2m.dl_type == bpf_htons(ETH_P_IP)) {
+      /* Check tunnel initiation */
+      if (xf->tm.tunnel_id == 0 ||  xf->tm.tun_type != LLB_TUN_GTP) {
+        dp_do_sess4_lkup(ctx, xf);
+        if (xf->tm.new_tunnel_id == 0 && !(xf->pm.nf & (LLB_NAT_DST|LLB_NAT_SRC))) {
+          return;
+        }
+      }
+    }
+
+    if (xf->pm.pipe_act & LLB_PIPE_TRAP &&
+        xf->pm.rcode & LLB_PIPE_RC_RT_TRAP) {
+      xf->pm.pipe_act &= ~LLB_PIPE_TRAP;
+      xf->pm.rcode &= ~LLB_PIPE_RC_RT_TRAP;
+    }
+  }
+
 #ifndef HAVE_DP_LBMODE_ONLY
   if (xf->pm.phit & LLB_DP_TMAC_HIT) {
 #else
@@ -418,7 +437,7 @@ dp_do_ipv4_fwd(void *ctx,  struct xfi *xf, void *fa_)
 }
 
 static void __always_inline
-dp_do_ipv6_fwd(void *ctx,  struct xfi *xf, void *fa_)
+dp_do_ipv6_fwd(void *ctx,  struct xfi *xf, void *fa_, int dir)
 {
 
 #ifndef HAVE_DP_LBMODE_ONLY
@@ -437,49 +456,21 @@ dp_do_ipv6_fwd(void *ctx,  struct xfi *xf, void *fa_)
 }
 
 static int __always_inline
-dp_l3tun_fwd(void *ctx,  struct xfi *xf, void *fa)
-{
-  if (xf->l2m.dl_type == bpf_htons(ETH_P_IP)) {
-    /* Check tunnel initiation */
-    if (xf->tm.tunnel_id == 0 ||  xf->tm.tun_type != LLB_TUN_GTP) {
-      dp_do_sess4_lkup(ctx, xf);
-      if (xf->tm.new_tunnel_id == 0) {
-        return 0;
-      }
-    }
-#ifndef HAVE_DP_LBMODE_ONLY
-    if (xf->pm.phit & LLB_DP_TMAC_HIT) {
-#else
-    if (1) {
-#endif
-
-      /* If some pipeline block already set a redirect before this,
-       * we honor this and dont do further l3 processing
-       */
-      if ((xf->pm.pipe_act & LLB_PIPE_RDR_MASK) == 0) {
-        dp_do_rtv4(ctx, xf, fa);
-      }
-    }
-  }
-  return 0;
-}
-
-static int __always_inline
-dp_l3_fwd(void *ctx,  struct xfi *xf, void *fa)
+dp_l3_fwd(void *ctx,  struct xfi *xf, void *fa, int dir)
 {
   if (xf->l2m.dl_type == bpf_htons(ETH_P_IP)) {
     if (xf->pm.nf && xf->nm.nv6 != 0) {
       xf->nm.xlate_proto = 1;
-      dp_do_ipv6_fwd(ctx, xf, fa);
+      dp_do_ipv6_fwd(ctx, xf, fa, dir);
     } else {
-      dp_do_ipv4_fwd(ctx, xf, fa);
+      dp_do_ipv4_fwd(ctx, xf, fa, dir);
     }
   } else if (xf->l2m.dl_type == bpf_htons(ETH_P_IPV6)) {
     if (xf->pm.nf && xf->nm.nv6 == 0) {
       xf->nm.xlate_proto = 1;
-      dp_do_ipv4_fwd(ctx, xf, fa);
+      dp_do_ipv4_fwd(ctx, xf, fa, dir);
     } else {
-      dp_do_ipv6_fwd(ctx, xf, fa);
+      dp_do_ipv6_fwd(ctx, xf, fa, dir);
     }
   }
   return 0;
@@ -496,9 +487,8 @@ dp_ing_l3(void *ctx,  struct xfi *xf, void *fa)
     }
   }
 
-  dp_l3_fwd(ctx, xf, fa);
   dp_do_ing_ct(ctx, xf, fa);
-  dp_l3tun_fwd(ctx, xf, fa);
+  dp_l3_fwd(ctx, xf, fa, 1);
 
   return 0;
 }

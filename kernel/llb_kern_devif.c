@@ -518,7 +518,7 @@ dp_ing_ct_main(void *ctx,  struct xfi *xf)
    * and start over. But simplicity wins against
    * complexity for now 
    */
-  dp_l3_fwd(ctx, xf, fa);
+  dp_l3_fwd(ctx, xf, fa, 0);
 
   /* Perform masquerading if necessary */
   if ((xf->pm.phit & LLB_DP_CTM_HIT) == 0) {
@@ -537,7 +537,7 @@ ct_start:
   }
   xf->nm.ct_sts = LLB_PIPE_CT_INP;
 
-  dp_l3tun_fwd(ctx, xf, fa);
+  dp_l3_fwd(ctx, xf, fa, 1);
   dp_eg_l2(ctx, xf, fa);
 
 res_end:

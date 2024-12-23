@@ -42,9 +42,8 @@ do {                                  \
 #define LLBS_PPLN_TRAPC(F,C)          \
 do {                                  \
   F->pm.pipe_act |= LLB_PIPE_TRAP;    \
-  F->pm.rcode = C;                    \
+  F->pm.rcode |= C;                   \
 } while (0)
-
 
 #define LLB_DP_FC_HCAP_FLAGS  (LLB_DP_CTM_HIT|LLB_DP_NAT_HIT)
 
@@ -87,7 +86,7 @@ struct dp_pi_mdi {
 #define LLB_PIPE_PASS         0x8
 #define LLB_PIPE_REWIRE       0x10
 #define LLB_PIPE_RDR_PRIO     0x20
-#define LLB_PIPE_SET_CT       0x40      
+#define LLB_PIPE_SET_CT       0x40
     __u8             pipe_act;
     __u8             l3_off;
 #define LLB_DP_TMAC_HIT       0x1
