@@ -21,8 +21,8 @@ dp_do_dec_nat_sess(void *ctx, struct xfi *xf, __u32 rule, __u16 aid)
 static int __always_inline
 dp_sel_nat_ep(void *ctx, struct xfi *xf, struct dp_proxy_tacts *act)
 {
-  int sel = -1;
-  uint8_t n = 0;
+  uint16_t sel = -1;
+  uint16_t n = 0;
   uint16_t i = 0;
   struct mf_xfrm_inf *nxfrm_act;
   __u16 rule_num = act->ca.cidx;
