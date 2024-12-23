@@ -130,7 +130,7 @@ dp_sel_nat_ep(void *ctx, struct xfi *xf, struct dp_proxy_tacts *act)
         nxfrm_act = &act->nxfrms[i];
         if (nxfrm_act->inactive == 0) {
           __u32 as = epa->active_sess[i];
-          if (lc > as || sel < 0) {
+          if (lc > as || sel == (uint16_t)(-1)) {
             sel = i;
             lc = as;
           }
