@@ -156,10 +156,12 @@ dp_sel_nat_ep(void *ctx, struct xfi *xf, struct dp_proxy_tacts *act, int is_udp)
                 eps->tcp = 0;
               }
 
-              if (is_udp)
+              if (is_udp) {
                 eps->udp = 1;
-              else
+              } else {
                 eps->tcp = 1;
+                eps->udp = 0;
+              }
 
               eps->lts = cts;
               //bpf_printk("use sel %u:%d", sel, is_udp);
@@ -177,10 +179,12 @@ dp_sel_nat_ep(void *ctx, struct xfi *xf, struct dp_proxy_tacts *act, int is_udp)
                         eps->udp = 0;
                         eps->tcp = 0;
                       }
-                      if (is_udp)
+                      if (is_udp) {
                         eps->udp = 1;
-                      else
+                      } else {
                         eps->tcp = 1;
+                        eps->udp = 0;
+                      }
                       eps->lts = cts;
                       break;
                     }
