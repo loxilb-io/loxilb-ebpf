@@ -41,7 +41,9 @@ setup_tail_calls(struct bpf_object *obj, struct libbpf_cfg *cfg)
     int fd = bpf_program__fd(prog);
 
     section = bpf_program__section_name(prog);
-    if (strcmp(section, "tc_packet_hook7") == 0) {
+    if (strcmp(section, "tc_packet_hook8") == 0) {
+      key = 8;
+    } else if (strcmp(section, "tc_packet_hook7") == 0) {
       key = 7;
     } else if (strcmp(section, "tc_packet_hook6") == 0) {
       key = 6;
@@ -155,7 +157,8 @@ libbpf_tc_attach(struct libbpf_cfg *cfg, int egr)
         strcmp(bpf_program__section_name(p), "tc_packet_hook4") == 0 ||
         strcmp(bpf_program__section_name(p), "tc_packet_hook5") == 0 ||
         strcmp(bpf_program__section_name(p), "tc_packet_hook6") == 0 ||
-        strcmp(bpf_program__section_name(p), "tc_packet_hook7") == 0) &&
+        strcmp(bpf_program__section_name(p), "tc_packet_hook7") == 0 ||
+        strcmp(bpf_program__section_name(p), "tc_packet_hook8") == 0) &&
         strcmp(bpf_program__section_name(p), cfg->progsec)) {
 
       log_debug("tc: autoload sec %s prog %s",

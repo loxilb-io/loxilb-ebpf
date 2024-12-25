@@ -44,7 +44,7 @@
 #define LLB_SESS_MAP_ENTRIES  (20*1024)
 #define LLB_PPLAT_MAP_ENTRIES (2048)
 #define LLB_PSECS             (8)
-#define LLB_MAX_NXFRMS        (1600)
+#define LLB_MAX_NXFRMS        (160)
 #define LLB_MIN_NXFRMS        (32)
 #define LLB_CRC32C_ENTRIES    (256)
 #define LLB_MAX_MHOSTS        (3)
@@ -54,6 +54,8 @@
 #define LLB_SOCKID_MAP_SZ     (17*1024)
 #define LLB_MAX_HOSTURL_LEN   (256)
 
+#define LLB_DP_SNAT_PGM_ID2    (8)
+#define LLB_DP_SNAT_PGM_ID1    (7)
 #define LLB_DP_SUNP_PGM_ID2    (6)
 #define LLB_DP_CRC_PGM_ID2     (5)
 #define LLB_DP_CRC_PGM_ID1     (4)
@@ -816,6 +818,8 @@ struct epsess {
   uint32_t csess;
   uint8_t tcp;
   uint8_t udp;
+  uint8_t inactive;
+  uint8_t res;
 };
 
 struct dp_nat_epacts {

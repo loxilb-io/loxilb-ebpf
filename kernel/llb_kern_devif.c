@@ -477,6 +477,11 @@ dp_ing_ct_main(void *ctx,  struct xfi *xf)
     goto res_end;
   }
 
+  if (xf->nm.ndone == 1) {
+    bpf_printk("NAT done");
+    goto ct_start;
+  }
+
   /* If ACL is hit, and packet arrives here 
    * it only means that we need CT processing.
    * In such a case, we skip nat lookup
@@ -492,7 +497,11 @@ dp_ing_ct_main(void *ctx,  struct xfi *xf)
       dp_record_it(ctx, xf);
     }
 
-    dp_do_nat(ctx, xf);
+    /* NAT lookup = Tailcall */
+    xf->km.skey[0] = 0;
+    *(__u16 *)&xf->km.skey[2] = 0;
+    TCALL_NAT_TC1();
+    //dp_do_nat(ctx, xf);
 
 #ifdef HAVE_DP_LBMODE_ONLY
     if ((xf->pm.phit & LLB_DP_NAT_HIT) == 0) {
@@ -505,6 +514,7 @@ dp_ing_ct_main(void *ctx,  struct xfi *xf)
     }
   }
 
+ct_start:
   LL_DBG_PRINTK("[CTRK] start");
 
   val = dp_ct_in(ctx, xf);
