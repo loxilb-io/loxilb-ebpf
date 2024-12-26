@@ -270,27 +270,12 @@ int tc_packet_func_nat1(struct __sk_buff *ctx)
     return DP_DROP;
   }
 
-  bpf_printk("Run nat1");
   xf->nm.ndone = 1;
   dp_do_nat(ctx, xf);
-  RETURN_TO_MP();
-  return DP_DROP;
-}
 
-SEC("tc_packet_hook8")
-int tc_packet_func_nat2(struct __sk_buff *ctx)
-{
-  int val = 0;
-  struct xfi *xf;
-
-  xf = bpf_map_lookup_elem(&xfis, &val);
-  if (!xf) {
-    return DP_DROP;
-  }
-
-  bpf_printk("Run nat2");
-  xf->nm.ndone = 1;
-  dp_do_nat(ctx, xf);
+  xf->km.skey[0] = 0;
+  *(__u16 *)&xf->km.skey[2] = 0;
+  *(__u16 *)&xf->km.skey[4] = 0;
   RETURN_TO_MP();
   return DP_DROP;
 }

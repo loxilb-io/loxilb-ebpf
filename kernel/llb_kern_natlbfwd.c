@@ -8,7 +8,6 @@
 #define EP_DPTO            (30000000000)
 
 #define TCALL_NAT_TC1() bpf_tail_call(ctx, &pgm_tbl, LLB_DP_SNAT_PGM_ID1)
-#define TCALL_NAT_TC2() bpf_tail_call(ctx, &pgm_tbl, LLB_DP_SNAT_PGM_ID2)
 
 static void __always_inline
 dp_do_dec_nat_sess(void *ctx, struct xfi *xf, __u32 rule, __u16 aid)
@@ -49,37 +48,44 @@ dp_update_ep_sess(void *ctx, struct xfi *xf, __u32 rule, int aid)
 
 static int __always_inline
 dp_sel_nat_ep_persist_check_slot(struct xfi *xf, struct dp_proxy_tacts *act, 
-                                 struct dp_nat_epacts *epa, uint16_t sel, int is_udp)
+                                 uint16_t sel, int is_udp)
 {
+  struct dp_nat_epacts *epa;
   struct epsess *eps;
+  __u32 key; 
   uint16_t n;
   __u64 cts = bpf_ktime_get_ns();
 
-  bpf_spin_lock(&epa->lock);
-  for (n = 0; n < LLB_MAX_NXFRMS_PLOOP; n++) {
-    if (sel < LLB_MAX_NXFRMS_PLOOP) {
-      if (1) {//act->nxfrms[sel].inactive == 0) {
+  key = act->ca.cidx;
+  epa = bpf_map_lookup_elem(&nat_ep_map, &key);
+  if (epa != NULL) {
+    bpf_spin_lock(&epa->lock);
+    for (n = 0; n < LLB_MAX_NXFRMS_PLOOP; n++) {
+      if (sel < LLB_MAX_NXFRMS-1) {
         eps = &epa->active_sess[sel];
-        if (eps->inactive == 0 &&
+        if (act->nxfrms[sel].inactive == 0 &&
             ((cts - eps->lts > EP_DPTO) ||
             (eps->tcp == 0 && !is_udp) ||
             (eps->udp == 0 && is_udp))) {
 
-            eps->tcp = !is_udp;
-            eps->udp = is_udp;
+            if (is_udp) {
+              eps->udp = 1;
+            } else {
+              eps->tcp = 1;
+              eps->udp = 0;
+            }
             eps->lts = cts;
             bpf_spin_unlock(&epa->lock);
             return sel;
         }
       }
+      sel++;
+      sel = sel % LLB_MAX_NXFRMS;
     }
-    sel++;
-    if (sel >= LLB_MAX_NXFRMS_PLOOP) {
-      sel = 0;
-    }
+    bpf_spin_unlock(&epa->lock);
   }
-  bpf_spin_unlock(&epa->lock);
-  *(__u16 *)&xf->km.skey[4] = sel+n;
+
+  *(__u16 *)&xf->km.skey[4] = sel;
   return (uint16_t)(-1);
 }
 
@@ -87,7 +93,6 @@ static int __always_inline
 dp_sel_nat_ep_persist(struct xfi *xf, struct dp_proxy_tacts *act, int is_udp)
 {
   uint16_t sel = -1;
-  __u16 rule_num = act->ca.cidx;
   __u64 now = bpf_ktime_get_ns();
   __u64 base;
   __u64 tfc = 0;
@@ -111,21 +116,12 @@ dp_sel_nat_ep_persist(struct xfi *xf, struct dp_proxy_tacts *act, int is_udp)
 #else
     sel = get_ip4_hash(xf->l34m.saddr4);
 #endif
+    sel %= act->nxfrm;
   }
-  sel %= act->nxfrm;
   act->lts = now;
   bpf_spin_unlock(&act->lock);
   if (sel < LLB_MAX_NXFRMS) {
-    struct dp_nat_epacts *epa;
-    __u32 key = rule_num;
-    //__u64 cts = bpf_ktime_get_ns();
-    epa = bpf_map_lookup_elem(&nat_ep_map, &key);
-    if (epa != NULL) {
-      //bpf_spin_lock(&epa->lock);
-      sel = dp_sel_nat_ep_persist_check_slot(xf, act, epa, sel, is_udp);
-      //bpf_spin_unlock(&epa->lock);
-      bpf_printk("Hello sel = %u", sel);
-    }
+    sel = dp_sel_nat_ep_persist_check_slot(xf, act, sel, is_udp);
   }
   return sel;
 }
@@ -185,21 +181,13 @@ dp_sel_nat_ep(void *ctx, struct xfi *xf, struct dp_proxy_tacts *act, int is_udp)
       }
     }
   } else if (act->sel_type == NAT_LB_SEL_RR_PERSIST) {
-    uint8_t tcall;
     uint16_t nep = *(__u16 *)&xf->km.skey[2];
-
     sel = dp_sel_nat_ep_persist(xf, act, is_udp);
     if (sel == (uint16_t)(-1)) {
       nep += LLB_MAX_NXFRMS_PLOOP;
       if (nep < LLB_MAX_NXFRMS) {
         *(__u16 *)&xf->km.skey[2] = nep;
-        tcall = ~xf->km.skey[0];
-        bpf_printk("current sel %lu", *(__u16 *)&xf->km.skey[2]);
-        if (tcall) {
-          TCALL_NAT_TC2();
-        } else {
-          TCALL_NAT_TC1();
-        } 
+        TCALL_NAT_TC1();
       }
     }
   } 
