@@ -1962,7 +1962,7 @@ llb_nat_dec_act_sessions(uint32_t rid, uint32_t aid)
     memset(&epa, 0, sizeof(epa));
     if ((bpf_map_lookup_elem_flags(t->map_fd, &rid, &epa, BPF_F_LOCK)) != 0) {
       if (epa.active_sess[aid].csess > 0) {
-        epa.active_sess[aid].csess = 0;
+        epa.active_sess[aid].csess--;
         epa.active_sess[aid].tcp = 0;
         epa.active_sess[aid].udp = 0;
         bpf_map_update_elem(t->map_fd, &rid, &epa, BPF_F_LOCK);

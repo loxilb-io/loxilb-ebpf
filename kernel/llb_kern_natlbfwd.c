@@ -5,21 +5,24 @@
  * SPDX-License-Identifier: (GPL-2.0 OR BSD-2-Clause)
  */
 
-#define EP_DPTO            (30000000000)
-
+#define LLB_MAX_NXFRMS_PLOOP (55)
+#define EP_DPTO              (30000000000)
 #define TCALL_NAT_TC1() bpf_tail_call(ctx, &pgm_tbl, LLB_DP_SNAT_PGM_ID1)
 
 static void __always_inline
-dp_do_dec_nat_sess(void *ctx, struct xfi *xf, __u32 rule, __u16 aid)
+dp_do_rst_nat_sess(void *ctx, struct xfi *xf, __u32 rule, __u16 aid)
 {
   struct dp_nat_epacts *epa;
   epa = bpf_map_lookup_elem(&nat_ep_map, &rule);
-  //if (epa != NULL && epa->ca.act_type == DP_SET_NACT_SESS) {
   if (epa != NULL) {
     bpf_spin_lock(&epa->lock);
     if (aid < LLB_MAX_NXFRMS) {
-      epa->active_sess[aid].tcp = 0;
-      epa->active_sess[aid].udp = 0;
+      if (epa->ca.act_type == DP_SET_NACT_SESS) {
+        epa->active_sess[aid].csess--;
+      } else {
+        epa->active_sess[aid].tcp = 0;
+        epa->active_sess[aid].udp = 0;
+      }
     }
     bpf_spin_unlock(&epa->lock);
   }
@@ -43,8 +46,6 @@ dp_update_ep_sess(void *ctx, struct xfi *xf, __u32 rule, int aid)
     bpf_spin_unlock(&epa->lock);
   }
 }
-
-#define LLB_MAX_NXFRMS_PLOOP 40
 
 static int __always_inline
 dp_sel_nat_ep_persist_check_slot(struct xfi *xf, struct dp_proxy_tacts *act, 
@@ -190,9 +191,7 @@ dp_sel_nat_ep(void *ctx, struct xfi *xf, struct dp_proxy_tacts *act, int is_udp)
         TCALL_NAT_TC1();
       }
     }
-  } 
-#if 0
-  else if (act->sel_type == NAT_LB_SEL_LC) {
+  } else if (act->sel_type == NAT_LB_SEL_LC) {
     struct dp_nat_epacts *epa;
     __u32 key = act->ca.cidx; //rule num
     __u32 lc = 0;
@@ -216,7 +215,6 @@ dp_sel_nat_ep(void *ctx, struct xfi *xf, struct dp_proxy_tacts *act, int is_udp)
       bpf_spin_unlock(&epa->lock);
     }
   }
-#endif
 
   LL_DBG_PRINTK("lb-sel %d", sel);
 

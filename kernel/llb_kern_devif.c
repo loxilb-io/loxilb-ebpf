@@ -478,7 +478,6 @@ dp_ing_ct_main(void *ctx,  struct xfi *xf)
   }
 
   if (xf->nm.ndone == 1) {
-    bpf_printk("NAT done");
     goto ct_start;
   }
 
