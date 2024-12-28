@@ -820,6 +820,7 @@ struct epsess {
   uint8_t udp;
   uint8_t inactive;
   uint8_t res;
+  uint32_t id;
 };
 
 struct dp_nat_epacts {

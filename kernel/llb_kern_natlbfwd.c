@@ -64,10 +64,11 @@ dp_sel_nat_ep_persist_check_slot(struct xfi *xf, struct dp_proxy_tacts *act,
     for (n = 0; n < LLB_MAX_NXFRMS_PLOOP; n++) {
       if (sel < LLB_MAX_NXFRMS-1) {
         eps = &epa->active_sess[sel];
-        if (act->nxfrms[sel].inactive == 0 &&
-            ((cts - eps->lts > EP_DPTO) ||
-            (eps->tcp == 0 && !is_udp) ||
-            (eps->udp == 0 && is_udp))) {
+        if (act->nxfrms[sel].inactive == 0) {
+          if ((cts - eps->lts > EP_DPTO) ||
+              ((eps->id == xf->l34m.saddr4) &&
+              ((eps->tcp == 0 && !is_udp) ||
+              ((eps->udp == 0 && is_udp))))) {
 
             if (is_udp) {
               eps->udp = 1;
@@ -76,8 +77,10 @@ dp_sel_nat_ep_persist_check_slot(struct xfi *xf, struct dp_proxy_tacts *act,
               eps->udp = 0;
             }
             eps->lts = cts;
+            eps->id = xf->l34m.saddr4;
             bpf_spin_unlock(&epa->lock);
             return sel;
+          }
         }
       }
       sel++;
@@ -123,6 +126,7 @@ dp_sel_nat_ep_persist(struct xfi *xf, struct dp_proxy_tacts *act, int is_udp)
   bpf_spin_unlock(&act->lock);
   if (sel < LLB_MAX_NXFRMS) {
     sel = dp_sel_nat_ep_persist_check_slot(xf, act, sel, is_udp);
+    //bpf_printk("port %d sel2 %d tcp %d", bpf_ntohs(xf->l34m.source), sel, !is_udp);
   }
   return sel;
 }
