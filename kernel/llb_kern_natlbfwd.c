@@ -22,6 +22,7 @@ dp_do_rst_nat_sess(void *ctx, struct xfi *xf, __u32 rule, __u16 aid)
       } else {
         epa->active_sess[aid].tcp = 0;
         epa->active_sess[aid].udp = 0;
+        epa->active_sess[aid].id = 0;
       }
     }
     bpf_spin_unlock(&epa->lock);
