@@ -551,7 +551,7 @@ llb_handle_sync_event(void *ctx,
   server_addr.sin_port = htons(DP_SYNC_SERVER_PORT);
   inet_pton(AF_INET, "127.0.0.1", &server_addr.sin_addr);
 
-  if (sendto(sockfd, data, data_sz, 0, 
+  if (sendto(xh->sync_fd, data, data_sz, 0, 
                (const struct sockaddr *)&server_addr, sizeof(server_addr)) < 0) {
     log_info("sync sendto failed");
   }
@@ -566,7 +566,7 @@ llb_sync_server_main(void *arg)
   char buffer[DP_SYNC_BUF_SZ];
   struct pollfd fds;
   int server_fd;
-  int client_len;
+  unsigned int client_len;
   int flags;
 
 restart_server:
@@ -669,7 +669,6 @@ llb_setup_ep_map(void)
   struct epsess *eps;
   __u32 key;
   int i = 0;
-  uint16_t n;
 
   for (key = 0; key < LLB_NAT_EP_MAP_ENTRIES; key++) {
     int ret = bpf_map_lookup_elem(llb_map2fd(LL_DP_NAT_EP_MAP), &key, &epa);
