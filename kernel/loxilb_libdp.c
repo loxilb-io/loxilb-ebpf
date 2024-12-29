@@ -16,6 +16,7 @@
 #include <time.h>
 #include <assert.h>
 #include <signal.h>
+#include <poll.h>
 #include <pthread.h>
 #include <netdb.h>
 #include <ifaddrs.h>
@@ -88,6 +89,8 @@ typedef struct llb_dp_struct
   const char *ll_dp_pdir;
   pthread_t pkt_thr;
   pthread_t cp_thr;
+  pthread_t sync_thr;
+  pthread_t sync_sthr;
   pthread_t mon_thr;
   int mgmt_ch_fd;
   int have_mtrace;
@@ -96,6 +99,7 @@ typedef struct llb_dp_struct
   int have_sockrwr;
   int have_sockmap;
   int have_noebpf;
+  int sync_fd;
   struct llb_kern_mon *monp;
   const char *cgroup_dfl_path;
   int cgfd;
@@ -514,6 +518,170 @@ llb_setup_cp_ring(void)
 cleanup:
   perf_buffer__free(pb);
   return -1;
+}
+
+static void *
+llb_sync_proc_main(void *arg)
+{
+  struct perf_buffer *pb = arg;
+
+  while (1) {
+    perf_buffer__poll(pb, 100 /* timeout, ms */);
+  }
+
+  /* NOT REACHED */
+  return NULL;
+}
+
+#define DP_SYNC_SERVER_PORT 22223
+#define DP_SYNC_BUF_SZ 512
+
+static void
+llb_handle_sync_event(void *ctx,
+             int cpu,
+             void *data,
+             unsigned int data_sz)
+{
+  log_info("sync event received");
+  struct sockaddr_in server_addr;
+
+  // Configure server address
+  memset(&server_addr, 0, sizeof(server_addr));
+  server_addr.sin_family = AF_INET;
+  server_addr.sin_port = htons(DP_SYNC_SERVER_PORT);
+  inet_pton(AF_INET, "127.0.0.1", &server_addr.sin_addr);
+
+  if (sendto(sockfd, data, data_sz, 0, 
+               (const struct sockaddr *)&server_addr, sizeof(server_addr)) < 0) {
+    log_info("sync sendto failed");
+  }
+
+  return;
+}
+
+static void *
+llb_sync_server_main(void *arg)
+{
+  struct sockaddr_in server_addr, client_addr;
+  char buffer[DP_SYNC_BUF_SZ];
+  struct pollfd fds;
+  int server_fd;
+  int client_len;
+  int flags;
+
+restart_server:
+  if ((server_fd = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
+    log_error("ssync - Failed to open sync server");
+    exit(1);
+  }
+
+  flags = fcntl(server_fd, F_GETFL, 0);
+  if (flags < 0) {
+    log_error("ssync - Failed to get socket flags");
+    exit(1);
+  }
+
+  if (fcntl(server_fd, F_SETFL, flags | O_NONBLOCK) < 0) {
+    log_error("Failed to set non-blocking mode");
+    exit(1);
+  }
+
+  memset(&server_addr, 0, sizeof(server_addr));
+  server_addr.sin_family = AF_INET;
+  server_addr.sin_addr.s_addr = INADDR_ANY;
+  server_addr.sin_port = htons(DP_SYNC_SERVER_PORT);
+
+  fds.fd = server_fd;
+  fds.events = POLLIN;
+
+  while (1) {
+    int ret = poll(&fds, 1, 100);
+
+    if (ret < 0) {
+      close(server_fd);
+      log_error("ssync - failed poll");
+      goto restart_server; 
+    } else if (ret == 0) {
+      continue;
+    }
+
+    if (fds.revents & POLLIN) {
+      memset(buffer, 0, DP_SYNC_BUF_SZ);
+      ssize_t recv_len = recvfrom(server_fd, buffer, DP_SYNC_BUF_SZ, 0,
+                                   (struct sockaddr *)&client_addr, &client_len);
+
+      if (recv_len < 0) {
+        log_error("ssync - recvfrom failed");
+        continue;
+      }
+
+      log_debug("ssync - recvfrom");
+
+      struct dp_nat_epacts epa;
+      struct epsess *teps;
+      struct epsess *eps = (void *)buffer;
+      __u32 key = eps->rid;
+      __u16 sel = eps->sel;
+      if (sel < LLB_MAX_NXFRMS) {
+        int ret1 = bpf_map_lookup_elem(llb_map2fd(LL_DP_NAT_EP_MAP), &key, &epa);
+        if (ret1 == 0) {
+          teps = &epa.active_sess[sel];
+          memcpy(teps, eps, sizeof(*eps));
+          bpf_map_update_elem(llb_map2fd(LL_DP_NAT_EP_MAP), &key, &epa, 0);
+        }
+      }
+    }
+  }
+
+  close(server_fd);
+  return NULL;
+}
+
+int
+llb_setup_sync_ring(void)
+{
+  struct perf_buffer *pb = NULL;
+  struct perf_buffer_opts pb_opts = { .sz = sizeof(struct perf_buffer_opts) } ;
+  int sfd = xh->maps[LL_DP_SYNC_PERF_RING].map_fd;
+
+  if (sfd < 0) return -1;
+
+  pb = perf_buffer__new(sfd, 8, llb_handle_sync_event, NULL, NULL, &pb_opts);
+  if (libbpf_get_error(pb)) {
+    fprintf(stderr, "Failed to create sync-ring perf buffer\n");
+    goto cleanup;
+  }
+
+  pthread_create(&xh->sync_thr, NULL, llb_sync_proc_main, pb);
+  pthread_create(&xh->sync_sthr, NULL, llb_sync_server_main, NULL);
+
+  return 0;
+
+cleanup:
+  perf_buffer__free(pb);
+  return -1;
+}
+
+int
+llb_setup_ep_map(void)
+{
+  struct dp_nat_epacts epa;
+  struct epsess *eps;
+  __u32 key;
+  int i = 0;
+  uint16_t n;
+
+  for (key = 0; key < LLB_NAT_EP_MAP_ENTRIES; key++) {
+    int ret = bpf_map_lookup_elem(llb_map2fd(LL_DP_NAT_EP_MAP), &key, &epa);
+    if (ret == 0) {
+      for (i = 0; i < LLB_MAX_NXFRMS; i++) {
+        eps = &epa.active_sess[i];
+        eps->sel = i;
+      }
+      bpf_map_update_elem(llb_map2fd(LL_DP_NAT_EP_MAP), &key, &epa, 0);
+    }
+  }
+  return 0;
 }
 
 #ifdef HAVE_DP_CT_SYNC
@@ -1231,6 +1399,10 @@ llb_dflt_sec_map2fd_all(struct bpf_object *bpf_obj)
       llb_setup_lcpu_map(fd);
     } else if (i == LL_DP_CP_PERF_RING) {
       llb_setup_cp_ring();
+    } else if (i == LL_DP_SYNC_PERF_RING) {
+      llb_setup_sync_ring();
+    } else if (i == LL_DP_NAT_EP_MAP) {
+      llb_setup_ep_map();
     }
   }
 
@@ -1530,6 +1702,10 @@ llb_xh_init(llb_dp_struct_t *xh)
   xh->maps[LL_DP_CP_PERF_RING].map_name = "cp_ring";
   xh->maps[LL_DP_CP_PERF_RING].has_pb   = 0;
   xh->maps[LL_DP_CP_PERF_RING].max_entries = MAX_REAL_CPUS;
+
+  xh->maps[LL_DP_SYNC_PERF_RING].map_name = "sync_ring";
+  xh->maps[LL_DP_SYNC_PERF_RING].has_pb   = 0;
+  xh->maps[LL_DP_SYNC_PERF_RING].max_entries = MAX_REAL_CPUS;
 
   xh->maps[LL_DP_NAT_EP_MAP].map_name = "nat_ep_map";
   xh->maps[LL_DP_NAT_EP_MAP].has_pb   = 0;
@@ -3285,7 +3461,7 @@ loxilb_set_loglevel(struct ebpfcfg *cfg)
 
   log_set_level(cfg->loglevel);
   if (xh->logfp) {
-      log_add_fp(xh->logfp, cfg->loglevel);
+    log_add_fp(xh->logfp, cfg->loglevel);
   }
   log_warn("ebpf: new loglevel %d", cfg->loglevel);
 }
@@ -3340,6 +3516,11 @@ loxilb_main(struct ebpfcfg *cfg)
       xh->have_sockrwr = 0;
       xh->have_sockmap = 0;
       xh->egr_hooks = 0;
+    }
+
+    xh->sync_fd = socket(AF_INET, SOCK_DGRAM, 0);
+    if (xh->sync_fd <= 0) {
+      assert(0);
     }
   }
 

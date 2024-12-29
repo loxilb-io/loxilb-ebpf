@@ -141,6 +141,7 @@ enum llb_dp_tid {
   LL_DP_LCPU_MAP,
   LL_DP_PPLAT_MAP,
   LL_DP_CP_PERF_RING,
+  LL_DP_SYNC_PERF_RING,
   LL_DP_NAT_EP_MAP,
   LL_DP_SOCK_RWR_MAP,
   LL_DP_SOCK_PROXY_MAP,
@@ -819,8 +820,10 @@ struct epsess {
   uint8_t tcp;
   uint8_t udp;
   uint8_t inactive;
-  uint8_t res;
+  uint8_t rid;
   uint32_t id;
+  uint16_t sel;
+  uint16_t res;
 };
 
 struct dp_nat_epacts {

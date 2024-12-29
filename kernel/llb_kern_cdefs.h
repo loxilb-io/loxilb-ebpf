@@ -93,6 +93,13 @@ struct bpf_map_def SEC("maps") cp_ring = {
   .max_entries = MAX_REAL_CPUS,
 };
 
+struct bpf_map_def SEC("maps") sync_ring = {
+  .type = BPF_MAP_TYPE_PERF_EVENT_ARRAY,
+  .key_size = sizeof(int),
+  .value_size = sizeof(__u32),
+  .max_entries = MAX_REAL_CPUS,
+};
+
 struct bpf_map_def SEC("maps") pkts = {
   .type = BPF_MAP_TYPE_PERCPU_ARRAY,
   .key_size = sizeof(__u32),  /* Index xdp_ifidx */
@@ -343,6 +350,13 @@ struct {
         __type(value,       __u32);
         __uint(max_entries, MAX_REAL_CPUS);
 } cp_ring SEC(".maps");
+
+struct {
+        __uint(type,        BPF_MAP_TYPE_PERF_EVENT_ARRAY);
+        __type(key,         int);
+        __type(value,       __u32);
+        __uint(max_entries, MAX_REAL_CPUS);
+} sync_ring SEC(".maps");
 
 struct {
         __uint(type,        BPF_MAP_TYPE_PERCPU_ARRAY);

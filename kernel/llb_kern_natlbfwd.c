@@ -23,6 +23,7 @@ dp_do_rst_nat_sess(void *ctx, struct xfi *xf, __u32 rule, __u16 aid)
         epa->active_sess[aid].tcp = 0;
         epa->active_sess[aid].udp = 0;
         epa->active_sess[aid].id = 0;
+        epa->active_sess[aid].lts = 0;
       }
     }
     bpf_spin_unlock(&epa->lock);
@@ -49,13 +50,15 @@ dp_update_ep_sess(void *ctx, struct xfi *xf, __u32 rule, int aid)
 }
 
 static int __always_inline
-dp_sel_nat_ep_persist_check_slot(struct xfi *xf, struct dp_proxy_tacts *act, 
+dp_sel_nat_ep_persist_check_slot(void *ctx, struct xfi *xf,
+                                 struct dp_proxy_tacts *act, 
                                  uint16_t sel, int is_udp)
 {
   struct dp_nat_epacts *epa;
   struct epsess *eps;
   __u32 key; 
   uint16_t n;
+  __u64 flags = BPF_F_CURRENT_CPU;
   __u64 cts = bpf_ktime_get_ns();
 
   key = act->ca.cidx;
@@ -79,7 +82,17 @@ dp_sel_nat_ep_persist_check_slot(struct xfi *xf, struct dp_proxy_tacts *act,
             }
             eps->lts = cts;
             eps->id = xf->l34m.saddr4;
+            eps->rid = key;
             bpf_spin_unlock(&epa->lock);
+
+            flags |= (__u64)(sizeof(struct epsess)) << 32;
+            int ret = bpf_perf_event_output(ctx, &sync_ring, flags,
+                            eps, sizeof(*eps));
+            if (ret != 0) {
+              bpf_printk("perf failed %d", ret);
+            }
+            bpf_printk("sel2: %d", sel);
+            
             return sel;
           }
         }
@@ -95,7 +108,7 @@ dp_sel_nat_ep_persist_check_slot(struct xfi *xf, struct dp_proxy_tacts *act,
 }
 
 static int __always_inline
-dp_sel_nat_ep_persist(struct xfi *xf, struct dp_proxy_tacts *act, int is_udp)
+dp_sel_nat_ep_persist(void *ctx, struct xfi *xf, struct dp_proxy_tacts *act, int is_udp)
 {
   uint16_t sel = -1;
   __u64 now = bpf_ktime_get_ns();
@@ -126,7 +139,7 @@ dp_sel_nat_ep_persist(struct xfi *xf, struct dp_proxy_tacts *act, int is_udp)
   act->lts = now;
   bpf_spin_unlock(&act->lock);
   if (sel < LLB_MAX_NXFRMS) {
-    sel = dp_sel_nat_ep_persist_check_slot(xf, act, sel, is_udp);
+    sel = dp_sel_nat_ep_persist_check_slot(ctx, xf, act, sel, is_udp);
     //bpf_printk("port %d sel2 %d tcp %d", bpf_ntohs(xf->l34m.source), sel, !is_udp);
   }
   return sel;
@@ -188,7 +201,7 @@ dp_sel_nat_ep(void *ctx, struct xfi *xf, struct dp_proxy_tacts *act, int is_udp)
     }
   } else if (act->sel_type == NAT_LB_SEL_RR_PERSIST) {
     uint16_t nep = *(__u16 *)&xf->km.skey[2];
-    sel = dp_sel_nat_ep_persist(xf, act, is_udp);
+    sel = dp_sel_nat_ep_persist(ctx, xf, act, is_udp);
     if (sel == (uint16_t)(-1)) {
       nep += LLB_MAX_NXFRMS_PLOOP;
       if (nep < LLB_MAX_NXFRMS) {
