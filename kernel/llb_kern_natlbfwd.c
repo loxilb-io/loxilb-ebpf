@@ -13,6 +13,7 @@ static void __always_inline
 dp_do_rst_nat_sess(void *ctx, struct xfi *xf, __u32 rule, __u16 aid)
 {
   struct dp_nat_epacts *epa;
+  __u64 flags = BPF_F_CURRENT_CPU;
   epa = bpf_map_lookup_elem(&nat_ep_map, &rule);
   if (epa != NULL) {
     bpf_spin_lock(&epa->lock);
@@ -24,6 +25,11 @@ dp_do_rst_nat_sess(void *ctx, struct xfi *xf, __u32 rule, __u16 aid)
         epa->active_sess[aid].udp = 0;
         epa->active_sess[aid].id = 0;
         epa->active_sess[aid].lts = 0;
+        bpf_spin_unlock(&epa->lock);
+        flags |= (__u64)(sizeof(struct epsess)) << 32;
+        bpf_perf_event_output(ctx, &sync_ring, flags,
+                            &epa->active_sess[aid], sizeof(struct epsess));
+        return;
       }
     }
     bpf_spin_unlock(&epa->lock);
@@ -86,13 +92,9 @@ dp_sel_nat_ep_persist_check_slot(void *ctx, struct xfi *xf,
             bpf_spin_unlock(&epa->lock);
 
             flags |= (__u64)(sizeof(struct epsess)) << 32;
-            int ret = bpf_perf_event_output(ctx, &sync_ring, flags,
+            bpf_perf_event_output(ctx, &sync_ring, flags,
                             eps, sizeof(*eps));
-            if (ret != 0) {
-              bpf_printk("perf failed %d", ret);
-            }
             bpf_printk("sel2: %d", sel);
-            
             return sel;
           }
         }

@@ -630,6 +630,8 @@ restart_server:
         int ret1 = bpf_map_lookup_elem(llb_map2fd(LL_DP_NAT_EP_MAP), &key, &epa);
         if (ret1 == 0) {
           teps = &epa.active_sess[sel];
+          if (eps->lts)
+            eps->lts = get_os_nsecs();
           memcpy(teps, eps, sizeof(*eps));
           bpf_map_update_elem(llb_map2fd(LL_DP_NAT_EP_MAP), &key, &epa, 0);
         }
