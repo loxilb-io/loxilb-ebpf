@@ -106,6 +106,9 @@ typedef struct llb_dp_struct
   int smfd;
   int egr_hooks;
   int nodenum;
+#define MAX_SYNC_NODES 3
+  int nsync_nodes;
+  struct sockaddr_in server_addr[MAX_SYNC_NODES];
   llb_dp_map_t maps[LL_DP_MAX_MAP];
   llb_dp_link_t links[LLB_INTERFACES];
   llb_dp_sect_t psecs[LLB_PSECS];
@@ -543,17 +546,13 @@ llb_handle_sync_event(void *ctx,
              unsigned int data_sz)
 {
   log_info("sync event received");
-  struct sockaddr_in server_addr;
+  ll_pretty_hex(data, data_sz);
 
-  // Configure server address
-  memset(&server_addr, 0, sizeof(server_addr));
-  server_addr.sin_family = AF_INET;
-  server_addr.sin_port = htons(DP_SYNC_SERVER_PORT);
-  inet_pton(AF_INET, "127.0.0.1", &server_addr.sin_addr);
-
-  if (sendto(xh->sync_fd, data, data_sz, 0, 
-               (const struct sockaddr *)&server_addr, sizeof(server_addr)) < 0) {
-    log_info("sync sendto failed");
+  for (int i = 0; i < xh->nsync_nodes; i++) {
+    if (sendto(xh->sync_fd, data, data_sz, MSG_DONTWAIT, 
+                 (const struct sockaddr *)&xh->server_addr[i], sizeof(xh->server_addr[i])) < 0) {
+      log_error("sync sendto failed");
+    }
   }
 
   return;
@@ -582,7 +581,7 @@ restart_server:
   }
 
   if (fcntl(server_fd, F_SETFL, flags | O_NONBLOCK) < 0) {
-    log_error("Failed to set non-blocking mode");
+    log_error("ssync - Failed to set non-blocking mode");
     exit(1);
   }
 
@@ -591,12 +590,16 @@ restart_server:
   server_addr.sin_addr.s_addr = INADDR_ANY;
   server_addr.sin_port = htons(DP_SYNC_SERVER_PORT);
 
+  if (bind(server_fd, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0) {
+    log_error("ssync - bind failed");
+    exit(1);
+  }
+
   fds.fd = server_fd;
   fds.events = POLLIN;
 
   while (1) {
     int ret = poll(&fds, 1, 100);
-
     if (ret < 0) {
       close(server_fd);
       log_error("ssync - failed poll");
@@ -616,6 +619,7 @@ restart_server:
       }
 
       log_debug("ssync - recvfrom");
+      ll_pretty_hex(buffer, recv_len);
 
       struct dp_nat_epacts epa;
       struct epsess *teps;
@@ -3520,6 +3524,23 @@ loxilb_main(struct ebpfcfg *cfg)
     xh->sync_fd = socket(AF_INET, SOCK_DGRAM, 0);
     if (xh->sync_fd <= 0) {
       assert(0);
+    }
+    if (cfg->cluster1) {
+      xh->server_addr[0].sin_family = AF_INET;
+      xh->server_addr[0].sin_port = htons(DP_SYNC_SERVER_PORT);
+      if (inet_pton(AF_INET, cfg->cluster1, &xh->server_addr[0].sin_addr) <= 0) {
+        assert(0);
+      }
+      xh->nsync_nodes++;
+    }
+
+    if (cfg->cluster2) {
+      xh->server_addr[1].sin_family = AF_INET;
+      xh->server_addr[1].sin_port = htons(DP_SYNC_SERVER_PORT);
+      if (inet_pton(AF_INET, cfg->cluster2, &xh->server_addr[1].sin_addr) <= 0) {
+        assert(0);
+      }
+      xh->nsync_nodes++;
     }
   }
 
