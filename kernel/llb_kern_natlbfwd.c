@@ -105,7 +105,7 @@ dp_sel_nat_ep_persist_check_slot(void *ctx, struct xfi *xf,
             flags |= (__u64)(sizeof(struct epsess)) << 32;
             bpf_perf_event_output(ctx, &sync_ring, flags,
                             eps, sizeof(*eps));
-            bpf_printk("sel2: %d", sel);
+            //bpf_printk("sel2: %d:0x%lx", sel, bpf_ntohs(eps->id));
             return sel;
           }
         }

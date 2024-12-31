@@ -542,10 +542,12 @@ llb_handle_sync_event(void *ctx,
              void *data,
              unsigned int data_sz)
 {
-#ifdef HAVE_DP_SSYNC_DEBUG
-  log_info("sync event received");
-  ll_pretty_hex(data, data_sz);
-#endif
+  char ab[INET_ADDRSTRLEN];
+  struct epsess *eps = (void *)data;
+  const char *host = inet_ntop(AF_INET, (struct in_addr *)&eps->id, ab, INET_ADDRSTRLEN);
+
+  log_trace("sync event: %s(t%d:u%d) rule %d slot %d lts %lluns",
+            host, eps->tcp, eps->udp, eps->rid, eps->sel, eps->lts);
 
   for (int i = 0; i < xh->nsync_nodes; i++) {
     if (sendto(xh->sync_fd, data, data_sz, MSG_DONTWAIT, 
