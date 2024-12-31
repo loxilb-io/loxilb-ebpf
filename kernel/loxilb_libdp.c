@@ -546,7 +546,7 @@ llb_handle_sync_event(void *ctx,
   struct epsess *eps = (void *)data;
   const char *host = inet_ntop(AF_INET, (struct in_addr *)&eps->id, ab, INET_ADDRSTRLEN);
 
-  log_trace("sync event: %s(t%d:u%d) rule %d slot %d lts %lluns",
+  log_trace("<-sync : %s(t%d:u%d) rule %d slot %d lts %lluns",
             host, eps->tcp, eps->udp, eps->rid, eps->sel, eps->lts);
 
   for (int i = 0; i < xh->nsync_nodes; i++) {
@@ -627,6 +627,12 @@ restart_server:
       struct dp_nat_epacts epa;
       struct epsess *teps;
       struct epsess *eps = (void *)buffer;
+
+      char ab[INET_ADDRSTRLEN];
+      const char *host = inet_ntop(AF_INET, (struct in_addr *)&eps->id, ab, INET_ADDRSTRLEN);
+      log_trace("sync <- : %s(t%d:u%d) rule %d slot %d lts %lluns",
+            host, eps->tcp, eps->udp, eps->rid, eps->sel, eps->lts);
+
       __u32 key = eps->rid;
       __u16 sel = eps->sel;
       if (sel < LLB_MAX_NXFRMS) {
