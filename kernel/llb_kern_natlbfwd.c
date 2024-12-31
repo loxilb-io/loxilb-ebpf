@@ -21,15 +21,18 @@ dp_do_rst_nat_sess(void *ctx, struct xfi *xf, __u32 rule, __u16 aid)
       if (epa->ca.act_type == DP_SET_NACT_SESS) {
         epa->active_sess[aid].csess--;
       } else {
-        epa->active_sess[aid].tcp = 0;
-        epa->active_sess[aid].udp = 0;
-        epa->active_sess[aid].id = 0;
-        epa->active_sess[aid].lts = 0;
-        bpf_spin_unlock(&epa->lock);
-        flags |= (__u64)(sizeof(struct epsess)) << 32;
-        bpf_perf_event_output(ctx, &sync_ring, flags,
+        // Reset only if ep-slot is fully used
+        if (epa->active_sess[aid].udp) {
+          epa->active_sess[aid].tcp = 0;
+          epa->active_sess[aid].udp = 0;
+          epa->active_sess[aid].id = 0;
+          epa->active_sess[aid].lts = 0;
+          bpf_spin_unlock(&epa->lock);
+          flags |= (__u64)(sizeof(struct epsess)) << 32;
+          bpf_perf_event_output(ctx, &sync_ring, flags,
                             &epa->active_sess[aid], sizeof(struct epsess));
-        return;
+          return;
+        }
       }
     }
     bpf_spin_unlock(&epa->lock);
@@ -37,21 +40,29 @@ dp_do_rst_nat_sess(void *ctx, struct xfi *xf, __u32 rule, __u16 aid)
 }
 
 static void __always_inline
-dp_update_ep_sess(void *ctx, struct xfi *xf, __u32 rule, int aid)
+dp_update_ep_sess(void *ctx, struct xfi *xf, __u32 rule, __u16 aid)
 {
   struct dp_nat_epacts *epa;
+  __u64 flags = BPF_F_CURRENT_CPU;
   
   __u64 cts = bpf_ktime_get_ns();
   epa = bpf_map_lookup_elem(&nat_ep_map, &rule);
   if (epa != NULL) {
-    bpf_spin_lock(&epa->lock);
-    if (aid >= 0 && aid < LLB_MAX_NXFRMS) {
+    // FIXME : Do we need to care about race-condition here ?
+    //bpf_spin_lock(&epa->lock);
+    if (aid < LLB_MAX_NXFRMS) {
       struct epsess *eps = &epa->active_sess[aid];
       if (eps != NULL) {
-        eps->lts = cts; 
+        if (cts - eps->lts > 10000000000) {
+          eps->lts = cts;
+          //bpf_spin_unlock(&epa->lock);
+          flags |= (__u64)(sizeof(struct epsess)) << 32;
+          bpf_perf_event_output(ctx, &sync_ring, flags,
+                            eps, sizeof(struct epsess));
+        }
       }
     }
-    bpf_spin_unlock(&epa->lock);
+    //bpf_spin_unlock(&epa->lock);
   }
 }
 

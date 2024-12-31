@@ -84,6 +84,9 @@
 #define CT_ICMP_FN_CPTO       (5000000000)
 #define CT_MISMATCH_FN_CPTO   (180000000000)
 
+#define DP_SYNC_SERVER_PORT   (22223)
+#define DP_SYNC_BUF_SZ        (512)
+
 #define DP_XADDR_ISZR(a) ((a)[0] == 0 && \
                           (a)[1] == 0 && \
                           (a)[2] == 0 && \

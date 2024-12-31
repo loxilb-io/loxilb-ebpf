@@ -536,17 +536,16 @@ llb_sync_proc_main(void *arg)
   return NULL;
 }
 
-#define DP_SYNC_SERVER_PORT 22223
-#define DP_SYNC_BUF_SZ 512
-
 static void
 llb_handle_sync_event(void *ctx,
              int cpu,
              void *data,
              unsigned int data_sz)
 {
+#ifdef HAVE_DP_SSYNC_DEBUG
   log_info("sync event received");
   ll_pretty_hex(data, data_sz);
+#endif
 
   for (int i = 0; i < xh->nsync_nodes; i++) {
     if (sendto(xh->sync_fd, data, data_sz, MSG_DONTWAIT, 
@@ -618,8 +617,10 @@ restart_server:
         continue;
       }
 
+#ifdef HAVE_DP_SSYNC_DEBUG
       log_debug("ssync - recvfrom");
       ll_pretty_hex(buffer, recv_len);
+#endif
 
       struct dp_nat_epacts epa;
       struct epsess *teps;
@@ -632,6 +633,10 @@ restart_server:
           teps = &epa.active_sess[sel];
           if (eps->lts)
             eps->lts = get_os_nsecs();
+#ifdef HAVE_DP_SSYNC_DEBUG
+          log_debug("eps sel = %d tcp %d udp %d id 0x%x rid %d -- lts %llu\n",
+                  eps->sel, eps->tcp, eps->udp, ntohl(eps->id), eps->rid, eps->lts);
+#endif
           memcpy(teps, eps, sizeof(*eps));
           bpf_map_update_elem(llb_map2fd(LL_DP_NAT_EP_MAP), &key, &epa, 0);
         }

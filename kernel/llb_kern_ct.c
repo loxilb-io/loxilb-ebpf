@@ -78,8 +78,7 @@ dp_run_ct_helper(void *ctx, struct xfi *xf)
   if (xf->l34m.nw_proto == IPPROTO_TCP) {
     dp_run_ctact_helper(xf, act);
   }
-  volatile int sel = (int)(act->ctd.aid);
-  dp_update_ep_sess(ctx, xf, act->ctd.rid, sel);
+  dp_update_ep_sess(ctx, xf, act->ctd.rid, act->ctd.aid);
   return 0;
 }
 
