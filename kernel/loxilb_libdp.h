@@ -63,8 +63,6 @@ struct ebpfcfg {
   int have_sockrwr;
   int have_sockmap;
   int have_noebpf;
-  char *cluster1;
-  char *cluster2;
 };
 
 void loxilb_set_loglevel(struct ebpfcfg *cfg);

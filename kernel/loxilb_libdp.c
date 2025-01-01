@@ -3623,16 +3623,6 @@ loxilb_main(struct ebpfcfg *cfg)
     if (xh->sync_fd <= 0) {
       assert(0);
     }
-    if (cfg->cluster1) {
-      if (llb_add_cnode(cfg->cluster1)) {
-        assert(0);
-      }
-    }
-    if (cfg->cluster2) {
-      if (llb_add_cnode(cfg->cluster2)) {
-        assert(0);
-      }
-    }
   }
 
   llb_xh_init(xh);
