@@ -106,7 +106,7 @@ typedef struct llb_dp_struct
   int smfd;
   int egr_hooks;
   int nodenum;
-#define MAX_SYNC_NODES 3
+#define MAX_SYNC_NODES 5
   int nsync_nodes;
   struct sockaddr_in server_addr[MAX_SYNC_NODES];
   llb_dp_map_t maps[LL_DP_MAX_MAP];
@@ -2608,6 +2608,89 @@ llb_del_map_elem(int tbl, void *k)
   return llb_del_map_elem_wval(tbl, k, NULL);
 }
 
+int
+llb_add_cnode(char *node)
+{
+  struct sockaddr_in node_addr;
+  struct sockaddr_in *pnode;
+  if (node == NULL) {
+    return -EINVAL;
+  }
+
+  if (xh->nsync_nodes >= MAX_SYNC_NODES) {
+    log_error("cnode: no free slots for %s", node);
+    return -E2BIG;
+  }
+
+  node_addr.sin_family = AF_INET;
+  node_addr.sin_port = htons(DP_SYNC_SERVER_PORT);
+  if (inet_pton(AF_INET, node, &node_addr.sin_addr) <= 0) {
+    log_error("cnode: parse failed for %s", node);
+    return -EINVAL;
+  }
+
+  for (int i = 0; i < xh->nsync_nodes; i++) {
+    if (xh->server_addr[i].sin_addr.s_addr == node_addr.sin_addr.s_addr) {
+      log_error("cnode:already present %s", node);
+      return -EINVAL;
+    }
+  }
+
+  pnode = &xh->server_addr[xh->nsync_nodes];
+  memcpy(pnode, &node_addr, sizeof(struct sockaddr_in ));
+  xh->nsync_nodes++;
+
+  log_error("cnode: added new %s", node);
+  return 0;
+}
+
+int
+llb_delete_cnode(char *node)
+{
+  struct sockaddr_in node_addr;
+  struct sockaddr_in *pnode1;
+  struct sockaddr_in *pnode2;
+  int i;
+
+  if (node == NULL) {
+    return -EINVAL;
+  }
+
+  if (xh->nsync_nodes <= 0) {
+    log_error("cnode:list empty - delete failed for %s", node);
+    return -ENOENT;
+  }
+
+  node_addr.sin_family = AF_INET;
+  node_addr.sin_port = htons(DP_SYNC_SERVER_PORT);
+  if (inet_pton(AF_INET, node, &node_addr.sin_addr) <= 0) {
+    log_error("cnode: parse failed for %s", node);
+    return -1;
+  }
+
+  for (i = 0; i < xh->nsync_nodes; i++) {
+    if (xh->server_addr[i].sin_addr.s_addr == node_addr.sin_addr.s_addr) {
+      break;
+    }
+  }
+
+  if (i >= xh->nsync_nodes) {
+    log_error("cnode: node not found - delete failed for %s", node);
+    return -ENOENT;
+  }
+
+
+  for (int j = i; j < xh->nsync_nodes-1; j++) {
+    pnode1 = &xh->server_addr[j];
+    pnode2 = &xh->server_addr[j+1];
+    memcpy(pnode1, pnode2, sizeof(struct sockaddr_in));
+  }
+  xh->nsync_nodes--;
+
+  log_error("cnode: delete %s", node);
+  return 0;
+}
+
 unsigned long long
 get_os_usecs(void)
 {
@@ -3541,21 +3624,14 @@ loxilb_main(struct ebpfcfg *cfg)
       assert(0);
     }
     if (cfg->cluster1) {
-      xh->server_addr[0].sin_family = AF_INET;
-      xh->server_addr[0].sin_port = htons(DP_SYNC_SERVER_PORT);
-      if (inet_pton(AF_INET, cfg->cluster1, &xh->server_addr[0].sin_addr) <= 0) {
+      if (llb_add_cnode(cfg->cluster1)) {
         assert(0);
       }
-      xh->nsync_nodes++;
     }
-
     if (cfg->cluster2) {
-      xh->server_addr[1].sin_family = AF_INET;
-      xh->server_addr[1].sin_port = htons(DP_SYNC_SERVER_PORT);
-      if (inet_pton(AF_INET, cfg->cluster2, &xh->server_addr[1].sin_addr) <= 0) {
+      if (llb_add_cnode(cfg->cluster2)) {
         assert(0);
       }
-      xh->nsync_nodes++;
     }
   }
 
