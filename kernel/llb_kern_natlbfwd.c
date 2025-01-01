@@ -221,6 +221,8 @@ dp_sel_nat_ep(void *ctx, struct xfi *xf, struct dp_proxy_tacts *act, int is_udp)
         *(__u16 *)&xf->km.skey[2] = nep;
         TCALL_NAT_TC1();
       }
+      // Give up but with a fight
+      sel = get_ip4_hash3(xf->l34m.saddr4) % act->nxfrm;
     }
   } else if (act->sel_type == NAT_LB_SEL_LC) {
     struct dp_nat_epacts *epa;
