@@ -325,6 +325,7 @@ dp_do_ctops(void *ctx, struct xfi *xf, void *fa_,
     }
 
     xf->pm.phit |= LLB_DP_NAT_HIT;
+    dp_update_ep_sess(ctx, xf, act->ctd.rid, act->ctd.aid);
 
   } else if (act->ca.act_type == DP_SET_TOCP) {
     LLBS_PPLN_PASSC(xf, LLB_PIPE_RC_ACL_TRAP);
@@ -336,7 +337,6 @@ dp_do_ctops(void *ctx, struct xfi *xf, void *fa_,
 #ifdef HAVE_DP_EXTCT
   if (xf->l34m.nw_proto == IPPROTO_TCP) {
     dp_run_ctact_helper(xf, act);
-    dp_update_ep_sess(ctx, xf, act->ctd.rid, act->ctd.aid);
   }
 #endif
 

@@ -31,16 +31,21 @@ dp_do_rst_ep_sess(void *ctx, struct xfi *xf, __u32 rule, __u16 aid)
   struct dp_nat_sepacts *epa;
   __u64 flags = BPF_F_CURRENT_CPU;
   __u32 key = (rule * LLB_MAX_NXFRMS) +  aid;
+
+  if (xf->pm.nf == 0) {
+    return;
+  }
+
   epa = bpf_map_lookup_elem(&nat_sep_map, &key);
   if (epa != NULL) {
     bpf_spin_lock(&epa->lock);
     struct epsess *eps = &epa->active_sess;
     // Reset only if ep-slot is fully used
     if (eps->udp) {
+      eps->lts = 0;
       eps->tcp = 0;
       eps->udp = 0;
       eps->id = 0;
-      eps->lts = 0;
       bpf_spin_unlock(&epa->lock);
       flags |= (__u64)(sizeof(struct epsess)) << 32;
       bpf_perf_event_output(ctx, &sync_ring, flags,
@@ -58,12 +63,17 @@ dp_update_ep_sess(void *ctx, struct xfi *xf, __u32 rule, __u16 aid)
   __u64 flags = BPF_F_CURRENT_CPU;
   __u64 cts = bpf_ktime_get_ns();
   __u32 key = (rule * LLB_MAX_NXFRMS) +  aid;
+
+  if (xf->pm.nf == 0) {
+    return;
+  }
+
   epa = bpf_map_lookup_elem(&nat_sep_map, &key);
   if (epa != NULL) {
     // FIXME : Do we need to care about race-condition here ?
     bpf_spin_lock(&epa->lock);
     struct epsess *eps = &epa->active_sess;
-    if (cts - eps->lts > 10000000000) {
+    if (cts - eps->lts > 10000000000 && eps->rid && eps->udp) {
       eps->lts = cts;
       bpf_spin_unlock(&epa->lock);
       flags |= (__u64)(sizeof(struct epsess)) << 32;
@@ -94,11 +104,11 @@ dp_sel_nat_ep_persist_check_slot(void *ctx, struct xfi *xf,
   key_base = act->ca.cidx * LLB_MAX_NXFRMS;
   for (n = 0; n < LLB_MAX_NXFRMS_PLOOP; n++) {
     if (sel < LLB_MAX_NXFRMS) {
-      key = key_base + sel;
-      epa = bpf_map_lookup_elem(&nat_sep_map, &key);
-      if (epa != NULL) {
-        eps = &epa->active_sess;
-        if (act->nxfrms[sel].inactive == 0) {
+      if (act->nxfrms[sel].inactive == 0) {
+        key = key_base + sel;
+        epa = bpf_map_lookup_elem(&nat_sep_map, &key);
+        if (epa != NULL) {
+          eps = &epa->active_sess;
           if ((cts - eps->lts > EP_DPTO) ||
               ((eps->id == id) &&
               ((eps->tcp == 0 && !is_udp) ||
@@ -111,7 +121,10 @@ dp_sel_nat_ep_persist_check_slot(void *ctx, struct xfi *xf,
               eps->tcp = 1;
               eps->udp = 0;
             }
-            goto out;
+            bpf_perf_event_output(ctx, &sync_ring, flags,
+                          eps, sizeof(*eps));
+ 
+            return sel;
           }
         }
       }
@@ -122,13 +135,6 @@ dp_sel_nat_ep_persist_check_slot(void *ctx, struct xfi *xf,
 
   *(__u16 *)&xf->km.skey[4] = sel;
   return (uint16_t)(-1);
-
-out:
-  if (eps != NULL) {
-    bpf_perf_event_output(ctx, &sync_ring, flags,
-                          eps, sizeof(*eps));
-  }
-  return sel;
 }
 
 static int __always_inline
@@ -233,7 +239,7 @@ dp_sel_nat_ep(void *ctx, struct xfi *xf, struct dp_proxy_tacts *act, int is_udp)
         TCALL_NAT_TC1();
       }
       // Give up but with a fight
-      sel = get_ip4_hash3(xf->l34m.saddr4) % act->nxfrm;
+      //sel = get_ip4_hash3(xf->l34m.saddr4) % act->nxfrm;
     }
   } else if (act->sel_type == NAT_LB_SEL_LC) {
     struct dp_nat_epacts *epa;
