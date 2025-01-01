@@ -624,21 +624,22 @@ restart_server:
       ll_pretty_hex(buffer, recv_len);
 #endif
 
-      struct dp_nat_epacts epa;
+      struct dp_nat_sepacts epa;
       struct epsess *teps;
       struct epsess *eps = (void *)buffer;
-
       char ab[INET_ADDRSTRLEN];
       const char *host = inet_ntop(AF_INET, (struct in_addr *)&eps->id, ab, INET_ADDRSTRLEN);
-      log_trace("sync <- : %s(t%d:u%d) rule %d slot %d lts %lluns",
-            host, eps->tcp, eps->udp, eps->rid, eps->sel, eps->lts);
 
-      __u32 key = eps->rid;
       __u16 sel = eps->sel;
+      __u32 key = (eps->rid * LLB_MAX_NXFRMS) +  sel;
+
+      log_trace("sync <- : %s(t%d:u%d) key %lu rule %d slot %d lts %lluns",
+            host, eps->tcp, eps->udp, key, eps->rid, eps->sel, eps->lts);
+
       if (sel < LLB_MAX_NXFRMS) {
-        int ret1 = bpf_map_lookup_elem(llb_map2fd(LL_DP_NAT_EP_MAP), &key, &epa);
+        int ret1 = bpf_map_lookup_elem(llb_map2fd(LL_DP_NAT_SEP_MAP), &key, &epa);
         if (ret1 == 0) {
-          teps = &epa.active_sess[sel];
+          teps = &epa.active_sess;
           if (eps->lts)
             eps->lts = get_os_nsecs();
 #ifdef HAVE_DP_SSYNC_DEBUG
@@ -646,7 +647,7 @@ restart_server:
                   eps->sel, eps->tcp, eps->udp, ntohl(eps->id), eps->rid, eps->lts);
 #endif
           memcpy(teps, eps, sizeof(*eps));
-          bpf_map_update_elem(llb_map2fd(LL_DP_NAT_EP_MAP), &key, &epa, 0);
+          bpf_map_update_elem(llb_map2fd(LL_DP_NAT_SEP_MAP), &key, &epa, 0);
         }
       }
     }
@@ -682,21 +683,19 @@ cleanup:
 }
 
 int
-llb_setup_ep_map(void)
+llb_setup_sep_map(void)
 {
-  struct dp_nat_epacts epa;
+  struct dp_nat_sepacts epa;
   struct epsess *eps;
   __u32 key;
-  int i = 0;
 
-  for (key = 0; key < LLB_NAT_EP_MAP_ENTRIES; key++) {
-    int ret = bpf_map_lookup_elem(llb_map2fd(LL_DP_NAT_EP_MAP), &key, &epa);
+  for (key = 0; key < LLB_NAT_SEP_MAP_ENTRIES; key++) {
+    int ret = bpf_map_lookup_elem(llb_map2fd(LL_DP_NAT_SEP_MAP), &key, &epa);
     if (ret == 0) {
-      for (i = 0; i < LLB_MAX_NXFRMS; i++) {
-        eps = &epa.active_sess[i];
-        eps->sel = i;
-      }
-      bpf_map_update_elem(llb_map2fd(LL_DP_NAT_EP_MAP), &key, &epa, 0);
+      eps = &epa.active_sess;
+      eps->rid = key/LLB_MAX_NXFRMS;
+      eps->sel = key%LLB_MAX_NXFRMS;
+      bpf_map_update_elem(llb_map2fd(LL_DP_NAT_SEP_MAP), &key, &epa, 0);
     }
   }
   return 0;
@@ -1419,8 +1418,8 @@ llb_dflt_sec_map2fd_all(struct bpf_object *bpf_obj)
       llb_setup_cp_ring();
     } else if (i == LL_DP_SYNC_PERF_RING) {
       llb_setup_sync_ring();
-    } else if (i == LL_DP_NAT_EP_MAP) {
-      llb_setup_ep_map();
+    } else if (i == LL_DP_NAT_SEP_MAP) {
+      llb_setup_sep_map();
     }
   }
 
@@ -1728,6 +1727,10 @@ llb_xh_init(llb_dp_struct_t *xh)
   xh->maps[LL_DP_NAT_EP_MAP].map_name = "nat_ep_map";
   xh->maps[LL_DP_NAT_EP_MAP].has_pb   = 0;
   xh->maps[LL_DP_NAT_EP_MAP].max_entries = LLB_NAT_EP_MAP_ENTRIES;
+
+  xh->maps[LL_DP_NAT_SEP_MAP].map_name = "nat_sep_map";
+  xh->maps[LL_DP_NAT_SEP_MAP].has_pb   = 0;
+  xh->maps[LL_DP_NAT_SEP_MAP].max_entries = LLB_NAT_SEP_MAP_ENTRIES;
 
   xh->maps[LL_DP_SOCK_RWR_MAP].map_name = "sock_rwr_map";
   xh->maps[LL_DP_SOCK_RWR_MAP].has_pb   = 0;
@@ -2149,9 +2152,9 @@ llb_nat_dec_act_sessions(uint32_t rid, uint32_t aid)
 {
   llb_dp_map_t *t;
   struct dp_nat_epacts epa;
+  struct dp_nat_sepacts sepa;
 
   t = &xh->maps[LL_DP_NAT_EP_MAP];
-
   if (t != NULL) {
     memset(&epa, 0, sizeof(epa));
     if ((bpf_map_lookup_elem_flags(t->map_fd, &rid, &epa, BPF_F_LOCK)) != 0) {
@@ -2163,17 +2166,32 @@ llb_nat_dec_act_sessions(uint32_t rid, uint32_t aid)
       }
     }
   }
+
+  t = &xh->maps[LL_DP_NAT_SEP_MAP];
+  if (t != NULL) {
+    uint32_t key = (rid * LLB_MAX_NXFRMS) + aid;
+    memset(&sepa, 0, sizeof(sepa));
+    if ((bpf_map_lookup_elem_flags(t->map_fd, &key, &sepa, BPF_F_LOCK)) != 0) {
+      if (sepa.active_sess.csess > 0) {
+        sepa.active_sess.csess--;
+        sepa.active_sess.tcp = 0;
+        sepa.active_sess.udp = 0;
+        bpf_map_update_elem(t->map_fd, &rid, &epa, BPF_F_LOCK);
+      }
+    }
+  }
+
 }
 
 static void
-llb_nat_rst_act_sessions(uint32_t rid)
+llb_nat_rst_act_sessions(uint32_t rid, uint32_t aid)
 {
   llb_dp_map_t *t;
   struct dp_nat_epacts epa;
+  struct dp_nat_sepacts sepa;
   int i;
 
   t = &xh->maps[LL_DP_NAT_EP_MAP];
-
   if (t != NULL) {
     memset(&epa, 0, sizeof(epa));
     if ((bpf_map_lookup_elem_flags(t->map_fd, &rid, &epa, BPF_F_LOCK)) != 0) {
@@ -2184,6 +2202,20 @@ llb_nat_rst_act_sessions(uint32_t rid)
         epa.active_sess[i].tcp = 0;
       }
       bpf_map_update_elem(t->map_fd, &rid, &epa, BPF_F_LOCK);
+    }
+  }
+
+  t = &xh->maps[LL_DP_NAT_SEP_MAP];
+  if (t != NULL) {
+    uint32_t key = (rid * LLB_MAX_NXFRMS) + aid;
+    memset(&sepa, 0, sizeof(sepa));
+    if ((bpf_map_lookup_elem_flags(t->map_fd, &key, &sepa, BPF_F_LOCK)) != 0) {
+      if (sepa.active_sess.csess > 0) {
+        sepa.active_sess.csess--;
+        sepa.active_sess.tcp = 0;
+        sepa.active_sess.udp = 0;
+        bpf_map_update_elem(t->map_fd, &rid, &epa, BPF_F_LOCK);
+      }
     }
   }
 }
@@ -2397,7 +2429,7 @@ llb_add_map_elem(int tbl, void *k, void *v)
       int aid = 0;
       for (aid = 0; aid < LLB_MAX_NXFRMS; aid++) {
         llb_clear_map_stats(tbl, LLB_NAT_STAT_CID(cidx, aid));
-        llb_nat_rst_act_sessions(cidx);
+        llb_nat_rst_act_sessions(cidx, aid);
       }
     } else {
       llb_clear_map_stats(tbl, cidx);

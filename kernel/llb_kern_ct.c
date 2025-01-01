@@ -1809,8 +1809,10 @@ dp_ct_in(void *ctx, struct xfi *xf)
       }
 
       if (xi->nat_flags) {
-        if (xf->l34m.nw_proto == IPPROTO_TCP)
+        if (xf->l34m.nw_proto == IPPROTO_TCP) {
           dp_do_rst_nat_sess(ctx, xf, atdat->ctd.rid, atdat->ctd.aid);
+          dp_do_rst_ep_sess(ctx, xf, atdat->ctd.rid, atdat->ctd.aid);
+        }
       }
     }
   }

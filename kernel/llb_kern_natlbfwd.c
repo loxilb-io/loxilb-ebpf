@@ -13,27 +13,39 @@ static void __always_inline
 dp_do_rst_nat_sess(void *ctx, struct xfi *xf, __u32 rule, __u16 aid)
 {
   struct dp_nat_epacts *epa;
-  __u64 flags = BPF_F_CURRENT_CPU;
   epa = bpf_map_lookup_elem(&nat_ep_map, &rule);
   if (epa != NULL) {
     bpf_spin_lock(&epa->lock);
     if (aid < LLB_MAX_NXFRMS) {
       if (epa->ca.act_type == DP_SET_NACT_SESS) {
         epa->active_sess[aid].csess--;
-      } else {
-        // Reset only if ep-slot is fully used
-        if (epa->active_sess[aid].udp) {
-          epa->active_sess[aid].tcp = 0;
-          epa->active_sess[aid].udp = 0;
-          epa->active_sess[aid].id = 0;
-          epa->active_sess[aid].lts = 0;
-          bpf_spin_unlock(&epa->lock);
-          flags |= (__u64)(sizeof(struct epsess)) << 32;
-          bpf_perf_event_output(ctx, &sync_ring, flags,
-                            &epa->active_sess[aid], sizeof(struct epsess));
-          return;
-        }
       }
+    }
+    bpf_spin_unlock(&epa->lock);
+  }
+}
+
+static void __always_inline
+dp_do_rst_ep_sess(void *ctx, struct xfi *xf, __u32 rule, __u16 aid)
+{
+  struct dp_nat_sepacts *epa;
+  __u64 flags = BPF_F_CURRENT_CPU;
+  __u32 key = (rule * LLB_MAX_NXFRMS) +  aid;
+  epa = bpf_map_lookup_elem(&nat_sep_map, &key);
+  if (epa != NULL) {
+    bpf_spin_lock(&epa->lock);
+    struct epsess *eps = &epa->active_sess;
+    // Reset only if ep-slot is fully used
+    if (eps->udp) {
+      eps->tcp = 0;
+      eps->udp = 0;
+      eps->id = 0;
+      eps->lts = 0;
+      bpf_spin_unlock(&epa->lock);
+      flags |= (__u64)(sizeof(struct epsess)) << 32;
+      bpf_perf_event_output(ctx, &sync_ring, flags,
+                        eps, sizeof(struct epsess));
+      return;
     }
     bpf_spin_unlock(&epa->lock);
   }
@@ -42,27 +54,24 @@ dp_do_rst_nat_sess(void *ctx, struct xfi *xf, __u32 rule, __u16 aid)
 static void __always_inline
 dp_update_ep_sess(void *ctx, struct xfi *xf, __u32 rule, __u16 aid)
 {
-  struct dp_nat_epacts *epa;
+  struct dp_nat_sepacts *epa;
   __u64 flags = BPF_F_CURRENT_CPU;
-  
   __u64 cts = bpf_ktime_get_ns();
-  epa = bpf_map_lookup_elem(&nat_ep_map, &rule);
+  __u32 key = (rule * LLB_MAX_NXFRMS) +  aid;
+  epa = bpf_map_lookup_elem(&nat_sep_map, &key);
   if (epa != NULL) {
     // FIXME : Do we need to care about race-condition here ?
-    //bpf_spin_lock(&epa->lock);
-    if (aid < LLB_MAX_NXFRMS) {
-      struct epsess *eps = &epa->active_sess[aid];
-      if (eps != NULL) {
-        if (cts - eps->lts > 10000000000) {
-          eps->lts = cts;
-          //bpf_spin_unlock(&epa->lock);
-          flags |= (__u64)(sizeof(struct epsess)) << 32;
-          bpf_perf_event_output(ctx, &sync_ring, flags,
-                            eps, sizeof(struct epsess));
-        }
-      }
+    bpf_spin_lock(&epa->lock);
+    struct epsess *eps = &epa->active_sess;
+    if (cts - eps->lts > 10000000000) {
+      eps->lts = cts;
+      bpf_spin_unlock(&epa->lock);
+      flags |= (__u64)(sizeof(struct epsess)) << 32;
+      bpf_perf_event_output(ctx, &sync_ring, flags,
+                        eps, sizeof(struct epsess));
+      return;
     }
-    //bpf_spin_unlock(&epa->lock);
+    bpf_spin_unlock(&epa->lock);
   }
 }
 
@@ -71,53 +80,55 @@ dp_sel_nat_ep_persist_check_slot(void *ctx, struct xfi *xf,
                                  struct dp_proxy_tacts *act, 
                                  uint16_t sel, int is_udp)
 {
-  struct dp_nat_epacts *epa;
+  struct dp_nat_sepacts *epa;
   struct epsess *eps;
-  __u32 key; 
   uint16_t n;
+  __u32 key;
+  __u32 key_base;
+  __u32 id;
   __u64 flags = BPF_F_CURRENT_CPU;
   __u64 cts = bpf_ktime_get_ns();
 
-  key = act->ca.cidx;
-  epa = bpf_map_lookup_elem(&nat_ep_map, &key);
-  if (epa != NULL) {
-    bpf_spin_lock(&epa->lock);
-    for (n = 0; n < LLB_MAX_NXFRMS_PLOOP; n++) {
-      if (sel < LLB_MAX_NXFRMS-1) {
-        eps = &epa->active_sess[sel];
+  flags |= (__u64)(sizeof(struct epsess)) << 32;
+  id = xf->l34m.saddr4;
+  key_base = act->ca.cidx * LLB_MAX_NXFRMS;
+  for (n = 0; n < LLB_MAX_NXFRMS_PLOOP; n++) {
+    if (sel < LLB_MAX_NXFRMS) {
+      key = key_base + sel;
+      epa = bpf_map_lookup_elem(&nat_sep_map, &key);
+      if (epa != NULL) {
+        eps = &epa->active_sess;
         if (act->nxfrms[sel].inactive == 0) {
           if ((cts - eps->lts > EP_DPTO) ||
-              ((eps->id == xf->l34m.saddr4) &&
+              ((eps->id == id) &&
               ((eps->tcp == 0 && !is_udp) ||
               ((eps->udp == 0 && is_udp))))) {
-
+            eps->lts = cts;
+            eps->id = id;
             if (is_udp) {
               eps->udp = 1;
             } else {
               eps->tcp = 1;
               eps->udp = 0;
             }
-            eps->lts = cts;
-            eps->id = xf->l34m.saddr4;
-            eps->rid = key;
-            bpf_spin_unlock(&epa->lock);
-
-            flags |= (__u64)(sizeof(struct epsess)) << 32;
-            bpf_perf_event_output(ctx, &sync_ring, flags,
-                            eps, sizeof(*eps));
-            //bpf_printk("sel2: %d:0x%lx", sel, bpf_ntohs(eps->id));
-            return sel;
+            goto out;
           }
         }
       }
       sel++;
       sel = sel % LLB_MAX_NXFRMS;
     }
-    bpf_spin_unlock(&epa->lock);
   }
 
   *(__u16 *)&xf->km.skey[4] = sel;
   return (uint16_t)(-1);
+
+out:
+  if (eps != NULL) {
+    bpf_perf_event_output(ctx, &sync_ring, flags,
+                          eps, sizeof(*eps));
+  }
+  return sel;
 }
 
 static int __always_inline
