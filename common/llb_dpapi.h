@@ -948,5 +948,7 @@ int llb_dp_link_attach(const char *ifname, const char *psec, int mp_type, int un
 void llb_unload_kern_all(void);
 void llb_xh_lock(void);
 void llb_xh_unlock(void);
+int llb_add_cnode(char *);
+int llb_delete_cnode(char *);
 
 #endif /* __LLB_DPAPI_H__ */
