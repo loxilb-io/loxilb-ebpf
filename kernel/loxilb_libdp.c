@@ -2162,7 +2162,7 @@ llb_add_map_elem_nat_post_proc(void *k, void *v)
     ep_arm = &na->nxfrms[i];
     if (ep_arm->inactive != teps->inactive) {
       teps->inactive = ep_arm->inactive;
-       bpf_map_update_elem(llb_map2fd(LL_DP_NAT_SEP_MAP), &key, &epa, BPF_F_LOCK);
+      bpf_map_update_elem(llb_map2fd(LL_DP_NAT_SEP_MAP), &key, &epa, BPF_F_LOCK);
     }
   }
 
