@@ -551,7 +551,9 @@ llb_handle_sep_resolution(struct epsess *eps, int do_remote)
     int ret = bpf_map_lookup_elem_flags(llb_map2fd(LL_DP_NAT_SEP_MAP), &key, &epa, BPF_F_LOCK);
     if (ret == 0) {
       teps = &epa.active_sess;
-      if (lts - teps->lts > 30000000000 || teps->id == 0) {
+      if (teps->inactive) continue;
+
+      if (lts - teps->lts > 30000000000 || teps->id == 0 || teps->id == eps->id) {
         teps->lts = lts;
         teps->tcp = 0;
         teps->udp = 0;
@@ -2142,11 +2144,27 @@ llb_add_map_elem_nat_post_proc(void *k, void *v)
   struct dp_proxy_tacts *na = v;
   struct mf_xfrm_inf *ep_arm;
   uint32_t *inact_aids;
+  struct dp_nat_sepacts epa;
+  struct epsess *teps;
   int i = 0;
   int j = 0;
 
   inact_aids = calloc(1, sizeof(uint32_t)*LLB_MAX_NXFRMS);
   assert(inact_aids);
+
+  for (i = 0; i < LLB_MAX_NXFRMS; i++) {
+    __u32 key_base = na->ca.cidx * LLB_MAX_NXFRMS;
+    __u32 key = key_base + i;
+    int ret = bpf_map_lookup_elem_flags(llb_map2fd(LL_DP_NAT_SEP_MAP), &key, &epa, BPF_F_LOCK);
+    if (ret != 0) continue;
+
+    teps = &epa.active_sess;
+    ep_arm = &na->nxfrms[i];
+    if (ep_arm->inactive != teps->inactive) {
+      teps->inactive = ep_arm->inactive;
+       bpf_map_update_elem(llb_map2fd(LL_DP_NAT_SEP_MAP), &key, &epa, BPF_F_LOCK);
+    }
+  }
 
   for (i = 0; i < na->nxfrm && i < LLB_MAX_NXFRMS; i++) {
     ep_arm = &na->nxfrms[i];
