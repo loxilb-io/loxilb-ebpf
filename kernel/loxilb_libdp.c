@@ -637,7 +637,7 @@ restart_server:
             host, eps->tcp, eps->udp, key, eps->rid, eps->sel, eps->lts);
 
       if (sel < LLB_MAX_NXFRMS) {
-        int ret1 = bpf_map_lookup_elem(llb_map2fd(LL_DP_NAT_SEP_MAP), &key, &epa);
+        int ret1 = bpf_map_lookup_elem_flags(llb_map2fd(LL_DP_NAT_SEP_MAP), &key, &epa, BPF_F_LOCK);
         if (ret1 == 0) {
           teps = &epa.active_sess;
           if (eps->lts)
@@ -647,7 +647,7 @@ restart_server:
                   eps->sel, eps->tcp, eps->udp, ntohl(eps->id), eps->rid, eps->lts);
 #endif
           memcpy(teps, eps, sizeof(*eps));
-          bpf_map_update_elem(llb_map2fd(LL_DP_NAT_SEP_MAP), &key, &epa, 0);
+          bpf_map_update_elem(llb_map2fd(LL_DP_NAT_SEP_MAP), &key, &epa, BPF_F_LOCK);
         }
       }
     }
