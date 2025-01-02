@@ -5,7 +5,7 @@
  * SPDX-License-Identifier: (GPL-2.0 OR BSD-2-Clause)
  */
 
-#define LLB_MAX_NXFRMS_PLOOP (55)
+#define LLB_MAX_NXFRMS_PLOOP (10)
 #define EP_DPTO              (30000000000)
 #define TCALL_NAT_TC1() bpf_tail_call(ctx, &pgm_tbl, LLB_DP_SNAT_PGM_ID1)
 
@@ -108,6 +108,7 @@ dp_sel_nat_ep_persist_check_slot(void *ctx, struct xfi *xf,
         key = key_base + sel;
         epa = bpf_map_lookup_elem(&nat_sep_map, &key);
         if (epa != NULL) {
+          bpf_spin_lock(&epa->lock);
           eps = &epa->active_sess;
           if ((cts - eps->lts > EP_DPTO) ||
               ((eps->id == id) &&
@@ -121,11 +122,12 @@ dp_sel_nat_ep_persist_check_slot(void *ctx, struct xfi *xf,
               eps->tcp = 1;
               eps->udp = 0;
             }
+            bpf_spin_unlock(&epa->lock);
             bpf_perf_event_output(ctx, &sync_ring, flags,
                           eps, sizeof(*eps));
- 
             return sel;
           }
+          bpf_spin_unlock(&epa->lock);
         }
       }
       sel++;
