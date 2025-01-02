@@ -111,12 +111,15 @@ dp_sel_nat_ep_persist_check_slot(void *ctx, struct xfi *xf,
           bpf_spin_lock(&epa->lock);
           memcpy(&eps, &epa->active_sess, sizeof(struct epsess)); 
           bpf_spin_unlock(&epa->lock);
-          if ((cts - eps.lts > EP_DPTO) ||
-              ((eps.id == id) &&
+          //if ((cts - eps.lts > EP_DPTO) ||
+          //    ((eps.id == id) &&
+          //    ((eps.tcp == 0 && !is_udp) ||
+          //    ((eps.udp == 0 && is_udp))))) {
+
+          if (eps.id == id && 
               ((eps.tcp == 0 && !is_udp) ||
-              ((eps.udp == 0 && is_udp))))) {
+               (eps.udp == 0 && is_udp))) {
             eps.lts = cts;
-            eps.id = id;
             if (is_udp) {
               eps.udp = 1;
             } else {
@@ -244,6 +247,21 @@ dp_sel_nat_ep(void *ctx, struct xfi *xf, struct dp_proxy_tacts *act, int is_udp)
       }
       // Give up but with a fight
       //sel = get_ip4_hash3(xf->l34m.saddr4) % act->nxfrm;
+      if (1) {
+        struct epsess eps;
+        __u64 flags = BPF_F_CURRENT_CPU;
+
+        memset(&eps, 0, sizeof(eps));
+        eps.rid = act->ca.cidx;
+        eps.id = xf->l34m.saddr4;
+        eps.res = 1;
+
+        flags |= (__u64)(sizeof(struct epsess)) << 32;
+        bpf_perf_event_output(ctx, &sync_ring, flags,
+                          &eps, sizeof(eps));
+        LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_ACT_UNK);
+        return (__u16)(-1);
+      }
     }
   } else if (act->sel_type == NAT_LB_SEL_LC) {
     struct dp_nat_epacts *epa;

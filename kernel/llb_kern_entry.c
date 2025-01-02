@@ -273,10 +273,15 @@ int tc_packet_func_nat1(struct __sk_buff *ctx)
   xf->nm.ndone = 1;
   dp_do_nat(ctx, xf);
 
+  if (xf->pm.pipe_act & LLB_PIPE_DROP)
+    goto drop;
+
   xf->km.skey[0] = 0;
   *(__u16 *)&xf->km.skey[2] = 0;
   *(__u16 *)&xf->km.skey[4] = 0;
   RETURN_TO_MP();
+
+drop:
   return DP_DROP;
 }
 

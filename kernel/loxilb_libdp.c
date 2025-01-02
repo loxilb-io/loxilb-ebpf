@@ -106,6 +106,7 @@ typedef struct llb_dp_struct
   int smfd;
   int egr_hooks;
   int nodenum;
+  int is_leader;
 #define MAX_SYNC_NODES 5
   int nsync_nodes;
   struct sockaddr_in server_addr[MAX_SYNC_NODES];
@@ -537,6 +538,40 @@ llb_sync_proc_main(void *arg)
 }
 
 static void
+llb_handle_sep_resolution(void *ctx, struct epsess *eps, int do_remote)
+{
+  __u32 key_base = eps->rid * LLB_MAX_NXFRMS;
+  __u64 lts = get_os_nsecs();
+  struct dp_nat_sepacts epa;
+  struct epsess *teps;
+
+  for (int i = 0; i < LLB_MAX_NXFRMS; i++) {
+    __u32 key = key_base + i;   
+    XH_LOCK();
+    int ret = bpf_map_lookup_elem_flags(llb_map2fd(LL_DP_NAT_SEP_MAP), &key, &epa, BPF_F_LOCK);
+    if (ret == 0) {
+      teps = &epa.active_sess;
+      if (lts - teps->lts > 30000000000 || teps->id == 0) {
+        teps->lts = lts;
+        teps->tcp = 0;
+        teps->udp = 0;
+        teps->res = 0;
+        teps->id = eps->id;
+        bpf_map_update_elem(llb_map2fd(LL_DP_NAT_SEP_MAP), &key, &epa, BPF_F_LOCK);
+        XH_UNLOCK();
+        log_trace("sync-use <- : %04x(t%d:u%d) rule %d slot %d lts %lluns: res %d",
+            teps->id, teps->tcp, teps->udp, teps->rid, teps->sel, teps->lts, teps->res);
+        if (dp_remote) {
+          llb_handle_sync_event(ctx, 0, teps, sizeof(struct epsess));
+        }
+        return;
+      }
+    }
+    XH_UNLOCK();
+  }
+}
+
+static void
 llb_handle_sync_event(void *ctx,
              int cpu,
              void *data,
@@ -544,10 +579,15 @@ llb_handle_sync_event(void *ctx,
 {
   char ab[INET_ADDRSTRLEN];
   struct epsess *eps = (void *)data;
-  const char *host = inet_ntop(AF_INET, (struct in_addr *)&eps->id, ab, INET_ADDRSTRLEN);
+  const char *host;
 
-  log_trace("<-sync : %s(t%d:u%d) rule %d slot %d lts %lluns",
-            host, eps->tcp, eps->udp, eps->rid, eps->sel, eps->lts);
+  host = inet_ntop(AF_INET, (struct in_addr *)&eps->id, ab, INET_ADDRSTRLEN);
+  log_trace("<-sync : %s(t%d:u%d) rule %d slot %d lts %lluns: res %d",
+            host, eps->tcp, eps->udp, eps->rid, eps->sel, eps->lts, eps->res);
+
+  if (xh->is_leader && eps->res) {
+    return llb_handle_sep_resolution(ctx, eps, 0);
+  }
 
   for (int i = 0; i < xh->nsync_nodes; i++) {
     if (sendto(xh->sync_fd, data, data_sz, MSG_DONTWAIT, 
