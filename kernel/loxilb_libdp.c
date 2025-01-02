@@ -538,7 +538,7 @@ llb_sync_proc_main(void *arg)
 }
 
 static void
-llb_handle_sep_resolution(void *ctx, struct epsess *eps, int do_remote)
+llb_handle_sep_resolution(struct epsess *eps, int do_remote)
 {
   __u32 key_base = eps->rid * LLB_MAX_NXFRMS;
   __u64 lts = get_os_nsecs();
@@ -561,8 +561,8 @@ llb_handle_sep_resolution(void *ctx, struct epsess *eps, int do_remote)
         XH_UNLOCK();
         log_trace("sync-use <- : %04x(t%d:u%d) rule %d slot %d lts %lluns: res %d",
             teps->id, teps->tcp, teps->udp, teps->rid, teps->sel, teps->lts, teps->res);
-        if (dp_remote) {
-          llb_handle_sync_event(ctx, 0, teps, sizeof(struct epsess));
+        if (do_remote) {
+          llb_handle_sync_event(NULL, 0, teps, sizeof(struct epsess));
         }
         return;
       }
@@ -571,7 +571,7 @@ llb_handle_sep_resolution(void *ctx, struct epsess *eps, int do_remote)
   }
 }
 
-static void
+void
 llb_handle_sync_event(void *ctx,
              int cpu,
              void *data,
@@ -586,7 +586,7 @@ llb_handle_sync_event(void *ctx,
             host, eps->tcp, eps->udp, eps->rid, eps->sel, eps->lts, eps->res);
 
   if (xh->is_leader && eps->res) {
-    return llb_handle_sep_resolution(ctx, eps, 0);
+    return llb_handle_sep_resolution(eps, 0);
   }
 
   for (int i = 0; i < xh->nsync_nodes; i++) {
@@ -607,6 +607,13 @@ llb_sync_server_main(void *arg)
   struct pollfd fds;
   int server_fd;
   unsigned int client_len;
+  struct dp_nat_sepacts epa;
+  struct epsess *teps;
+  struct epsess *eps;
+  char ab[INET_ADDRSTRLEN];
+  const char *host;
+  uint16_t sel;
+  uint32_t key;
   int flags;
 
 restart_server:
@@ -664,17 +671,19 @@ restart_server:
       ll_pretty_hex(buffer, recv_len);
 #endif
 
-      struct dp_nat_sepacts epa;
-      struct epsess *teps;
-      struct epsess *eps = (void *)buffer;
-      char ab[INET_ADDRSTRLEN];
-      const char *host = inet_ntop(AF_INET, (struct in_addr *)&eps->id, ab, INET_ADDRSTRLEN);
+      eps = (void *)buffer;
+      host = inet_ntop(AF_INET, (struct in_addr *)&eps->id, ab, INET_ADDRSTRLEN);
 
-      __u16 sel = eps->sel;
-      __u32 key = (eps->rid * LLB_MAX_NXFRMS) +  sel;
+      sel = eps->sel;
+      key = (eps->rid * LLB_MAX_NXFRMS) +  sel;
 
-      log_trace("sync <- : %s(t%d:u%d) key %lu rule %d slot %d lts %lluns",
-            host, eps->tcp, eps->udp, key, eps->rid, eps->sel, eps->lts);
+      log_trace("sync <- : %s(t%d:u%d) key %lu rule %d slot %d lts %lluns res %d",
+            host, eps->tcp, eps->udp, key, eps->rid, eps->sel, eps->lts, eps->res);
+
+      if (eps->res && xh->is_leader) {
+        llb_handle_sep_resolution(eps, 1);
+        continue;
+      }
 
       if (sel < LLB_MAX_NXFRMS) {
         int ret1 = bpf_map_lookup_elem_flags(llb_map2fd(LL_DP_NAT_SEP_MAP), &key, &epa, BPF_F_LOCK);
@@ -2771,6 +2780,14 @@ get_os_usecs(void)
   return ((unsigned long long)ts.tv_sec * 1000000UL) + ts.tv_nsec/1000;
 }
 
+int
+llb_set_leader(int mode)
+{
+  xh->is_leader = mode;
+  log_info("leader: state %d", mode);
+  return 0;
+}
+ 
 unsigned long long
 get_os_nsecs(void)
 {

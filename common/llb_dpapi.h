@@ -958,5 +958,6 @@ void llb_xh_lock(void);
 void llb_xh_unlock(void);
 int llb_add_cnode(char *);
 int llb_delete_cnode(char *);
+int llb_set_leader(int);
 
 #endif /* __LLB_DPAPI_H__ */

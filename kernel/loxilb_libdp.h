@@ -65,6 +65,10 @@ struct ebpfcfg {
   int have_noebpf;
 };
 
+void llb_handle_sync_event(void *ctx,
+             int cpu,
+             void *data,
+             unsigned int data_sz);
 void loxilb_set_loglevel(struct ebpfcfg *cfg);
 int loxilb_main(struct ebpfcfg *cfg);
 
