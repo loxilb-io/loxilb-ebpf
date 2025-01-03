@@ -708,7 +708,7 @@ dp_parse_udp(struct parser *p,
   struct udphdr *udp = DP_TC_PTR(p->dbegin);
   
   if (udp + 1 > p->dend) {
-    return DP_PRET_OK;
+    return DP_PRET_FAIL;
   }
 
   xf->l34m.source = udp->source;
