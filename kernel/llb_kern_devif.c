@@ -333,6 +333,10 @@ dp_pipe_check_res(void *ctx, struct xfi *xf, void *fa)
 #else
     if (xf->pm.pipe_act & (LLB_PIPE_TRAP | LLB_PIPE_PASS)) {
 #endif
+      if (xf->pm.rcode & (LLB_PIPE_RC_NODMAC|LLB_PIPE_RC_NH_UNK)) {
+        xf->pm.rcode |= LLB_PIPE_RC_RESOLVE;
+        dp_ring_event(ctx, xf, 1);
+      }
       return DP_PASS;
     }
 #else

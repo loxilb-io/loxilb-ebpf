@@ -800,7 +800,16 @@ dp_ring_event(void *ctx,  struct xfi *xf, int cp)
   pmd->table_id = xf->pm.table_id;
   pmd->rcode = xf->pm.rcode;
   pmd->pkt_len = DP_GET_LEN(ctx);
-  pmd->resolve_ip = xf->l34m.daddr[0];
+  if (xf->l2m.dl_type == bpf_ntohs(ETH_P_IP)) {
+    pmd->resolve_ip = xf->l34m.daddr[0];
+    if (xf->pm.nf & LLB_NAT_DST) {
+      pmd->resolve_ip = xf->nm.nxip4;
+    } else if (xf->pm.nf & LLB_NAT_SRC) {
+      pmd->resolve_ip = xf->nm.nrip4;
+    }
+  } else {
+    pmd->resolve_ip = 0;
+  }
 
   flags |= (__u64)pmd->pkt_len << 32;
   
