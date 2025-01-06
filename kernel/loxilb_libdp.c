@@ -2061,6 +2061,8 @@ llb_dp_ufw42_pdiop(struct pdi_rule *new, struct dp_fwv4_ent *e)
   }
 }
 
+static void ll_map_ct_rm_any(void);
+
 int
 llb_add_mf_map_elem__(int tbl, void *k, void *v)
 {
@@ -2101,6 +2103,8 @@ llb_add_mf_map_elem__(int tbl, void *k, void *v)
       n++;
     }
     PDI_MAP_ULOCK(xh->ufw4);
+
+    if (ret == 0) ll_map_ct_rm_any();
   }
   return ret;
 }
@@ -2325,6 +2329,8 @@ llb_del_mf_map_elem__(int tbl, void *k)
       bpf_map_update_elem(llb_map2fd(tbl), &n, &p, 0);
       n++;
     }
+
+    if (ret == 0) ll_map_ct_rm_any();
   }
   return ret;
 }
@@ -2889,6 +2895,24 @@ ll_ct_map_ent_rm_related(int tid, void *k, void *ita)
   return 0;
 }
 
+static int
+ll_ct_map_ent_rm_any(int tid, void *k, void *ita)
+{
+  struct dp_ct_key *key = k;
+  dp_map_ita_t *it = ita;
+  struct dp_ct_tact *adat;
+
+  if (!it|| !it->uarg || !it->val) return 0;
+
+  adat = it->val;
+
+  if (!key->v6) {
+    llb_del_map_elem_with_cidx(LL_DP_FCV4_MAP, adat->ca.cidx);
+  }
+  llb_clear_map_stats(LL_DP_CT_STATS_MAP, adat->ca.cidx);
+  return 1;
+}
+
 static void
 ll_map_ct_rm_related(uint32_t rid, uint32_t *aids, int naid)
 {
@@ -2925,6 +2949,38 @@ ll_map_ct_rm_related(uint32_t rid, uint32_t *aids, int naid)
   if (adat) free(adat);
   if (as) free(as);
 }
+
+static void
+ll_map_ct_rm_any(void)
+{
+  dp_map_ita_t it;
+  int i = 0;
+  struct dp_ct_key next_key;
+  struct dp_ct_tact *adat;
+  ct_arg_struct_t *as;
+  uint64_t ns = get_os_nsecs();
+
+  adat = calloc(1, sizeof(*adat));
+  if (!adat) return;
+
+  as = calloc(1, sizeof(*as));
+  if (!as) {
+    free(adat);
+    return;
+  }
+
+  as->curr_ns = ns;
+
+  memset(&it, 0, sizeof(it));
+  it.next_key = &next_key;
+  it.val = adat;
+  it.uarg = as;
+
+  llb_map_loop_and_delete(LL_DP_CT_MAP, ll_ct_map_ent_rm_any, &it);
+  if (adat) free(adat);
+  if (as) free(as);
+}
+
 
 static void
 llb_set_rlims(void)
