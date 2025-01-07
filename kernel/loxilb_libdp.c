@@ -380,8 +380,10 @@ ll_flush_fcmap(void)
   fc_val = calloc(1, sizeof(*fc_val));
   if (!fc_val) return;
 
+  memset(&next_key, 0, sizeof(next_key));
   memset(&it, 0, sizeof(it));
   it.next_key = &next_key;
+  it.key_sz = sizeof(next_key);
   it.val = fc_val;
   it.uarg = &ns;
 
@@ -1806,9 +1808,11 @@ llb_fetch_pol_map_stats(int tid, uint32_t e, void *ppass, void *pdrop)
 void 
 llb_map_loop_and_delete(int tid, dp_map_walker_t cb, dp_map_ita_t *it)
 {
-  void *key = NULL;
+  void *pkey = NULL;
   llb_dp_map_t *t;
   uint32_t n = 0;
+  int delete = 0;
+  uint8_t key[1024];
 
   if (xh->have_noebpf) {
     return;
@@ -1819,24 +1823,46 @@ llb_map_loop_and_delete(int tid, dp_map_walker_t cb, dp_map_ita_t *it)
   if (tid < 0 || tid >= LL_DP_MAX_MAP)
     return;
 
+  memset(&key, 0, sizeof(key));
   t = &xh->maps[tid];
 
-  while (bpf_map_get_next_key(t->map_fd, key, it->next_key) == 0) {
-    if (n >= (10*t->max_entries)) break;
+  while (bpf_map_get_next_key(t->map_fd, pkey, it->next_key) == 0) {
+    if (n >= (t->max_entries)) break;
+
+    if (delete) {
+      llb_maptrace_uhook(tid, 0, pkey, it->key_sz, NULL, 0);
+      bpf_map_delete_elem(t->map_fd, pkey);
+    }
 
     if (bpf_map_lookup_elem(t->map_fd, it->next_key, it->val) != 0) {
       goto next;
     }
 
+    if (it->key_sz > 0) {
+      memcpy(key, it->next_key, it->key_sz);
+    } else {
+      memcpy(key, it->next_key, sizeof(key));
+    }
+
     if (cb(tid, it->next_key, it)) {
-      llb_maptrace_uhook(tid, 0, it->next_key, it->key_sz, NULL, 0);
-      bpf_map_delete_elem(t->map_fd, it->next_key);
+      delete = 1;
+    } else {
+      delete = 0;
     }
 
 next:
-    key = it->next_key;
+    pkey = key;
     n++;
   }
+
+  if (pkey != NULL && delete) {
+    llb_maptrace_uhook(tid, 0, pkey, it->key_sz, NULL, 0);
+    bpf_map_delete_elem(t->map_fd, pkey);
+  }
+
+#ifdef LLB_DP_CT_DEBUG
+  log_trace("TID %d entry loop count: %d", tid, n);
+#endif
 
   return;
 }
@@ -2456,8 +2482,10 @@ ll_age_fcmap(void)
   fc_val = calloc(1, sizeof(*fc_val));
   if (!fc_val) return;
 
+  memset(&next_key, 0, sizeof(next_key));
   memset(&it, 0, sizeof(it));
   it.next_key = &next_key;
+  it.key_sz = sizeof(next_key);
   it.val = fc_val;
   it.uarg = &ns;
 
@@ -2734,12 +2762,14 @@ ll_ct_map_ent_has_aged(int tid, void *k, void *ita)
       llb_nat_dec_act_sessions(adat->ctd.rid, adat->ctd.aid);
     }
 
+#if 0
     if (!adat->ctd.pi.frag) {
       ll_send_ctep_reset(&xkey, &axdat);
       llb_maptrace_uhook(LL_DP_CT_MAP, 0, &xkey, sizeof(xkey), NULL, 0);
       bpf_map_delete_elem(t->map_fd, &xkey);
       llb_clear_map_stats(LL_DP_CT_STATS_MAP, axdat.ca.cidx);
     }
+#endif
     return 1;
   }
 
@@ -2936,6 +2966,7 @@ ll_map_ct_rm_related(uint32_t rid, uint32_t *aids, int naid)
 
   memset(&it, 0, sizeof(it));
   it.next_key = &next_key;
+  it.key_sz = sizeof(next_key);
   it.val = adat;
   it.uarg = as;
 
@@ -2973,6 +3004,7 @@ ll_map_ct_rm_any(void)
 
   memset(&it, 0, sizeof(it));
   it.next_key = &next_key;
+  it.key_sz = sizeof(next_key);
   it.val = adat;
   it.uarg = as;
 
