@@ -2607,9 +2607,11 @@ ll_send_ctep_reset(struct dp_ct_key *ep, struct dp_ct_tact *adat)
 }
 
 static void
-ll_ct_get_state(struct dp_ct_key *key, struct dp_ct_tact *adat, bool *est, uint64_t *to)
+ll_ct_get_state(struct dp_ct_key *key, struct dp_ct_tact *adat, bool *est, uint64_t *to, bool *bidir)
 {
   struct dp_ct_dat *dat = &adat->ctd;
+
+  *bidir = true;
 
   if (key->l4proto == IPPROTO_TCP) {
     ct_tcp_pinf_t *ts = &dat->pi.t;
@@ -2625,6 +2627,8 @@ ll_ct_get_state(struct dp_ct_key *key, struct dp_ct_tact *adat, bool *est, uint6
     }
   } else if (key->l4proto == IPPROTO_UDP) {
     ct_udp_pinf_t *us = &dat->pi.u;
+
+    *bidir = false;
 
     if (adat->ctd.pi.frag) {
       *to = CT_UDP_FN_CPTO;
@@ -2672,8 +2676,10 @@ ll_ct_map_ent_has_aged(int tid, void *k, void *ita)
   uint64_t latest_ns;
   int used1 = 0;
   int used2 = 0;
+  int any_used = 0;
   bool est = false;
   bool has_nat = false;
+  bool bidir = true;
   uint64_t to = CT_V4_CPTO;
   char dstr[INET6_ADDRSTRLEN];
   char sstr[INET6_ADDRSTRLEN];
@@ -2714,7 +2720,7 @@ ll_ct_map_ent_has_aged(int tid, void *k, void *ita)
       inet_ntop(AF_INET6, xkey.daddr, dstr, INET6_ADDRSTRLEN);
     }
 
-    ll_ct_get_state(&xkey, &axdat, &est, &to);
+    ll_ct_get_state(&xkey, &axdat, &est, &to, &bidir);
 
     if (est && curr_ns - adat->lts < CT_MISMATCH_FN_CPTO) {
       return 0;
@@ -2737,7 +2743,7 @@ ll_ct_map_ent_has_aged(int tid, void *k, void *ita)
   llb_fetch_map_stats_cached(LL_DP_CT_STATS_MAP, adat->ca.cidx, 1, &bytes, &pkts);
   llb_fetch_map_stats_cached(LL_DP_CT_STATS_MAP, axdat.ca.cidx, 1, &bytes, &pkts);
 
-  ll_ct_get_state(key, adat, &est, &to);
+  ll_ct_get_state(key, adat, &est, &to, &bidir);
 
   if (curr_ns < latest_ns) return 0;
 
@@ -2749,7 +2755,13 @@ ll_ct_map_ent_has_aged(int tid, void *k, void *ita)
   llb_fetch_map_stats_used(LL_DP_CT_STATS_MAP, adat->ca.cidx, 1, &used1);
   llb_fetch_map_stats_used(LL_DP_CT_STATS_MAP, axdat.ca.cidx, 1, &used2);
 
-  if (curr_ns - latest_ns > to && (!est || (!used1 && !used2))) {
+  if (bidir) {
+    any_used = used1 && used2;
+  } else {
+    any_used = used1 || used2;
+  }
+
+  if (curr_ns - latest_ns > to && (!est || !any_used)) {
     log_trace("ct: #%s:%d -> %s:%d (%d)# rid:%u est:%d nat:%d (Aged:%lluns:%d:%d)",
          sstr, ntohs(key->sport),
          dstr, ntohs(key->dport),  

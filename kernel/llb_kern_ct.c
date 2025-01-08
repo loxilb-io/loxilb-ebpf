@@ -1679,6 +1679,15 @@ dp_ct_in(void *ctx, struct xfi *xf)
   axtdat = bpf_map_lookup_elem(&ct_map, &xkey);
   if (atdat == NULL || axtdat == NULL) {
 
+    if (atdat != NULL) {
+      LLBS_PPLN_DROPC(xf, LLB_PIPE_CT_ERR);
+      return 0;
+    }
+    if (axtdat != NULL) {
+      LLBS_PPLN_DROPC(xf, LLB_PIPE_CT_ERR);
+      return 0;
+    }
+
     LL_DBG_PRINTK("[CTRK] new-ct4");
     adat->ca.ftrap = 0;
     adat->ca.oaux = 0;
