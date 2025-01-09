@@ -1675,8 +1675,8 @@ dp_ct_in(void *ctx, struct xfi *xf)
 
   dp_ct_proto_xfk_init(&key, xi, &xkey, xxi);
 
-  atdat = bpf_map_lookup_elem(&ct_map, &key);
   axtdat = bpf_map_lookup_elem(&ct_map, &xkey);
+  atdat = bpf_map_lookup_elem(&ct_map, &key);
   if (atdat == NULL || axtdat == NULL) {
 
     if (atdat != NULL) {
