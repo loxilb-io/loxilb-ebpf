@@ -2502,6 +2502,7 @@ typedef struct ct_arg_struct
   uint32_t aid[LLB_MAX_NXFRMS];
   int n_aids;
   int n_aged;
+  int dir;
 } ct_arg_struct_t;
 
 static int
@@ -2693,6 +2694,10 @@ ll_ct_map_ent_has_aged(int tid, void *k, void *ita)
   adat = it->val;
   dat = &adat->ctd;
 
+  if (as->dir >= 0 && as->dir != adat->ctd.dir) {
+    return 0;
+  }
+
   if (key->v6 == 0) {
     inet_ntop(AF_INET, key->saddr, sstr, INET_ADDRSTRLEN);
     inet_ntop(AF_INET, key->daddr, dstr, INET_ADDRSTRLEN);
@@ -2774,14 +2779,12 @@ ll_ct_map_ent_has_aged(int tid, void *k, void *ita)
       llb_nat_dec_act_sessions(adat->ctd.rid, adat->ctd.aid);
     }
 
-#if 0
     if (!adat->ctd.pi.frag) {
       ll_send_ctep_reset(&xkey, &axdat);
       llb_maptrace_uhook(LL_DP_CT_MAP, 0, &xkey, sizeof(xkey), NULL, 0);
       bpf_map_delete_elem(t->map_fd, &xkey);
       llb_clear_map_stats(LL_DP_CT_STATS_MAP, axdat.ca.cidx);
     }
-#endif
     return 1;
   }
 
@@ -2823,6 +2826,7 @@ ll_age_ctmap(void)
   }
 
   as->curr_ns = ns;
+  as->dir = CT_DIR_IN;
 
   memset(&it, 0, sizeof(it));
   it.next_key = &next_key;
