@@ -403,6 +403,7 @@ dp_do_ing_ct(void *ctx, struct xfi *xf, void *fa_)
 static void __always_inline
 dp_do_ipv4_fwd(void *ctx,  struct xfi *xf, void *fa_, int dir)
 {
+#if 0
   if (dir == 1) {
     if (xf->l2m.dl_type == bpf_htons(ETH_P_IP)) {
       /* Check tunnel initiation */
@@ -420,6 +421,7 @@ dp_do_ipv4_fwd(void *ctx,  struct xfi *xf, void *fa_, int dir)
       xf->pm.rcode &= ~LLB_PIPE_RC_RT_TRAP;
     }
   }
+#endif
 
 #ifndef HAVE_DP_LBMODE_ONLY
   if (xf->pm.phit & LLB_DP_TMAC_HIT) {
