@@ -109,6 +109,7 @@ typedef struct llb_dp_struct
   struct pdi_map *ufw6;
   FILE *logfp;
   struct throttler cpt;
+  uint64_t lctts;
 } llb_dp_struct_t;
 
 #define XH_LOCK()    pthread_rwlock_wrlock(&xh->lock)
@@ -2841,6 +2842,12 @@ ll_age_ctmap(void)
   }
 
   llb_map_loop_and_delete(LL_DP_CT_MAP, ll_ct_map_ent_has_aged, &it);
+
+  if (ns - xh->lctts > 240000000000) {
+    as->dir = CT_DIR_OUT;
+    llb_map_loop_and_delete(LL_DP_CT_MAP, ll_ct_map_ent_has_aged, &it);
+    xh->lctts = ns;
+  }
   XH_UNLOCK();
   if (adat) free(adat);
   if (as) free(as);
@@ -3420,6 +3427,8 @@ loxilb_main(struct ebpfcfg *cfg)
     if (xh->have_sockrwr != 0) {
       xh->cgroup_dfl_path = CGROUP_PATH;
     }
+
+    xh->lctts = get_os_nsecs();
 
     if (xh->have_noebpf) {
       xh->have_loader = 0;
