@@ -1675,18 +1675,8 @@ dp_ct_in(void *ctx, struct xfi *xf)
 
   dp_ct_proto_xfk_init(&key, xi, &xkey, xxi);
 
-  axtdat = bpf_map_lookup_elem(&ct_map, &xkey);
   atdat = bpf_map_lookup_elem(&ct_map, &key);
-  if (atdat == NULL || axtdat == NULL) {
-
-    if (atdat != NULL) {
-      LLBS_PPLN_DROPC(xf, LLB_PIPE_CT_ERR);
-      return 0;
-    }
-    if (axtdat != NULL) {
-      LLBS_PPLN_DROPC(xf, LLB_PIPE_CT_ERR);
-      return 0;
-    }
+  if (atdat == NULL) {
 
     LL_DBG_PRINTK("[CTRK] new-ct4");
     adat->ca.ftrap = 0;
@@ -1765,11 +1755,22 @@ dp_ct_in(void *ctx, struct xfi *xf)
     axdat->ctd.pb.bytes = 0;
     axdat->ctd.pb.packets = 0;
 
+    axtdat = bpf_map_lookup_elem(&ct_map, &xkey);
+    if (axtdat != NULL) {
+      LLBS_PPLN_DROPC(xf, LLB_PIPE_CT_ERR);
+      return 0;
+    }
     bpf_map_update_elem(&ct_map, &xkey, axdat, BPF_ANY);
     bpf_map_update_elem(&ct_map, &key, adat, BPF_ANY);
 
     atdat = bpf_map_lookup_elem(&ct_map, &key);
     axtdat = bpf_map_lookup_elem(&ct_map, &xkey);
+  } else {
+    axtdat = bpf_map_lookup_elem(&ct_map, &xkey);
+    if (axtdat == NULL) {
+      LLBS_PPLN_DROPC(xf, LLB_PIPE_CT_ERR);
+      return 0;
+    }
   }
 
   if (atdat != NULL && axtdat != NULL) {
