@@ -380,8 +380,10 @@ ll_flush_fcmap(void)
   fc_val = calloc(1, sizeof(*fc_val));
   if (!fc_val) return;
 
+  memset(&next_key, 0, sizeof(next_key));
   memset(&it, 0, sizeof(it));
   it.next_key = &next_key;
+  it.key_sz = sizeof(next_key);
   it.val = fc_val;
   it.uarg = &ns;
 
@@ -1806,9 +1808,11 @@ llb_fetch_pol_map_stats(int tid, uint32_t e, void *ppass, void *pdrop)
 void 
 llb_map_loop_and_delete(int tid, dp_map_walker_t cb, dp_map_ita_t *it)
 {
-  void *key = NULL;
+  void *pkey = NULL;
   llb_dp_map_t *t;
   uint32_t n = 0;
+  int delete = 0;
+  uint8_t key[1024];
 
   if (xh->have_noebpf) {
     return;
@@ -1819,24 +1823,46 @@ llb_map_loop_and_delete(int tid, dp_map_walker_t cb, dp_map_ita_t *it)
   if (tid < 0 || tid >= LL_DP_MAX_MAP)
     return;
 
+  memset(&key, 0, sizeof(key));
   t = &xh->maps[tid];
 
-  while (bpf_map_get_next_key(t->map_fd, key, it->next_key) == 0) {
-    if (n >= (10*t->max_entries)) break;
+  while (bpf_map_get_next_key(t->map_fd, pkey, it->next_key) == 0) {
+    if (n >= (t->max_entries)) break;
+
+    if (delete) {
+      llb_maptrace_uhook(tid, 0, pkey, it->key_sz, NULL, 0);
+      bpf_map_delete_elem(t->map_fd, pkey);
+    }
 
     if (bpf_map_lookup_elem(t->map_fd, it->next_key, it->val) != 0) {
       goto next;
     }
 
+    if (it->key_sz > 0) {
+      memcpy(key, it->next_key, it->key_sz);
+    } else {
+      memcpy(key, it->next_key, sizeof(key));
+    }
+
     if (cb(tid, it->next_key, it)) {
-      llb_maptrace_uhook(tid, 0, it->next_key, it->key_sz, NULL, 0);
-      bpf_map_delete_elem(t->map_fd, it->next_key);
+      delete = 1;
+    } else {
+      delete = 0;
     }
 
 next:
-    key = it->next_key;
+    pkey = key;
     n++;
   }
+
+  if (pkey != NULL && delete) {
+    llb_maptrace_uhook(tid, 0, pkey, it->key_sz, NULL, 0);
+    bpf_map_delete_elem(t->map_fd, pkey);
+  }
+
+#ifdef LLB_DP_CT_DEBUG
+  log_trace("TID %d entry loop count: %d", tid, n);
+#endif
 
   return;
 }
@@ -2456,8 +2482,10 @@ ll_age_fcmap(void)
   fc_val = calloc(1, sizeof(*fc_val));
   if (!fc_val) return;
 
+  memset(&next_key, 0, sizeof(next_key));
   memset(&it, 0, sizeof(it));
   it.next_key = &next_key;
+  it.key_sz = sizeof(next_key);
   it.val = fc_val;
   it.uarg = &ns;
 
@@ -2474,6 +2502,7 @@ typedef struct ct_arg_struct
   uint32_t aid[LLB_MAX_NXFRMS];
   int n_aids;
   int n_aged;
+  int dir;
 } ct_arg_struct_t;
 
 static int
@@ -2579,9 +2608,11 @@ ll_send_ctep_reset(struct dp_ct_key *ep, struct dp_ct_tact *adat)
 }
 
 static void
-ll_ct_get_state(struct dp_ct_key *key, struct dp_ct_tact *adat, bool *est, uint64_t *to)
+ll_ct_get_state(struct dp_ct_key *key, struct dp_ct_tact *adat, bool *est, uint64_t *to, bool *bidir)
 {
   struct dp_ct_dat *dat = &adat->ctd;
+
+  *bidir = true;
 
   if (key->l4proto == IPPROTO_TCP) {
     ct_tcp_pinf_t *ts = &dat->pi.t;
@@ -2597,6 +2628,8 @@ ll_ct_get_state(struct dp_ct_key *key, struct dp_ct_tact *adat, bool *est, uint6
     }
   } else if (key->l4proto == IPPROTO_UDP) {
     ct_udp_pinf_t *us = &dat->pi.u;
+
+    *bidir = false;
 
     if (adat->ctd.pi.frag) {
       *to = CT_UDP_FN_CPTO;
@@ -2644,8 +2677,10 @@ ll_ct_map_ent_has_aged(int tid, void *k, void *ita)
   uint64_t latest_ns;
   int used1 = 0;
   int used2 = 0;
+  int any_used = 0;
   bool est = false;
   bool has_nat = false;
+  bool bidir = true;
   uint64_t to = CT_V4_CPTO;
   char dstr[INET6_ADDRSTRLEN];
   char sstr[INET6_ADDRSTRLEN];
@@ -2658,6 +2693,10 @@ ll_ct_map_ent_has_aged(int tid, void *k, void *ita)
   curr_ns = as->curr_ns;
   adat = it->val;
   dat = &adat->ctd;
+
+  if (as->dir >= 0 && as->dir != adat->ctd.dir) {
+    return 0;
+  }
 
   if (key->v6 == 0) {
     inet_ntop(AF_INET, key->saddr, sstr, INET_ADDRSTRLEN);
@@ -2686,7 +2725,7 @@ ll_ct_map_ent_has_aged(int tid, void *k, void *ita)
       inet_ntop(AF_INET6, xkey.daddr, dstr, INET6_ADDRSTRLEN);
     }
 
-    ll_ct_get_state(&xkey, &axdat, &est, &to);
+    ll_ct_get_state(&xkey, &axdat, &est, &to, &bidir);
 
     if (est && curr_ns - adat->lts < CT_MISMATCH_FN_CPTO) {
       return 0;
@@ -2709,7 +2748,7 @@ ll_ct_map_ent_has_aged(int tid, void *k, void *ita)
   llb_fetch_map_stats_cached(LL_DP_CT_STATS_MAP, adat->ca.cidx, 1, &bytes, &pkts);
   llb_fetch_map_stats_cached(LL_DP_CT_STATS_MAP, axdat.ca.cidx, 1, &bytes, &pkts);
 
-  ll_ct_get_state(key, adat, &est, &to);
+  ll_ct_get_state(key, adat, &est, &to, &bidir);
 
   if (curr_ns < latest_ns) return 0;
 
@@ -2721,7 +2760,13 @@ ll_ct_map_ent_has_aged(int tid, void *k, void *ita)
   llb_fetch_map_stats_used(LL_DP_CT_STATS_MAP, adat->ca.cidx, 1, &used1);
   llb_fetch_map_stats_used(LL_DP_CT_STATS_MAP, axdat.ca.cidx, 1, &used2);
 
-  if (curr_ns - latest_ns > to && (!est || (!used1 && !used2))) {
+  if (bidir) {
+    any_used = used1 && used2;
+  } else {
+    any_used = used1 || used2;
+  }
+
+  if (curr_ns - latest_ns > to && (!est || !any_used)) {
     log_trace("ct: #%s:%d -> %s:%d (%d)# rid:%u est:%d nat:%d (Aged:%lluns:%d:%d)",
          sstr, ntohs(key->sport),
          dstr, ntohs(key->dport),  
@@ -2781,6 +2826,7 @@ ll_age_ctmap(void)
   }
 
   as->curr_ns = ns;
+  as->dir = CT_DIR_IN;
 
   memset(&it, 0, sizeof(it));
   it.next_key = &next_key;
@@ -2936,6 +2982,7 @@ ll_map_ct_rm_related(uint32_t rid, uint32_t *aids, int naid)
 
   memset(&it, 0, sizeof(it));
   it.next_key = &next_key;
+  it.key_sz = sizeof(next_key);
   it.val = adat;
   it.uarg = as;
 
@@ -2973,6 +3020,7 @@ ll_map_ct_rm_any(void)
 
   memset(&it, 0, sizeof(it));
   it.next_key = &next_key;
+  it.key_sz = sizeof(next_key);
   it.val = adat;
   it.uarg = as;
 

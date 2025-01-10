@@ -491,10 +491,12 @@ dp_ing_ct_main(void *ctx,  struct xfi *xf)
    */
   if ((xf->pm.phit & LLB_DP_CTM_HIT) == 0) {
 
+#ifdef HAVE_DP_FW
     if (xf->pm.fw_lid < LLB_FW4_MAP_ENTRIES) {
       bpf_tail_call(ctx, &pgm_tbl, LLB_DP_FW_PGM_ID);
       return DP_PASS;
     }
+#endif
 
     if (xf->pm.dp_rec) {
       dp_record_it(ctx, xf);
