@@ -79,6 +79,27 @@ dp_run_ct_helper(struct xfi *xf)
   return 0;
 }
 
+static void __always_inline
+dp_ct_related_fc_rm(struct dp_ct_key *ctk)
+{
+  struct dp_fcv4_key key;
+
+  if (ctk->v6 || ctk->ident || ctk->type) {
+    return;
+  }
+
+  key.daddr      = ctk->daddr4;
+  key.saddr      = ctk->saddr4;
+  key.sport      = ctk->sport;
+  key.dport      = ctk->dport;
+  key.l4proto    = ctk->l4proto;
+  key.pad        = 0;
+  key.in_port    = 0;
+
+  bpf_map_delete_elem(&fc_v4_map, &key);
+  return;
+}
+
 #ifdef HAVE_DP_EXTCT
 #define DP_RUN_CT_HELPER(x)                \
 do {                                       \
@@ -1808,6 +1829,8 @@ dp_ct_in(void *ctx, struct xfi *xf)
     } else if (smr == CT_SMR_ERR || smr == CT_SMR_CTD) {
       bpf_map_delete_elem(&ct_map, &xkey);
       bpf_map_delete_elem(&ct_map, &key);
+      dp_ct_related_fc_rm(&xkey);
+      dp_ct_related_fc_rm(&key);
 
       if (atdat->ctd.dir == CT_DIR_IN) {
         dp_ct_ctd(xf, &key, &xkey, atdat, axtdat);

@@ -64,11 +64,13 @@
 
 #define LLB_NAT_STAT_CID(rid, aid) ((((rid) & 0xfff) << 4) | (aid & 0xf))
 
-/* Hard-timeout of 40s for fc dp entry */
-#define FC_V4_DPTO            (60000000000)
+/* Hard-timeout of 120s for fc dp entry */
+#define FC_V4_DPTO            (120000000000)
 
-/* Hard-timeout of 2m for fc cp entry */
-#define FC_V4_CPTO            (120000000000)
+/* fc cp sweep period od 30m */
+#define FC_SWEEP_PERIOD       (1800000000000)
+/* Hard-timeout of 15m for fc cp entry */
+#define FC_V4_CPTO            ( 900000000000)
 
 /* Hard-timeout of 30m for ct entry */
 #define CT_V4_CPTO            (1800000000000)
