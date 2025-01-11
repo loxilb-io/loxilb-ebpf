@@ -70,6 +70,7 @@ dp_do_fcv4_lkup(void *ctx, struct xfi *xf)
     return 0; 
   }
 
+#ifdef HAVE_DP_FC_TMO
   /* Check timeout */ 
   if (bpf_ktime_get_ns() - acts->its > FC_V4_DPTO) {
     LL_FC_PRINTK("[FCH4] hto");
@@ -78,6 +79,7 @@ dp_do_fcv4_lkup(void *ctx, struct xfi *xf)
     xf->pm.rcode |= LLB_PIPE_RC_FCTO;
     return 0; 
   }
+#endif
 
   LL_FC_PRINTK("[FCH4] key found act-sz %d\n", sizeof(struct dp_fc_tacts));
 
@@ -161,13 +163,13 @@ dp_do_fcv4_lkup(void *ctx, struct xfi *xf)
     LL_FC_PRINTK("[FCH4] to-cp-act\n");
     LLBS_PPLN_TRAPC(xf, LLB_PIPE_RC_ACT_TRAP);
   } else {
-    goto del_out;
+    goto slow_pout;
   }
 
   /* Catch any conditions which need us to go to cp/ct */
   if (xf->pm.l4fin) {
     acts->ca.ftrap = 1;
-    goto del_out;
+    goto slow_pout;
   }
 
   DP_RUN_CT_HELPER(xf);
@@ -186,8 +188,8 @@ dp_do_fcv4_lkup(void *ctx, struct xfi *xf)
 
   return ret;
 
-del_out:
-  bpf_map_delete_elem(&fc_v4_map, &key);
+slow_pout:
+  //bpf_map_delete_elem(&fc_v4_map, &key);
   xf->pm.rcode |= LLB_PIPE_RC_FCBP;
   return 0;
 }

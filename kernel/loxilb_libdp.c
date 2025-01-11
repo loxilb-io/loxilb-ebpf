@@ -109,6 +109,8 @@ typedef struct llb_dp_struct
   struct pdi_map *ufw6;
   FILE *logfp;
   struct throttler cpt;
+  uint64_t lctts;
+  uint64_t lfcts;
 } llb_dp_struct_t;
 
 #define XH_LOCK()    pthread_rwlock_wrlock(&xh->lock)
@@ -2479,6 +2481,12 @@ ll_age_fcmap(void)
     return;
   }
 
+  if (ns - xh->lfcts < FC_SWEEP_PERIOD) {
+    return;
+  }
+
+  xh->lfcts = ns;
+
   fc_val = calloc(1, sizeof(*fc_val));
   if (!fc_val) return;
 
@@ -2662,6 +2670,27 @@ ll_ct_get_state(struct dp_ct_key *key, struct dp_ct_tact *adat, bool *est, uint6
   }
 }
 
+static void __always_inline
+dp_ct_related_fc_rm(struct dp_ct_key *ctk)
+{
+  struct dp_fcv4_key key;
+
+  if (ctk->v6 || ctk->ident || ctk->type) {
+    return;
+  }
+
+  key.daddr      = ctk->daddr4;
+  key.saddr      = ctk->saddr4;
+  key.sport      = ctk->sport;
+  key.dport      = ctk->dport;
+  key.l4proto    = ctk->l4proto;
+  key.pad        = 0;
+  key.in_port    = 0;
+
+  bpf_map_delete_elem(llb_map2fd(LL_DP_FCV4_MAP), &key);
+  return;
+}
+
 static int
 ll_ct_map_ent_has_aged(int tid, void *k, void *ita)
 {
@@ -2731,6 +2760,8 @@ ll_ct_map_ent_has_aged(int tid, void *k, void *ita)
       return 0;
     }
 
+    dp_ct_related_fc_rm(key);
+
     log_trace("ct: rdir not found #%s:%d -> %s:%d (%d)#",
          sstr, ntohs(xkey.sport),
          dstr, ntohs(xkey.dport),
@@ -2783,8 +2814,10 @@ ll_ct_map_ent_has_aged(int tid, void *k, void *ita)
       ll_send_ctep_reset(&xkey, &axdat);
       llb_maptrace_uhook(LL_DP_CT_MAP, 0, &xkey, sizeof(xkey), NULL, 0);
       bpf_map_delete_elem(t->map_fd, &xkey);
+      dp_ct_related_fc_rm(&xkey);
       llb_clear_map_stats(LL_DP_CT_STATS_MAP, axdat.ca.cidx);
     }
+    dp_ct_related_fc_rm(key);
     return 1;
   }
 
@@ -2841,6 +2874,11 @@ ll_age_ctmap(void)
   }
 
   llb_map_loop_and_delete(LL_DP_CT_MAP, ll_ct_map_ent_has_aged, &it);
+  if (ns - xh->lctts > 120000000000) {
+    as->dir = CT_DIR_OUT;
+    llb_map_loop_and_delete(LL_DP_CT_MAP, ll_ct_map_ent_has_aged, &it);
+    xh->lctts = ns;
+  }
   XH_UNLOCK();
   if (adat) free(adat);
   if (as) free(as);
@@ -3001,7 +3039,6 @@ static void
 ll_map_ct_rm_any(void)
 {
   dp_map_ita_t it;
-  int i = 0;
   struct dp_ct_key next_key;
   struct dp_ct_tact *adat;
   ct_arg_struct_t *as;
@@ -3420,6 +3457,9 @@ loxilb_main(struct ebpfcfg *cfg)
     if (xh->have_sockrwr != 0) {
       xh->cgroup_dfl_path = CGROUP_PATH;
     }
+
+    xh->lctts = get_os_nsecs();
+    xh->lfcts = get_os_nsecs();
 
     if (xh->have_noebpf) {
       xh->have_loader = 0;
