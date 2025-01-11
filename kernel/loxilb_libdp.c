@@ -117,6 +117,7 @@ typedef struct llb_dp_struct
   struct pdi_map *ufw6;
   FILE *logfp;
   struct throttler cpt;
+  uint64_t lctts;
 } llb_dp_struct_t;
 
 #define XH_LOCK()    pthread_rwlock_wrlock(&xh->lock)
@@ -2897,6 +2898,7 @@ typedef struct ct_arg_struct
   uint32_t aid[LLB_MAX_NXFRMS];
   int n_aids;
   int n_aged;
+  int dir;
 } ct_arg_struct_t;
 
 static int
@@ -3002,9 +3004,11 @@ ll_send_ctep_reset(struct dp_ct_key *ep, struct dp_ct_tact *adat)
 }
 
 static void
-ll_ct_get_state(struct dp_ct_key *key, struct dp_ct_tact *adat, bool *est, uint64_t *to)
+ll_ct_get_state(struct dp_ct_key *key, struct dp_ct_tact *adat, bool *est, uint64_t *to, bool *bidir)
 {
   struct dp_ct_dat *dat = &adat->ctd;
+
+  *bidir = true;
 
   if (key->l4proto == IPPROTO_TCP) {
     ct_tcp_pinf_t *ts = &dat->pi.t;
@@ -3020,6 +3024,8 @@ ll_ct_get_state(struct dp_ct_key *key, struct dp_ct_tact *adat, bool *est, uint6
     }
   } else if (key->l4proto == IPPROTO_UDP) {
     ct_udp_pinf_t *us = &dat->pi.u;
+
+    *bidir = false;
 
     if (adat->ctd.pi.frag) {
       *to = CT_UDP_FN_CPTO;
@@ -3067,8 +3073,10 @@ ll_ct_map_ent_has_aged(int tid, void *k, void *ita)
   uint64_t latest_ns;
   int used1 = 0;
   int used2 = 0;
+  int any_used = 0;
   bool est = false;
   bool has_nat = false;
+  bool bidir = true;
   uint64_t to = CT_V4_CPTO;
   char dstr[INET6_ADDRSTRLEN];
   char sstr[INET6_ADDRSTRLEN];
@@ -3081,6 +3089,10 @@ ll_ct_map_ent_has_aged(int tid, void *k, void *ita)
   curr_ns = as->curr_ns;
   adat = it->val;
   dat = &adat->ctd;
+
+  if (as->dir >= 0 && as->dir != adat->ctd.dir) {
+    return 0;
+  }
 
   if (key->v6 == 0) {
     inet_ntop(AF_INET, key->saddr, sstr, INET_ADDRSTRLEN);
@@ -3109,7 +3121,7 @@ ll_ct_map_ent_has_aged(int tid, void *k, void *ita)
       inet_ntop(AF_INET6, xkey.daddr, dstr, INET6_ADDRSTRLEN);
     }
 
-    ll_ct_get_state(&xkey, &axdat, &est, &to);
+    ll_ct_get_state(&xkey, &axdat, &est, &to, &bidir);
 
     if (est && curr_ns - adat->lts < CT_MISMATCH_FN_CPTO) {
       return 0;
@@ -3132,7 +3144,7 @@ ll_ct_map_ent_has_aged(int tid, void *k, void *ita)
   llb_fetch_map_stats_cached(LL_DP_CT_STATS_MAP, adat->ca.cidx, 1, &bytes, &pkts);
   llb_fetch_map_stats_cached(LL_DP_CT_STATS_MAP, axdat.ca.cidx, 1, &bytes, &pkts);
 
-  ll_ct_get_state(key, adat, &est, &to);
+  ll_ct_get_state(key, adat, &est, &to, &bidir);
 
   if (curr_ns < latest_ns) return 0;
 
@@ -3144,7 +3156,13 @@ ll_ct_map_ent_has_aged(int tid, void *k, void *ita)
   llb_fetch_map_stats_used(LL_DP_CT_STATS_MAP, adat->ca.cidx, 1, &used1);
   llb_fetch_map_stats_used(LL_DP_CT_STATS_MAP, axdat.ca.cidx, 1, &used2);
 
-  if (curr_ns - latest_ns > to && (!est || (!used1 && !used2))) {
+  if (bidir) {
+    any_used = used1 && used2;
+  } else {
+    any_used = used1 || used2;
+  }
+
+  if (curr_ns - latest_ns > to && (!est || !any_used)) {
     log_trace("ct: #%s:%d -> %s:%d (%d)# rid:%u est:%d nat:%d (Aged:%lluns:%d:%d)",
          sstr, ntohs(key->sport),
          dstr, ntohs(key->dport),  
@@ -3157,14 +3175,12 @@ ll_ct_map_ent_has_aged(int tid, void *k, void *ita)
       llb_nat_dec_act_sessions(adat->ctd.rid, adat->ctd.aid);
     }
 
-#if 0
     if (!adat->ctd.pi.frag) {
       ll_send_ctep_reset(&xkey, &axdat);
       llb_maptrace_uhook(LL_DP_CT_MAP, 0, &xkey, sizeof(xkey), NULL, 0);
       bpf_map_delete_elem(t->map_fd, &xkey);
       llb_clear_map_stats(LL_DP_CT_STATS_MAP, axdat.ca.cidx);
     }
-#endif
     return 1;
   }
 
@@ -3206,6 +3222,7 @@ ll_age_ctmap(void)
   }
 
   as->curr_ns = ns;
+  as->dir = CT_DIR_IN;
 
   memset(&it, 0, sizeof(it));
   it.next_key = &next_key;
@@ -3220,6 +3237,12 @@ ll_age_ctmap(void)
   }
 
   llb_map_loop_and_delete(LL_DP_CT_MAP, ll_ct_map_ent_has_aged, &it);
+
+  if (ns - xh->lctts > 240000000000) {
+    as->dir = CT_DIR_OUT;
+    llb_map_loop_and_delete(LL_DP_CT_MAP, ll_ct_map_ent_has_aged, &it);
+    xh->lctts = ns;
+  }
   XH_UNLOCK();
   if (adat) free(adat);
   if (as) free(as);
@@ -3799,6 +3822,8 @@ loxilb_main(struct ebpfcfg *cfg)
     if (xh->have_sockrwr != 0) {
       xh->cgroup_dfl_path = CGROUP_PATH;
     }
+
+    xh->lctts = get_os_nsecs();
 
     if (xh->have_noebpf) {
       xh->have_loader = 0;

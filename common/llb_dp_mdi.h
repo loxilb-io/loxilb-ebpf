@@ -137,6 +137,7 @@ struct dp_pi_mdi {
 #define LLB_PIPE_RC_CSUM_DRP  0x1000000
 #define LLB_PIPE_RC_NH_UNK    0x2000000
 #define LLB_PIPE_RC_RESOLVE   0x4000000
+#define LLB_PIPE_CT_ERR       0x8000000
     __u32            rcode;
 
     __u8             tc:4;
