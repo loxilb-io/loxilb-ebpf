@@ -2111,6 +2111,9 @@ llb_add_mf_map_elem__(int tbl, void *k, void *v)
     ret = pdi_rule_insert(xh->ufw4, new, &nr);
     if (ret != 0) {
       free(new);
+      if (ret == -EEXIST) {
+        return 0;
+      }
       return -1;
     }
 
