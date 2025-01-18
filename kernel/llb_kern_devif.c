@@ -502,7 +502,7 @@ dp_ing_ct_main(void *ctx,  struct xfi *xf)
       dp_record_it(ctx, xf);
     }
 
-    if (!(xf->pm.dp_mark & LLB_MARK_SNAT)) {
+    if (!(xf->pm.dp_mark & LLB_MARK_NAT)) {
       dp_do_nat(ctx, xf);
     }
 
@@ -528,7 +528,7 @@ dp_ing_ct_main(void *ctx,  struct xfi *xf)
 
   /* Perform masquerading if necessary */
   if ((xf->pm.phit & LLB_DP_CTM_HIT) == 0) {
-    if (xf->pm.dp_mark & LLB_MARK_SNAT) {
+    if (xf->pm.dp_mark & LLB_MARK_NAT) {
       bpf_tail_call(ctx, &pgm_tbl, LLB_DP_MASQ_PGM_ID);
       return DP_PASS;
     }

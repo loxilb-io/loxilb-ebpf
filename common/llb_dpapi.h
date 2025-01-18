@@ -85,7 +85,7 @@
 #define CT_MISMATCH_FN_CPTO   (180000000000)
 
 /* FW Mark values */
-#define LLB_MARK_SNAT         (0x80000000)
+#define LLB_MARK_NAT          (0x80000000)
 #define LLB_MARK_SRC          (0x40000000)
 #define LLB_MARK_SNAT_EGR     (0x20000000)
 

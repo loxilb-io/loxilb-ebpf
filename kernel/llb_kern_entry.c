@@ -270,7 +270,7 @@ int tc_packet_func_masq(struct __sk_buff *ctx)
     return DP_DROP;
   }
 
-  if (xf->pm.dp_mark & LLB_MARK_SNAT) {
+  if (xf->pm.dp_mark & LLB_MARK_NAT) {
     /* Do masquerade */
     dp_do_nat(ctx, xf);
     RETURN_TO_MP();
