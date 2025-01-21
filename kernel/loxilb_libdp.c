@@ -2488,8 +2488,6 @@ ll_age_fcmap(void)
     return;
   }
 
-  log_error("FC TIMEO");
-
   xh->lfcts = ns;
 
   fc_val = calloc(1, sizeof(*fc_val));

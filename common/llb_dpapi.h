@@ -67,7 +67,7 @@
 /* Hard-timeout of 120s for fc dp entry */
 #define FC_V4_DPTO            (120000000000)
 
-/* fc cp sweep period od 30m */
+/* fc cp sweep period of 30m */
 #define FC_SWEEP_PERIOD       (1800000000000)
 /* Hard-timeout of 15m for fc cp entry */
 #define FC_V4_CPTO            ( 900000000000)
