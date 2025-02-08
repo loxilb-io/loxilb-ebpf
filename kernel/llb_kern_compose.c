@@ -446,6 +446,7 @@ dp_parse_gtp_ehdr(void *nh, void *dend)
   return DP_PRET_OK;
 }
 
+
 #ifdef HAVE_LEGACY_BPF_MAPS
 struct bpf_map_def SEC("maps") gparser = {
   .type = BPF_MAP_TYPE_PERCPU_ARRAY,
@@ -454,7 +455,7 @@ struct bpf_map_def SEC("maps") gparser = {
   .max_entries = 1,
 };
 #else
-struct {
+struct gparser_d {
         __uint(type,        BPF_MAP_TYPE_PERCPU_ARRAY);
         __type(key,         int);
         __type(value,       struct gtp_parser);

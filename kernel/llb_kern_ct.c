@@ -16,7 +16,7 @@ struct bpf_map_def SEC("maps") ct_ctr = {
 
 #else
 
-struct {
+struct ct_ctr_d {
   __uint(type,        BPF_MAP_TYPE_ARRAY);
   __type(key,         __u32);
   __type(value,       struct dp_ct_ctrtact);

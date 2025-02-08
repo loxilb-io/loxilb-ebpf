@@ -309,154 +309,154 @@ struct bpf_map_def SEC("maps") xfck = {
 
 #else /* New BTF definitions */
 
-struct {
+struct intf_map_d {
         __uint(type,        BPF_MAP_TYPE_HASH);
         __type(key,         struct intf_key);
         __type(value,       struct dp_intf_tact);
         __uint(max_entries, LLB_INTERFACES);
 } intf_map SEC(".maps");
 
-struct {
+struct intf_stats_map_d {
         __uint(type,        BPF_MAP_TYPE_PERCPU_ARRAY);
         __type(key,         __u32);
         __type(value,       struct dp_pb_stats);
         __uint(max_entries, LLB_INTERFACES);
 } intf_stats_map SEC(".maps");
 
-struct {
+struct bd_stats_map_d {
         __uint(type,        BPF_MAP_TYPE_PERCPU_ARRAY);
         __type(key,         __u32);
         __type(value,       struct dp_pb_stats);
         __uint(max_entries, LLB_INTF_MAP_ENTRIES);
 } bd_stats_map SEC(".maps");
 
-struct {
+struct pkt_ring_d {
         __uint(type,        BPF_MAP_TYPE_PERF_EVENT_ARRAY);
         __type(key,         int);
         __type(value,       __u32);
         __uint(max_entries, MAX_REAL_CPUS);
 } pkt_ring SEC(".maps");
 
-struct {
+struct cp_ring_d {
         __uint(type,        BPF_MAP_TYPE_PERF_EVENT_ARRAY);
         __type(key,         int);
         __type(value,       __u32);
         __uint(max_entries, MAX_REAL_CPUS);
 } cp_ring SEC(".maps");
 
-struct {
+struct pkts_d {
         __uint(type,        BPF_MAP_TYPE_PERCPU_ARRAY);
         __type(key,         __u32);
         __type(value,       struct ll_dp_pmdi);
         __uint(max_entries, 1);
 } pkts SEC(".maps");
 
-struct {
+struct fcas_d {
         __uint(type,        BPF_MAP_TYPE_PERCPU_ARRAY);
         __type(key,         __u32);
         __type(value,       struct dp_fc_tacts);
         __uint(max_entries, 1);
 } fcas SEC(".maps");
 
-struct {
+struct xfis_d {
         __uint(type,        BPF_MAP_TYPE_PERCPU_ARRAY);
         __type(key,         int);
         __type(value,       struct xfi);
         __uint(max_entries, 1);
 } xfis SEC(".maps");
 
-struct {
+struct tx_intf_map_d {
         __uint(type,        BPF_MAP_TYPE_DEVMAP);
         __type(key,         int);
         __type(value,       int);
         __uint(max_entries, LLB_INTERFACES);
 } tx_intf_map SEC(".maps");
 
-struct {
+struct tx_intf_stats_map_d {
         __uint(type,        BPF_MAP_TYPE_PERCPU_ARRAY);
         __type(key,         __u32);
         __type(value,       struct dp_pb_stats);
         __uint(max_entries, LLB_INTF_MAP_ENTRIES);
 } tx_intf_stats_map SEC(".maps");
 
-struct {
+struct tx_bd_stats_map_d {
         __uint(type,        BPF_MAP_TYPE_PERCPU_ARRAY);
         __type(key,         __u32);
         __type(value,       struct dp_pb_stats);
         __uint(max_entries, LLB_INTF_MAP_ENTRIES);
 } tx_bd_stats_map SEC(".maps");
 
-struct {
+struct smac_map_d {
         __uint(type,        BPF_MAP_TYPE_HASH);
         __type(key,         struct dp_smac_key);
         __type(value,       struct dp_smac_tact);
         __uint(max_entries, LLB_SMAC_MAP_ENTRIES);
 } smac_map SEC(".maps");
 
-struct {
+struct dmac_map_d {
         __uint(type,        BPF_MAP_TYPE_HASH);
         __type(key,         struct dp_dmac_key);
         __type(value,       struct dp_dmac_tact);
         __uint(max_entries, LLB_DMAC_MAP_ENTRIES);
 } dmac_map SEC(".maps");
 
-struct {
+struct tmac_map_d {
         __uint(type,        BPF_MAP_TYPE_HASH);
         __type(key,         struct dp_tmac_key);
         __type(value,       struct dp_tmac_tact);
         __uint(max_entries, LLB_TMAC_MAP_ENTRIES);
 } tmac_map SEC(".maps");
 
-struct {
+struct tmac_stats_map_d {
         __uint(type,        BPF_MAP_TYPE_PERCPU_ARRAY);
         __type(key,         __u32);
         __type(value,       struct dp_pb_stats);
         __uint(max_entries, LLB_TMAC_MAP_ENTRIES);
 } tmac_stats_map SEC(".maps");
 
-struct {
+struct nh_map_d {
         __uint(type,        BPF_MAP_TYPE_ARRAY);
         __type(key,         struct dp_nh_key);
         __type(value,       struct dp_nh_tact);
         __uint(max_entries, LLB_NH_MAP_ENTRIES);
 } nh_map SEC(".maps");
 
-struct {
+struct ct_map_d {
         __uint(type,        BPF_MAP_TYPE_HASH);
         __type(key,         struct dp_ct_key);
         __type(value,       struct dp_ct_tact);
         __uint(max_entries, LLB_CT_MAP_ENTRIES);
 } ct_map SEC(".maps");
 
-struct {
+struct ct_stats_map_d {
         __uint(type,        BPF_MAP_TYPE_PERCPU_ARRAY);
         __type(key,         __u32);
         __type(value,       struct dp_pb_stats);
         __uint(max_entries, LLB_CT_MAP_ENTRIES);
 } ct_stats_map SEC(".maps");
 
-struct {
+struct nat_map_d {
         __uint(type,        BPF_MAP_TYPE_HASH);
         __type(key,         struct dp_nat_key);
         __type(value,       struct dp_proxy_tacts);
         __uint(max_entries, LLB_NATV4_MAP_ENTRIES);
 } nat_map SEC(".maps");
 
-struct {
+struct nat_stats_map_d {
         __uint(type,        BPF_MAP_TYPE_PERCPU_ARRAY);
         __type(key,         __u32);
         __type(value,       struct dp_pb_stats);
         __uint(max_entries, LLB_NATV4_STAT_MAP_ENTRIES);
 } nat_stats_map SEC(".maps");
 
-struct {
+struct nat_ep_map_d {
         __uint(type,        BPF_MAP_TYPE_ARRAY);
         __type(key,         __u32);
         __type(value,       struct dp_nat_epacts);
         __uint(max_entries, LLB_NAT_EP_MAP_ENTRIES);
 } nat_ep_map SEC(".maps");
 
-struct {
+struct rt_v4_map_d {
         __uint(type,        BPF_MAP_TYPE_LPM_TRIE);
         __type(key,         struct dp_rtv4_key);
         __type(value,       struct dp_rt_tact);
@@ -464,14 +464,14 @@ struct {
         __uint(max_entries, LLB_RTV4_MAP_ENTRIES);
 } rt_v4_map SEC(".maps");
 
-struct {
+struct rt_v4_stats_map_d {
         __uint(type,        BPF_MAP_TYPE_PERCPU_ARRAY);
         __type(key,         __u32);
         __type(value,       struct dp_pb_stats);
         __uint(max_entries, LLB_RTV4_MAP_ENTRIES);
 } rt_v4_stats_map SEC(".maps");
 
-struct {
+struct rt_v6_map_d {
         __uint(type,        BPF_MAP_TYPE_LPM_TRIE);
         __type(key,         struct dp_rtv6_key);
         __type(value,       struct dp_rt_tact);
@@ -479,113 +479,112 @@ struct {
         __uint(max_entries, LLB_RTV6_MAP_ENTRIES);
 } rt_v6_map SEC(".maps");
 
-struct {
+struct rt_v6_stats_map_d {
         __uint(type,        BPF_MAP_TYPE_PERCPU_ARRAY);
         __type(key,         __u32);
         __type(value,       struct dp_pb_stats);
         __uint(max_entries, LLB_RTV6_MAP_ENTRIES);
 } rt_v6_stats_map SEC(".maps");
 
-struct {
+struct mirr_map_d {
         __uint(type,        BPF_MAP_TYPE_ARRAY);
         __type(key,         __u32);
         __type(value,       struct dp_mirr_tact);
         __uint(max_entries, LLB_MIRR_MAP_ENTRIES);
 } mirr_map SEC(".maps");
 
-struct {
+struct sess_v4_map_d {
         __uint(type,        BPF_MAP_TYPE_HASH);
         __type(key,         struct dp_sess4_key);
         __type(value,       struct dp_sess_tact);
         __uint(max_entries, LLB_SESS_MAP_ENTRIES);
 } sess_v4_map SEC(".maps");
 
-struct {
+struct sess_v4_stats_map_d {
         __uint(type,        BPF_MAP_TYPE_PERCPU_ARRAY);
         __type(key,         __u32);
         __type(value,       struct dp_pb_stats);
         __uint(max_entries, LLB_SESS_MAP_ENTRIES);
 } sess_v4_stats_map SEC(".maps");
 
-struct {
+struct fc_v4_map_d {
         __uint(type,        BPF_MAP_TYPE_HASH);
         __type(key,         struct dp_fcv4_key);
         __type(value,       struct dp_fc_tacts);
         __uint(max_entries, LLB_FCV4_MAP_ENTRIES);
 } fc_v4_map SEC(".maps");
 
-struct {
+struct fc_v4_stats_map_d {
         __uint(type,        BPF_MAP_TYPE_PERCPU_ARRAY);
         __type(key,         __u32);
         __type(value,       struct dp_pb_stats);
         __uint(max_entries, LLB_FCV4_MAP_ENTRIES);
 } fc_v4_stats_map SEC(".maps");
 
-struct {
+struct fw_v4_map_d {
         __uint(type,        BPF_MAP_TYPE_ARRAY);
         __type(key,         __u32);
         __type(value,       struct dp_fwv4_ent);
         __uint(max_entries, LLB_FW4_MAP_ENTRIES);
 } fw_v4_map SEC(".maps");
 
-struct {
+struct fw_v4_stats_map_d {
         __uint(type,        BPF_MAP_TYPE_PERCPU_ARRAY);
         __type(key,         __u32);
         __type(value,       struct dp_pb_stats);
         __uint(max_entries, LLB_FW4_MAP_ENTRIES);
 } fw_v4_stats_map SEC(".maps");
 
-struct {
+struct pgm_tbl_d {
         __uint(type,        BPF_MAP_TYPE_PROG_ARRAY);
         __type(key,         __u32);
         __type(value,       __u32);
         __uint(max_entries, LLB_PGM_MAP_ENTRIES);
 } pgm_tbl SEC(".maps");
 
-struct {
+struct polx_map_d {
         __uint(type,        BPF_MAP_TYPE_ARRAY);
         __type(key,         __u32);
         __type(value,       struct dp_pol_tact);
         __uint(max_entries, LLB_POL_MAP_ENTRIES);
 } polx_map SEC(".maps");
 
-struct {
+struct xfck_d {
         __uint(type,        BPF_MAP_TYPE_PERCPU_ARRAY);
         __type(key,         int);
         __type(value,       struct dp_fcv4_key);
         __uint(max_entries, 1);
 } xfck SEC(".maps");
 
-struct {
+struct crc32c_map_d {
         __uint(type,        BPF_MAP_TYPE_ARRAY);
         __type(key,         __u32);
         __type(value,       __u32);
         __uint(max_entries, LLB_CRC32C_ENTRIES);
 } crc32c_map SEC(".maps");
 
-struct {
+struct cpu_map_d {
 	      __uint(type,        BPF_MAP_TYPE_CPUMAP);
 	      __type(key,         __u32);
 	      __type(value,       __u32);
 	      __uint(max_entries, MAX_REAL_CPUS);
 } cpu_map SEC(".maps");
 
-struct {
+struct live_cpu_map_d {
 	      __uint(type,        BPF_MAP_TYPE_ARRAY);
 	      __type(key,         __u32);
 	      __type(value,       __u32);
 	      __uint(max_entries, MAX_REAL_CPUS);
 } live_cpu_map SEC(".maps");
 
-struct {
+struct pplat_map_d {
 	      __uint(type,        BPF_MAP_TYPE_PERCPU_ARRAY);
 	      __type(key,         __u32);
 	      __type(value,       struct dp_pb_stats);
 	      __uint(max_entries, LLB_PPLAT_MAP_ENTRIES);
 } pplat_map SEC(".maps");
 
-
-struct {
+struct xctk_d {
         __uint(type,        BPF_MAP_TYPE_PERCPU_ARRAY);
         __type(key,         __u32);
         __type(value,       struct dp_ct_tact);
@@ -596,7 +595,7 @@ struct {
 #endif
 
 static void __always_inline
-dp_do_map_stats(struct xdp_md *ctx,  
+dp_do_map_stats(void *ctx,
                 struct xfi *xf,
                 int xtbl,
                 int cidx)
@@ -2168,8 +2167,10 @@ dp_reset_pkt_hash(void *md)
 static __u32 __always_inline
 dp_get_pkt_hash(void *md)
 {
+  __u32 hash = 0;
   bpf_set_hash_invalid(md);
-  return bpf_get_hash_recalc(md);
+  hash = bpf_get_hash_recalc(md);
+  return hash;
 }
 
 static __u32 __always_inline

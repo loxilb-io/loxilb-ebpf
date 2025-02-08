@@ -7,7 +7,7 @@
 
 char LICENSE[] SEC("license") = "Dual BSD/GPL";
 
-struct {
+struct map_events_d {
     __uint(type, BPF_MAP_TYPE_PERF_EVENT_ARRAY);
     __type(key, int);
     __type(value, unsigned int);

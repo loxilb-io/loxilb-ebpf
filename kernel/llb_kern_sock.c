@@ -18,7 +18,7 @@
 
 #define LLB_RWR_MAP_SZ (1024)
 
-struct {
+struct sock_rwr_map_d {
   __uint(type,        BPF_MAP_TYPE_HASH);
   __type(key,         struct sock_rwr_key);
   __type(value,       struct sock_rwr_action);
