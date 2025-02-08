@@ -18,7 +18,7 @@
 #include "../common/llb_dp_mdi.h"
 
 #ifndef HAVE_SOCKOPS
-struct {
+struct sock_proxy_map2_d {
   __uint(type,        BPF_MAP_TYPE_SOCKHASH);
   __type(key,         struct llb_sockmap_key);
   __type(value,       int);

@@ -7,7 +7,7 @@
 #ifndef __LLB_SOCKMAP_H__
 #define __LLB_SOCKMAP_H__
 
-struct {
+struct sock_proxy_map_d {
   __uint(type,        BPF_MAP_TYPE_SOCKHASH);
   __type(key,         struct llb_sockmap_key);
   __type(value,       int);

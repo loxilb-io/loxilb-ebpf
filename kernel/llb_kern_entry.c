@@ -29,7 +29,7 @@
 #include "llb_kern_fcfwd.c"
 
 static int __always_inline
-dp_ing_pkt_main(void *md, struct xfi *xf)
+dp_ing_pkt_main(struct __sk_buff *md, struct xfi *xf)
 {
   LL_DBG_PRINTK("[PRSR] START cpu %d \n", bpf_get_smp_processor_id());
   LL_DBG_PRINTK("[PRSR] fi  %d\n", sizeof(*xf));

@@ -474,9 +474,7 @@ struct dp_pol_tact {
                          * DP_SET_DO_POLICER
                          */
   struct bpf_spin_lock lock;
-  union {
-    struct dp_policer_act pol;
-  };
+  struct dp_policer_act pol;
 };
 
 struct sock_rwr_key {
@@ -661,21 +659,22 @@ typedef struct {
 #define nat_xip4 nat_xip[0]
 #define nat_rip4 nat_rip[0]
 
-struct mf_xfrm_inf
-{
+struct mf_xfrm_inf {
   /* LLB_NAT_XXX flags */
   uint8_t nat_flags;
   uint8_t inactive;
   uint8_t wprio;
   uint8_t nv6;
   uint8_t dsr;
-  uint8_t mhon:4;
-  uint8_t mhs:4;
-  uint16_t nat_xport;
+  uint8_t mhon;
+  uint8_t mhs;
+  uint8_t pad1;
   uint32_t nat_xip[4];
   uint32_t nat_rip[4];
+  uint16_t nat_xport;
   uint16_t osp;
   uint16_t odp;
+  uint8_t pad2[2];
 };
 typedef struct mf_xfrm_inf nxfrm_inf_t;
 
@@ -810,17 +809,19 @@ struct dp_proxy_tacts {
   uint8_t sel_type;
   uint8_t sec_mode;
   uint8_t ppv2;
-  uint32_t pmhh[LLB_MAX_MHOSTS];
-  struct mf_xfrm_inf nxfrms[LLB_MAX_NXFRMS];
-  uint8_t host_url[LLB_MAX_HOSTURL_LEN];
+  uint8_t pad1[7];
   uint64_t lts;
   uint64_t base_to;
+  uint32_t pmhh[LLB_MAX_MHOSTS];
+  uint8_t pad2[4];
+  struct mf_xfrm_inf nxfrms[LLB_MAX_NXFRMS];
+  uint8_t host_url[LLB_MAX_HOSTURL_LEN];
 };
 
 struct dp_nat_epacts {
   struct dp_cmn_act ca;
   struct bpf_spin_lock lock;
-  uint32_t active_sess[LLB_MAX_NXFRMS];
+  uint16_t active_sess[LLB_MAX_NXFRMS];
 };
 
 /* This is currently based on ULCL classification scheme */

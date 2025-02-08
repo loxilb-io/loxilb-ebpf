@@ -406,7 +406,7 @@ dp_insert_fcv4(void *ctx, struct xfi *xf, struct dp_fc_tacts *acts)
 }
 
 static int __always_inline
-dp_ing_slow_main(void *ctx,  struct xfi *xf)
+dp_ing_slow_main(struct __sk_buff *ctx,  struct xfi *xf)
 {
   struct dp_fc_tacts *fa = NULL;
 #ifdef HAVE_DP_FC
@@ -467,7 +467,7 @@ out:
 }
 
 static int __always_inline
-dp_ing_ct_main(void *ctx,  struct xfi *xf)
+dp_ing_ct_main(struct __sk_buff *ctx,  struct xfi *xf)
 {
   int val = 0;
   struct dp_fc_tacts *fa = NULL;
