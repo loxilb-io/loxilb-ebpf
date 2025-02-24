@@ -27,7 +27,7 @@ dp_do_fw4_main(void *ctx, struct xfi *xf)
   int i = 0;
   struct dp_fwv4_ent *fwe;
   struct pdi_key key;
-  struct dp_fwv4_tact *act = NULL;
+  struct dp_fw_tact *act = NULL;
 
   memset(&key, 0, sizeof(key));
   PDI_VAL_INIT(&key.inport, xf->pm.iport);

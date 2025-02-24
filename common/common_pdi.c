@@ -12,7 +12,7 @@
 #include "pdi.h"
 
 struct pdi_map *
-pdi_map_alloc(const char *name, pdi_add_map_op_t add_map, pdi_del_map_op_t del_map)
+pdi_map_alloc(const char *name, int v6, pdi_add_map_op_t add_map, pdi_del_map_op_t del_map)
 {
   struct pdi_map *map = calloc(1, sizeof(struct pdi_map));
 
@@ -22,6 +22,7 @@ pdi_map_alloc(const char *name, pdi_add_map_op_t add_map, pdi_del_map_op_t del_m
   } else {
     strncpy(map->name, "default", PDI_MAP_NAME_LEN);
   }
+  map->v6 = v6 ? 1 : 0;
   map->pdi_add_map_em = add_map;
   map->pdi_del_map_em = del_map;
 
@@ -29,27 +30,39 @@ pdi_map_alloc(const char *name, pdi_add_map_op_t add_map, pdi_del_map_op_t del_m
 }
 
 void
-pdi_key2str(struct pdi_key *key, char *fstr)
+pdi_key2str(struct pdi_map *map, pdi_key_t *key, char *fstr)
 {
   int l = 0;
 
-  PDI_MATCH_PRINT(&key->dest, "dest", fstr, l, none);
-  PDI_MATCH_PRINT(&key->source, "source", fstr, l, none);
-  PDI_RMATCH_PRINT(&key->dport, "dport", fstr, l, none);
-  PDI_RMATCH_PRINT(&key->dport, "sport", fstr, l, none);
-  PDI_MATCH_PRINT(&key->inport, "inport", fstr, l, none);
-  PDI_MATCH_PRINT(&key->protocol, "prot", fstr, l, none);
-  PDI_MATCH_PRINT(&key->zone, "zone", fstr, l, none);
-  PDI_MATCH_PRINT(&key->bd, "bd", fstr, l, none);
+  if (map->v6 == 0) {
+    PDI_MATCH_PRINT(&key->k4.dest, "dest", fstr, l, none);
+    PDI_MATCH_PRINT(&key->k4.source, "source", fstr, l, none);
+    PDI_RMATCH_PRINT(&key->k4.dport, "dport", fstr, l, none);
+    PDI_RMATCH_PRINT(&key->k4.sport, "sport", fstr, l, none);
+    PDI_MATCH_PRINT(&key->k4.inport, "inport", fstr, l, none);
+    PDI_MATCH_PRINT(&key->k4.protocol, "prot", fstr, l, none);
+    PDI_MATCH_PRINT(&key->k4.zone, "zone", fstr, l, none);
+    PDI_MATCH_PRINT(&key->k4.bd, "bd", fstr, l, none);
+  } else {
+    printf("ipv6\n");
+    PDI_MATCH6_PRINT(&key->k6.dest, "dest6", fstr, l, none);
+    PDI_MATCH6_PRINT(&key->k6.source, "source6", fstr, l, none);
+    PDI_RMATCH_PRINT(&key->k6.dport, "dport", fstr, l, none);
+    PDI_RMATCH_PRINT(&key->k6.sport, "sport", fstr, l, none);
+    PDI_MATCH_PRINT(&key->k6.inport, "inport", fstr, l, none);
+    PDI_MATCH_PRINT(&key->k6.protocol, "prot", fstr, l, none);
+    PDI_MATCH_PRINT(&key->k6.zone, "zone", fstr, l, none);
+    PDI_MATCH_PRINT(&key->k6.bd, "bd", fstr, l, none);
+  }
 }
 
 void
-pdi_rule2str(struct pdi_rule *node)
+pdi_rule2str(struct pdi_map *map, struct pdi_rule *node)
 {
   char fmtstr[1000] = { 0 };
 
   if (1) {
-    pdi_key2str(&node->key, fmtstr);
+    pdi_key2str(map, &node->key, fmtstr);
     printf("(%s)%d\n", fmtstr, node->data.pref);
   }
 }
@@ -61,7 +74,7 @@ pdi_rules2str(struct pdi_map *map)
 
   printf("#### Rules ####\n");
   while (node) {
-    pdi_rule2str(node);
+    pdi_rule2str(map, node);
     node = node->next;
   }
   printf("##############\n");
@@ -96,7 +109,13 @@ pdi_rule_insert(struct pdi_map *map, struct pdi_rule *new, int *nr)
     }
 
     if (pref == node->data.pref)  {
-      if (PDI_KEY_EQ(&new->key, &node->key)) {
+      int equal = 0;
+      if (map->v6) {
+        equal = PDI_KEY6_EQ(&new->key, &node->key);
+      } else {
+        equal = PDI_KEY_EQ(&new->key, &node->key);
+      }
+      if (equal) {
         PDI_MAP_ULOCK(map);
         return -EEXIST;
       } 
@@ -123,7 +142,7 @@ pdi_rule_insert(struct pdi_map *map, struct pdi_rule *new, int *nr)
 }
 
 struct pdi_rule *
-pdi_rule_delete__(struct pdi_map *map, struct pdi_key *key, uint32_t pref, int *nr)
+pdi_rule_delete__(struct pdi_map *map, union pdi_key_un *key, uint32_t pref, int *nr)
 {
   struct pdi_rule *prev =  NULL;
   struct pdi_rule *node;
@@ -132,7 +151,13 @@ pdi_rule_delete__(struct pdi_map *map, struct pdi_key *key, uint32_t pref, int *
 
   while (node) {
     if (pref == node->data.pref)  {
-      if (PDI_KEY_EQ(key, &node->key)) {
+      int equal = 0;
+      if (map->v6) {
+        equal = PDI_KEY6_EQ(key, &node->key);
+      } else {
+        equal = PDI_KEY_EQ(key, &node->key);
+      }
+      if (equal) {
         if (prev) {
           prev->next = node->next;
         } else {
@@ -153,7 +178,7 @@ pdi_rule_delete__(struct pdi_map *map, struct pdi_key *key, uint32_t pref, int *
 }
 
 int
-pdi_rule_delete(struct pdi_map *map, struct pdi_key *key, uint32_t pref, int *nr)
+pdi_rule_delete(struct pdi_map *map, union pdi_key_un *key, uint32_t pref, int *nr)
 {
   struct pdi_rule *node = NULL;
   struct pdi_val *val, *tmp;
@@ -182,7 +207,7 @@ pdi_rule_delete(struct pdi_map *map, struct pdi_key *key, uint32_t pref, int *nr
 }
 
 struct pdi_rule *
-pdi_rule_get__(struct pdi_map *map, struct pdi_key *val)
+pdi_rule_get__(struct pdi_map *map, union pdi_key_un *val)
 {
   struct pdi_rule *node = map->head;
 
@@ -197,7 +222,7 @@ pdi_rule_get__(struct pdi_map *map, struct pdi_key *val)
 }
 
 int
-pdi_add_val(struct pdi_map *map, struct pdi_key *kval)
+pdi_add_val(struct pdi_map *map, union pdi_key_un *kval)
 {
   struct pdi_val *hval = NULL;
   struct pdi_rule *rule = NULL;
@@ -207,9 +232,9 @@ pdi_add_val(struct pdi_map *map, struct pdi_key *kval)
   rule = pdi_rule_get__(map, kval);
   if (rule != NULL) {
     printf("Found match --\n");
-    pdi_rule2str(rule);
+    pdi_rule2str(map, rule);
 
-    HASH_FIND(hh, rule->hash, kval, sizeof(struct pdi_key), hval);
+    HASH_FIND(hh, rule->hash, kval, sizeof(union pdi_key_un), hval);
     if (hval) {
       printf("hval exists\n");
       if (map->pdi_add_map_em) {
@@ -222,7 +247,7 @@ pdi_add_val(struct pdi_map *map, struct pdi_key *kval)
     hval = calloc(1, sizeof(*hval));
     memcpy(&hval->val, kval, sizeof(*kval));
     hval->r = rule;
-    HASH_ADD(hh, rule->hash, val, sizeof(struct pdi_key), hval);
+    HASH_ADD(hh, rule->hash, val, sizeof(union pdi_key_un), hval);
     PDI_MAP_ULOCK(map);
     return 0;
   }
@@ -233,7 +258,7 @@ pdi_add_val(struct pdi_map *map, struct pdi_key *kval)
 }
 
 int
-pdi_del_val(struct pdi_map *map, struct pdi_key *kval)
+pdi_del_val(struct pdi_map *map, union pdi_key_un *kval)
 {
   struct pdi_val *hval = NULL;
   struct pdi_rule *rule = NULL;
@@ -243,9 +268,9 @@ pdi_del_val(struct pdi_map *map, struct pdi_key *kval)
   rule = pdi_rule_get__(map, kval);
   if (rule != NULL) {
     printf("Found match --\n");
-    pdi_rule2str(rule);
+    pdi_rule2str(map, rule);
 
-    HASH_FIND(hh, rule->hash, kval, sizeof(struct pdi_key), hval);
+    HASH_FIND(hh, rule->hash, kval, sizeof(union pdi_key_un), hval);
     if (hval == NULL) {
       printf("hval does not exist\n");
       PDI_MAP_ULOCK(map);
@@ -286,7 +311,7 @@ pdi_map_run(struct pdi_map *map)
         if (map->pdi_del_map_em) {
           map->pdi_del_map_em(&val->val);
         }
-        pdi_key2str(&val->val, fmtstr);
+        pdi_key2str(map, &val->val, fmtstr);
         printf("Expired entry %s\n", fmtstr);
         free(val);
       }
@@ -300,21 +325,22 @@ int
 pdi_unit_test(void)
 {
   struct pdi_map *map;
+  struct pdi_map *map6;
   int r = 0;
 
-  map = pdi_map_alloc("ufw4", NULL, NULL);
+  map = pdi_map_alloc("ufw4", 0, NULL, NULL);
+  map6 = pdi_map_alloc("ufw6", 1, NULL, NULL);
 
   struct pdi_rule *new = calloc(1, sizeof(struct pdi_rule));
   if (new) {
-    PDI_MATCH_INIT(&new->key.dest, 0x0a0a0a0a, 0xffffff00);
-    PDI_RMATCH_INIT(&new->key.dport, 1, 100, 200); 
+    PDI_MATCH_INIT(&new->key.k4.dest, 0x0a0a0a0a, 0xffffff00);
+    PDI_RMATCH_INIT(&new->key.k4.dport, 1, 100, 200);
     r = pdi_rule_insert(map, new, NULL);
     if (r != 0) {
       printf("Insert fail1\n");
       exit(0);
     }
   }
-
 
   struct pdi_rule *new1 = calloc(1, sizeof(struct pdi_rule));
   if (new1) {
@@ -327,11 +353,10 @@ pdi_unit_test(void)
     }
   }
 
-
   struct pdi_rule *new2 = calloc(1, sizeof(struct pdi_rule));
   if (new2) {
-    PDI_MATCH_INIT(&new2->key.dest, 0x0a0a0a0a, 0xffffff00);
-    PDI_RMATCH_INIT(&new2->key.dport, 0, 100, 0xffff); 
+    PDI_MATCH_INIT(&new2->key.k4.dest, 0x0a0a0a0a, 0xffffff00);
+    PDI_RMATCH_INIT(&new2->key.k4.dport, 0, 100, 0xffff);
     r = pdi_rule_insert(map, new2, NULL);
     if (r != 0) {
       printf("Insert fail3\n");
@@ -353,10 +378,10 @@ pdi_unit_test(void)
 
   struct pdi_rule *new4 = calloc(1, sizeof(struct pdi_rule));
   if (new4) {
-    PDI_MATCH_INIT(&new4->key.dest, 0x0a0a0a0a, 0xffffff00);
-    PDI_MATCH_INIT(&new4->key.source, 0x0b0b0b00, 0xffffff00);
-    PDI_RMATCH_INIT(&new4->key.dport, 1, 500, 600); 
-    PDI_RMATCH_INIT(&new4->key.sport, 1, 500, 600); 
+    PDI_MATCH_INIT(&new4->key.k4.dest, 0x0a0a0a0a, 0xffffff00);
+    PDI_MATCH_INIT(&new4->key.k4.source, 0x0b0b0b00, 0xffffff00);
+    PDI_RMATCH_INIT(&new4->key.k4.dport, 1, 500, 600);
+    PDI_RMATCH_INIT(&new4->key.k4.sport, 1, 600, 700);
     r = pdi_rule_insert(map, new4, NULL);
     if (r != 0) {
       printf("Insert fail1\n");
@@ -367,22 +392,22 @@ pdi_unit_test(void)
   pdi_rules2str(map);
 
   if (1) {
-    struct pdi_key key =  { 0 } ;
-    PDI_VAL_INIT(&key.source, 0x0b0b0b0b);
-    PDI_VAL_INIT(&key.dest, 0x0a0a0a0a);
-    PDI_RVAL_INIT(&key.dport, 501);
-    PDI_RVAL_INIT(&key.sport, 501);
+    pdi_key_t key =  { 0 } ;
+    PDI_VAL_INIT(&key.k4.source, 0x0b0b0b0b);
+    PDI_VAL_INIT(&key.k4.dest, 0x0a0a0a0a);
+    PDI_RVAL_INIT(&key.k4.dport, 501);
+    PDI_RVAL_INIT(&key.k4.sport, 501);
     if (pdi_add_val(map, &key) != 0) {
       printf("Failed to add pdi val1\n");
     }
   }
 
   if (1) {
-    struct pdi_key key =  { 0 } ;
-    PDI_VAL_INIT(&key.source, 0x0b0b0b0b);
-    PDI_VAL_INIT(&key.dest, 0x0a0a0a0a);
-    PDI_RVAL_INIT(&key.dport, 502);
-    PDI_RVAL_INIT(&key.sport, 502);
+    pdi_key_t key =  { 0 } ;
+    PDI_VAL_INIT(&key.k4.source, 0x0b0b0b0b);
+    PDI_VAL_INIT(&key.k4.dest, 0x0a0a0a0a);
+    PDI_RVAL_INIT(&key.k4.dport, 502);
+    PDI_RVAL_INIT(&key.k4.sport, 502);
     if (pdi_add_val(map, &key) != 0) {
       printf("Failed to add pdi val2\n");
     }
@@ -390,6 +415,47 @@ pdi_unit_test(void)
 
   if (pdi_rule_delete(map, &new4->key, 0, NULL) != 0) {
      printf("Failed delete--%d\n", __LINE__);
+  }
+
+  struct pdi_rule *new6 = calloc(1, sizeof(struct pdi_rule));
+  if (new) {
+    struct in6_addr addr6;
+    struct in6_addr net6;
+    inet_pton(AF_INET6, "2001::1234", &addr6);
+    inet_pton(AF_INET6, "ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff", &net6);
+    PDI_MATCH6_INIT(&new6->key.k6.dest, &addr6.s6_addr, &net6.s6_addr);
+    PDI_RMATCH_INIT(&new6->key.k6.dport, 1, 100, 200);
+    r = pdi_rule_insert(map6, new6, NULL);
+    if (r != 0) {
+      printf("Insert fail1\n");
+      exit(0);
+    }
+
+    r = pdi_rule_insert(map6, new6, NULL);
+    if (r == 0) {
+      printf("Insert fail1\n");
+      exit(0);
+    }
+
+  }
+
+  pdi_rules2str(map6);
+
+  if (1) {
+    pdi_key_t key =  { 0 } ;
+    struct in6_addr addr6;
+    inet_pton(AF_INET6, "2001::1234", &addr6);
+    PDI_VAL6_INIT(&key.k6.dest, &addr6.s6_addr);
+    PDI_RVAL_INIT(&key.k6.dport, 102);
+    if (pdi_add_val(map6, &key) != 0) {
+      printf("Failed to add pdi val2\n");
+      exit(0);
+    }
+  }
+
+  if (pdi_rule_delete(map6, &new6->key, 0, NULL) != 0) {
+    printf("Failed delete--%d\n", __LINE__);
+    exit(0);
   }
 
   return 0;

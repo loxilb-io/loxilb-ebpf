@@ -21,8 +21,19 @@ do {                                                               \
   if ((v1)->has_range) {                                           \
     l += sprintf(fmtstr+l, "%s:%d-%d,", kstr,cv((v1)->u.r.min), cv((v1)->u.r.max));   \
   }                                                                \
-  else {                                                           \
+  else if ((v1)->u.v.valid) {                                      \
     l += sprintf(fmtstr+l, "%s:0x%x,", kstr, cv((v1)->u.v.valid & (v1)->u.v.val)); \
+  }                                                                \
+} while(0)
+
+#define PDI_MATCH6_PRINT(v1, kstr, fmtstr, l, cv)                  \
+do {                                                               \
+  char str[INET6_ADDRSTRLEN];                                      \
+  uint8_t zero_addr[16] = { 0 };                                   \
+  if (memcmp((v1)->valid, zero_addr, sizeof((v1)->valid))) {       \
+    if (inet_ntop(AF_INET6, (v1)->val, str, INET6_ADDRSTRLEN)) {   \
+      l += sprintf(fmtstr+l, "%s:%s,", kstr, str);                 \
+    }                                                              \
   }                                                                \
 } while(0)
 
@@ -35,6 +46,7 @@ struct pdi_map {
   char name[PDI_MAP_NAME_LEN];
   pthread_rwlock_t lock;
   __u32 nr;
+  __u32 v6;
   struct pdi_rule *head;
   int (*pdi_add_map_em)(void *key, void *val, size_t sz);
   int (*pdi_del_map_em)(void *key);
@@ -86,8 +98,14 @@ struct pdi_stats {
   uint64_t packets;
 };
 
+union pdi_key_un {
+  struct pdi_key k4;
+  struct pdi6_key k6;
+};
+typedef union pdi_key_un pdi_key_t;
+
 struct pdi_val {
-  struct pdi_key val;
+  pdi_key_t val;
   struct pdi_rule *r;
 #define PDI_VAL_INACT_TO  (60000000000)
   uint64_t lts;
@@ -95,45 +113,72 @@ struct pdi_val {
 };
 
 struct pdi_rule {
-  struct pdi_key key;
+  pdi_key_t key;
   struct pdi_data data;
   struct pdi_rule *next;
   struct pdi_val *hash;
 };
 
-#define PDI_KEY_EQ(v1, v2)                                  \
-  ((PDI_MATCH_ALL(&(v1)->dest, &(v2)->dest)))         &&    \
-  ((PDI_MATCH_ALL(&(v1)->source, &(v2)->source)))     &&    \
-  ((PDI_RMATCH_ALL(&(v1)->dport, &(v2)->dport)))      &&    \
-  ((PDI_RMATCH_ALL(&(v1)->sport, &(v2)->sport)))      &&    \
-  ((PDI_MATCH_ALL(&(v1)->inport, &(v2)->inport)))     &&    \
-  ((PDI_MATCH_ALL(&(v1)->zone, &(v2)->zone)))         &&    \
-  ((PDI_MATCH_ALL(&(v1)->protocol, &(v2)->protocol))) &&    \
-  ((PDI_MATCH_ALL(&(v1)->bd, &(v2)->bd)))
+#define PDI_KEY_EQ(v1, v2)                                        \
+  ((PDI_MATCH_ALL(&(v1)->k4.dest, &(v2)->k4.dest)))         &&    \
+  ((PDI_MATCH_ALL(&(v1)->k4.source, &(v2)->k4.source)))     &&    \
+  ((PDI_RMATCH_ALL(&(v1)->k4.dport, &(v2)->k4.dport)))      &&    \
+  ((PDI_RMATCH_ALL(&(v1)->k4.sport, &(v2)->k4.sport)))      &&    \
+  ((PDI_MATCH_ALL(&(v1)->k4.inport, &(v2)->k4.inport)))     &&    \
+  ((PDI_MATCH_ALL(&(v1)->k4.zone, &(v2)->k4.zone)))         &&    \
+  ((PDI_MATCH_ALL(&(v1)->k4.protocol, &(v2)->k4.protocol))) &&    \
+  ((PDI_MATCH_ALL(&(v1)->k4.bd, &(v2)->k4.bd)))
 
-#define PDI_PKEY_EQ(v1, v2)                             \
-  (((PDI_MATCH(&(v1)->dest, &(v2)->dest)))        &&    \
-  ((PDI_MATCH(&(v1)->source, &(v2)->source)))     &&    \
-  ((PDI_RMATCH(&(v1)->dport, &(v2)->dport)))      &&    \
-  ((PDI_RMATCH(&(v1)->sport, &(v2)->sport)))      &&    \
-  ((PDI_MATCH(&(v1)->inport, &(v2)->inport)))     &&    \
-  ((PDI_MATCH(&(v1)->zone, &(v2)->zone)))         &&    \
-  ((PDI_MATCH(&(v1)->protocol, &(v2)->protocol))) &&    \
-  ((PDI_MATCH(&(v1)->bd, &(v2)->bd))))
+#define PDI_PKEY_EQ(v1, v2)                                       \
+  (((PDI_MATCH(&(v1)->k4.dest, &(v2)->k4.dest)))            &&    \
+  ((PDI_MATCH(&(v1)->k4.source, &(v2)->k4.source)))         &&    \
+  ((PDI_RMATCH(&(v1)->k4.dport, &(v2)->k4.dport)))          &&    \
+  ((PDI_RMATCH(&(v1)->k4.sport, &(v2)->k4.sport)))          &&    \
+  ((PDI_MATCH(&(v1)->k4.inport, &(v2)->k4.inport)))         &&    \
+  ((PDI_MATCH(&(v1)->k4.zone, &(v2)->k4.zone)))             &&    \
+  ((PDI_MATCH(&(v1)->k4.protocol, &(v2)->k4.protocol)))     &&    \
+  ((PDI_MATCH(&(v1)->k4.bd, &(v2)->k4.bd))))
 
-#define PDI_PKEY_NTOH(v1)                          \
-    (v1)->dest = htonl((v1)->dest);                \
-    (v1)->source = htonl((v1)->source);            \
-    (v1)->dport = htons((v1)->dport);              \
-    (v1)->dest = htons((v1)->sport);               \
-    (v1)->zone = htons((v1)->zone);                \
-    (v1)->bd = htons((v1)->bd);                    \
-    (v1)->inport = htons((v1)->inport);
+#define PDI_PKEY_NTOH(v1)                                        \
+    (v1)->key.k4.dest = htonl((v1)->key.k4.dest);                \
+    (v1)->key.k4.source = htonl((v1)->key.k4.source);            \
+    (v1)->key.k4.dport = htons((v1)->key.k4.dport);              \
+    (v1)->key.k4.dest = htons((v1)->key.k4.sport);               \
+    (v1)->key.k4.zone = htons((v1)->key.k4.zone);                \
+    (v1)->key.k4.bd = htons((v1)->key.k4.bd);                    \
+    (v1)->key.k4.inport = htons((v1)->key.k4.inport);
+
+#define PDI_KEY6_EQ(v1, v2)                                       \
+  ((PDI_MATCH6_ALL(&(v1)->k6.dest, &(v2)->k6.dest)))        &&    \
+  ((PDI_MATCH6_ALL(&(v1)->k6.source, &(v2)->k6.source)))    &&    \
+  ((PDI_RMATCH_ALL(&(v1)->k6.dport, &(v2)->k6.dport)))      &&    \
+  ((PDI_RMATCH_ALL(&(v1)->k6.sport, &(v2)->k6.sport)))      &&    \
+  ((PDI_MATCH_ALL(&(v1)->k6.inport, &(v2)->k6.inport)))     &&    \
+  ((PDI_MATCH_ALL(&(v1)->k6.zone, &(v2)->k6.zone)))         &&    \
+  ((PDI_MATCH_ALL(&(v1)->k6.protocol, &(v2)->k6.protocol))) &&    \
+  ((PDI_MATCH_ALL(&(v1)->k6.bd, &(v2)->k6.bd)))
+
+#define PDI_PKEY6_EQ(v1, v2)                                      \
+  (((PDI_MATCH(&(v1)->k6.dest, &(v2)->k6.dest)))            &&    \
+  ((PDI_MATCH(&(v1)->k6.source, &(v2)->k6.source)))         &&    \
+  ((PDI_RMATCH(&(v1)->k6.dport, &(v2)->k6.dport)))          &&    \
+  ((PDI_RMATCH(&(v1)->k6.sport, &(v2)->k6.sport)))          &&    \
+  ((PDI_MATCH(&(v1)->k6.inport, &(v2)->k6.inport)))         &&    \
+  ((PDI_MATCH(&(v1)->k6.zone, &(v2)->k6.zone)))             &&    \
+  ((PDI_MATCH(&(v1)->k6.protocol, &(v2)->k6.protocol)))     &&    \
+  ((PDI_MATCH(&(v1)->k6.bd, &(v2)->k6.bd))))
+
+#define PDI_PKEY6_NTOH(v1)                                       \
+    (v1)->key.k6.dport = htons((v1)->key.k6.dport);              \
+    (v1)->key.k6.dest = htons((v1)->key.k6.sport);               \
+    (v1)->key.k6.zone = htons((v1)->key.k6.zone);                \
+    (v1)->key.k6.bd = htons((v1)->key.k4.bd);                    \
+    (v1)->key.k6.inport = htons((v1)->key.k6.inport);
 
 #define FOR_EACH_PDI_ENT(map, ent) for(ent = map->head; ent; ent = ent->next) 
 
-struct pdi_map *pdi_map_alloc(const char *name, pdi_add_map_op_t add_map, pdi_del_map_op_t del_map);
+struct pdi_map *pdi_map_alloc(const char *name, int v6, pdi_add_map_op_t add_map, pdi_del_map_op_t del_map);
 int pdi_rule_insert(struct pdi_map *map, struct pdi_rule *new, int *nr);
-int pdi_rule_delete(struct pdi_map *map, struct pdi_key *key, uint32_t pref, int *nr);
+int pdi_rule_delete(struct pdi_map *map, union pdi_key_un *key, uint32_t pref, int *nr);
 
 #endif

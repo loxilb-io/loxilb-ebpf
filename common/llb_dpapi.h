@@ -752,7 +752,7 @@ struct dp_proxy_ct_ent {
   struct dp_pb_stats st_out;
 };
 
-struct dp_fwv4_tact {
+struct dp_fw_tact {
   struct dp_cmn_act ca; /* Possible actions :
                          *  DP_SET_DROP
                          *  DP_SET_TOCP
@@ -768,7 +768,12 @@ struct dp_fwv4_tact {
 
 struct dp_fwv4_ent {
 	struct pdi_key k;
-  struct dp_fwv4_tact fwa;
+  struct dp_fw_tact fwa;
+};
+
+struct dp_fwv6_ent {
+	struct pdi6_key k;
+  struct dp_fw_tact fwa;
 };
 
 struct dp_nat_key {
