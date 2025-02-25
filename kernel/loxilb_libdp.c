@@ -26,6 +26,7 @@
 #include "libbpf.h"
 
 #include <net/if.h>
+#include <net/if_arp.h>
 #include <arpa/inet.h>
 #include <linux/unistd.h>
 #include <linux/if_ether.h>
@@ -1298,12 +1299,40 @@ llb_set_dev_up(char *ifname, bool up)
 }
 
 static int
+llb_set_dev_hw_ether(char *ifname, uint8_t *mac)
+{
+  struct ifreq ifr;
+  int fd;
+
+  if ((fd = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
+    return -1;
+  }
+
+  memset(&ifr, 0, sizeof(ifr));
+  memcpy(ifr.ifr_name, ifname, IFNAMSIZ);
+  ifr.ifr_ifindex = if_nametoindex(ifname);
+  memcpy(ifr.ifr_hwaddr.sa_data, mac, 6);
+	ifr.ifr_hwaddr.sa_family = ARPHRD_ETHER;
+
+  if (ioctl(fd, SIOCSIFHWADDR, &ifr) < 0) {
+    close(fd);
+    return -1;
+  }
+
+  close(fd);
+  return 0;
+}
+
+
+
+static int
 llb_loader_init(llb_dp_struct_t *xh)
 {
   int fd;
   int ret;
   struct ifreq ifr;
   char *dev = "/dev/net/tun";
+  uint8_t mac[6] = { 0x00, 0x00, 0xca, 0xfe, 0xfa, 0xce };
   
   if ((fd = open(dev, O_RDWR)) < 0 ) {
     return fd;
@@ -1326,6 +1355,7 @@ llb_loader_init(llb_dp_struct_t *xh)
 
   xh->mgmt_ch_fd = fd;
   llb_set_dev_up(LLB_MGMT_CHANNEL, 1);
+  llb_set_dev_hw_ether(LLB_MGMT_CHANNEL, mac);
 
   /* First unload eBPF/XDP */
   llb_dp_link_attach(LLB_MGMT_CHANNEL, XDP_LL_SEC_DEFAULT,
