@@ -132,8 +132,8 @@ do {                                         \
 
 #define PDI_MATCH6_COPY(v1, v2)              \
 do {                                         \
-  memcpy(v1->valid, v2->valid, sizeof(v1->valid)); \
-  memcpy(v1->val, v2->val, sizeof(v1->val)); \
+  memcpy((v1)->valid, (v2)->valid, sizeof((v1)->valid)); \
+  memcpy((v1)->val, (v2)->val, sizeof((v1)->val)); \
 } while (0)
 
 #define PDI_VAL_INIT(v1, v)                  \

@@ -130,7 +130,7 @@ dp_do_fw4_main(void *ctx, struct xfi *xf)
   xf->pm.phit |= LLB_DP_RES_HIT;
 
 done:
-  dp_do_map_stats(ctx, xf, LL_DP_FW4_STATS_MAP, act->ca.cidx);
+  dp_do_map_stats(ctx, xf, LL_DP_FW_STATS_MAP, act->ca.cidx);
   xf->pm.fw_rid = act->ca.cidx;
 
   RETURN_TO_MP();
@@ -160,8 +160,8 @@ dp_do_fw6_main(void *ctx, struct xfi *xf)
   LL_DBG_PRINTK("[FW6] -- Lookup\n");
   LL_DBG_PRINTK("[FW6] key-sz %d\n", sizeof(key));
   LL_DBG_PRINTK("[FW6] port %x\n", key.inport);
-  LL_DBG_PRINTK("[FW6] daddr 0x%x", key.dest);
-  LL_DBG_PRINTK("[FW6] saddr 0x%x", key.source);
+  LL_DBG_PRINTK("[FW6] daddr 0x%x", key.dest.val[0]);
+  LL_DBG_PRINTK("[FW6] saddr 0x%x", key.source.val[0]);
   LL_DBG_PRINTK("[FW6] sport %d\n", key.sport);
   LL_DBG_PRINTK("[FW6] dport %d\n", key.dport);
   LL_DBG_PRINTK("[FW6] l4proto %d\n", key.protocol);
@@ -174,16 +174,16 @@ dp_do_fw6_main(void *ctx, struct xfi *xf)
 
     fwe = bpf_map_lookup_elem(&fw_v6_map, &idx);
     if (!fwe) {
-      LL_DBG_PRINTK("[FW4] miss");
+      LL_DBG_PRINTK("[FW6] miss");
       /* End of lookup */
-      xf->pm.fw_lid = LLB_FW6_MAP_ENTRIES;
+      xf->pm.fw_lid = LLB_FW4_MAP_ENTRIES;
       RETURN_TO_MP();
       return DP_DROP;
     } else {
       if (idx == 0) {
         xf->pm.fw_mid = fwe->k.nr.val;
       } else if (i + xf->pm.fw_lid >= xf->pm.fw_mid) {
-        i = DP_MAX_LOOPS_PER_FWLKUP;
+        i = DP_MAX_LOOPS_PER_FW6LKUP;
         break;
       }
 
@@ -192,8 +192,8 @@ dp_do_fw6_main(void *ctx, struct xfi *xf)
       if (fwe->k.zone.val != 0 && 
           PDI_PKEY6_EQ(&key, &fwe->k)) {
 
-        /* End of lookup */
-        xf->pm.fw_lid = LLB_FW6_MAP_ENTRIES;
+        /* End of lookup  - Note that we are setting LLB_FW4_MAP_ENTRIES instead of LLB_FW6_MAP_ENTRIES */
+        xf->pm.fw_lid = LLB_FW4_MAP_ENTRIES;
         break;
       }
     }
@@ -205,9 +205,9 @@ dp_do_fw6_main(void *ctx, struct xfi *xf)
     if (xf->pm.fw_lid >= LLB_FW6_MAP_ENTRIES ||
         xf->pm.fw_lid > xf->pm.fw_mid) {
       /* End of lookup */
-      xf->pm.fw_lid = LLB_FW6_MAP_ENTRIES;
+      xf->pm.fw_lid = LLB_FW4_MAP_ENTRIES;
     }
-    LL_DBG_PRINTK("[FW4] done");
+    LL_DBG_PRINTK("[FW6] done");
     RETURN_TO_MP();
     return DP_DROP;
   }
@@ -238,7 +238,7 @@ dp_do_fw6_main(void *ctx, struct xfi *xf)
   xf->pm.phit |= LLB_DP_RES_HIT;
 
 done:
-  dp_do_map_stats(ctx, xf, LL_DP_FW6_STATS_MAP, act->ca.cidx);
+  dp_do_map_stats(ctx, xf, LL_DP_FW_STATS_MAP, act->ca.cidx);
   xf->pm.fw_rid = act->ca.cidx;
 
   RETURN_TO_MP();

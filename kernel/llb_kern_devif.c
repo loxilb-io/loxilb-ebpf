@@ -513,7 +513,7 @@ dp_ing_ct_main(struct __sk_buff *ctx,  struct xfi *xf)
 #endif
   } else {
     if (xf->pm.fw_rid != 0) {
-      dp_do_map_stats(ctx, xf, LL_DP_FW4_STATS_MAP, xf->pm.fw_rid);
+      dp_do_map_stats(ctx, xf, LL_DP_FW_STATS_MAP, xf->pm.fw_rid);
     }
   }
 
