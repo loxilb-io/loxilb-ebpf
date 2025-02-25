@@ -65,7 +65,7 @@ PDI_DEF_ARR_FIELD(8, 16);
 #define PDI_MATCH6(v1, v2) ({ \
     int match = 1; \
     for (int i = 0; i < 16; i++) { \
-        if ((v2)[i].valid != 0 && ((v1)[i].val & (v2)[i].valid) != (v2)[i].val) { \
+        if ((v2)->valid[i] != 0 && ((v1)->val[i] & (v2)->valid[i]) != (v2)->val[i]) { \
             match = 0; \
             break; \
         } \

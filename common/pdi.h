@@ -159,8 +159,8 @@ struct pdi_rule {
   ((PDI_MATCH_ALL(&(v1)->k6.bd, &(v2)->k6.bd)))
 
 #define PDI_PKEY6_EQ(v1, v2)                                      \
-  (((PDI_MATCH(&(v1)->k6.dest, &(v2)->k6.dest)))            &&    \
-  ((PDI_MATCH(&(v1)->k6.source, &(v2)->k6.source)))         &&    \
+  (((PDI_MATCH6(&(v1)->k6.dest, &(v2)->k6.dest)))           &&    \
+  ((PDI_MATCH6(&(v1)->k6.source, &(v2)->k6.source)))        &&    \
   ((PDI_RMATCH(&(v1)->k6.dport, &(v2)->k6.dport)))          &&    \
   ((PDI_RMATCH(&(v1)->k6.sport, &(v2)->k6.sport)))          &&    \
   ((PDI_MATCH(&(v1)->k6.inport, &(v2)->k6.inport)))         &&    \

@@ -1509,6 +1509,17 @@ llb_xh_init(llb_dp_struct_t *xh)
   xh->maps[LL_DP_FW4_STATS_MAP].pbs = calloc(LLB_FW4_MAP_ENTRIES,
                                             sizeof(struct dp_pbc_stats));
 
+  xh->maps[LL_DP_FW6_MAP].map_name = "fw_v6_map";
+  xh->maps[LL_DP_FW6_MAP].has_pb   = 1;
+  xh->maps[LL_DP_FW6_MAP].pb_xtid  = LL_DP_FW6_STATS_MAP;
+  xh->maps[LL_DP_FW6_MAP].max_entries = LLB_FW6_MAP_ENTRIES;
+
+  xh->maps[LL_DP_FW6_STATS_MAP].map_name = "fw_v6_stats_map";
+  xh->maps[LL_DP_FW6_STATS_MAP].has_pb   = 1;
+  xh->maps[LL_DP_FW6_STATS_MAP].max_entries = LLB_FW6_MAP_ENTRIES;
+  xh->maps[LL_DP_FW6_STATS_MAP].pbs = calloc(LLB_FW6_MAP_ENTRIES,
+                                            sizeof(struct dp_pbc_stats));
+
   xh->maps[LL_DP_CRC32C_MAP].map_name = "crc32c_map";
   xh->maps[LL_DP_CRC32C_MAP].has_pb   = 0;
   xh->maps[LL_DP_CRC32C_MAP].max_entries = LLB_CRC32C_ENTRIES;
