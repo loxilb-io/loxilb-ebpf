@@ -3240,4 +3240,25 @@ dp_swap_mac_header(void *ctx, struct xfi *xf)
   return 0;
 }
 
+static int __always_inline
+dp_set_llb_mac_header(void *ctx)
+{
+  void *start = DP_TC_PTR(DP_PDATA(ctx));
+  void *dend = DP_TC_PTR(DP_PDATA_END(ctx));
+  struct ethhdr *eth;
+
+  if (start + sizeof(*eth) > dend) {
+    return -1;
+  }
+
+  eth = DP_TC_PTR(start);
+  eth->h_dest[0] = 0x00;
+  eth->h_dest[1] = 0x00;
+  eth->h_dest[2] = 0xca;
+  eth->h_dest[3] = 0xfe;
+  eth->h_dest[4] = 0xfa;
+  eth->h_dest[5] = 0xce;
+  return 0;
+}
+
 #endif

@@ -87,6 +87,7 @@ dp_do_fixup_buf(void *ctx)
       return DP_DROP;
     }
 
+    dp_set_llb_mac_header(ctx);
     skb->cb[2] = LLB_MARK_SKB_FIXUP;
     //bpf_clone_redirect(skb, skb->ifindex, BPF_F_INGRESS);
     bpf_clone_redirect(skb, *oif, BPF_F_INGRESS);
