@@ -356,7 +356,7 @@ dp_do_ctops(void *ctx, struct xfi *xf, void *fa_,
       dp_record_it(ctx, xf);
       xf->pm.dp_rec = act->ca.record;
     }
-    dp_do_map_stats(ctx, xf, LL_DP_FW4_STATS_MAP, act->ca.fwrid);
+    dp_do_map_stats(ctx, xf, LL_DP_FW_STATS_MAP, act->ca.fwrid);
   }
   dp_do_map_stats(ctx, xf, LL_DP_CT_STATS_MAP, act->ca.cidx);
 #if 0

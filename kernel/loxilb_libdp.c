@@ -1500,14 +1500,19 @@ llb_xh_init(llb_dp_struct_t *xh)
 
   xh->maps[LL_DP_FW4_MAP].map_name = "fw_v4_map";
   xh->maps[LL_DP_FW4_MAP].has_pb   = 1;
-  xh->maps[LL_DP_FW4_MAP].pb_xtid  = LL_DP_FW4_STATS_MAP;
+  xh->maps[LL_DP_FW4_MAP].pb_xtid  = LL_DP_FW_STATS_MAP;
   xh->maps[LL_DP_FW4_MAP].max_entries = LLB_FW4_MAP_ENTRIES;
 
-  xh->maps[LL_DP_FW4_STATS_MAP].map_name = "fw_v4_stats_map";
-  xh->maps[LL_DP_FW4_STATS_MAP].has_pb   = 1;
-  xh->maps[LL_DP_FW4_STATS_MAP].max_entries = LLB_FW4_MAP_ENTRIES;
-  xh->maps[LL_DP_FW4_STATS_MAP].pbs = calloc(LLB_FW4_MAP_ENTRIES,
+  xh->maps[LL_DP_FW_STATS_MAP].map_name = "fw_stats_map";
+  xh->maps[LL_DP_FW_STATS_MAP].has_pb   = 1;
+  xh->maps[LL_DP_FW_STATS_MAP].max_entries = LLB_FW4_MAP_ENTRIES + LLB_FW6_MAP_ENTRIES;
+  xh->maps[LL_DP_FW_STATS_MAP].pbs = calloc(LLB_FW4_MAP_ENTRIES + LLB_FW6_MAP_ENTRIES,
                                             sizeof(struct dp_pbc_stats));
+
+  xh->maps[LL_DP_FW6_MAP].map_name = "fw_v6_map";
+  xh->maps[LL_DP_FW6_MAP].has_pb   = 1;
+  xh->maps[LL_DP_FW6_MAP].pb_xtid  = LL_DP_FW_STATS_MAP;
+  xh->maps[LL_DP_FW6_MAP].max_entries = LLB_FW6_MAP_ENTRIES;
 
   xh->maps[LL_DP_CRC32C_MAP].map_name = "crc32c_map";
   xh->maps[LL_DP_CRC32C_MAP].has_pb   = 0;
@@ -1549,10 +1554,10 @@ llb_xh_init(llb_dp_struct_t *xh)
   strcpy(xh->psecs[1].name, XDP_LL_SEC_DEFAULT);
   xh->psecs[1].setup = llb_dflt_sec_map2fd_all;
 
-  xh->ufw4 = pdi_map_alloc("ufw4", NULL, NULL);
+  xh->ufw4 = pdi_map_alloc("ufw4", 0, NULL, NULL);
   assert(xh->ufw4);
 
-  xh->ufw6 = pdi_map_alloc("ufw6", NULL, NULL);
+  xh->ufw6 = pdi_map_alloc("ufw6", 1, NULL, NULL);
   assert(xh->ufw6);
 
   if (xh->have_loader) {
@@ -2015,48 +2020,74 @@ llb_dp_pdik2_ufw4(struct pdi_rule *new, struct pdi_key *k)
 {
   memset(k, 0, sizeof(struct pdi_key));
 
-  PDI_MATCH_COPY(&k->dest, &new->key.dest);
-  PDI_MATCH_COPY(&k->source, &new->key.source);
-  PDI_RMATCH_COPY(&k->sport, &new->key.sport);
-  PDI_RMATCH_COPY(&k->dport, &new->key.dport);
-  PDI_MATCH_COPY(&k->inport, &new->key.inport);
-  PDI_MATCH_COPY(&k->protocol, &new->key.protocol);
-  PDI_MATCH_COPY(&k->zone, &new->key.zone);
+  PDI_MATCH_COPY(&k->dest, &new->key.k4.dest);
+  PDI_MATCH_COPY(&k->source, &new->key.k4.source);
+  PDI_RMATCH_COPY(&k->sport, &new->key.k4.sport);
+  PDI_RMATCH_COPY(&k->dport, &new->key.k4.dport);
+  PDI_MATCH_COPY(&k->inport, &new->key.k4.inport);
+  PDI_MATCH_COPY(&k->protocol, &new->key.k4.protocol);
+  PDI_MATCH_COPY(&k->zone, &new->key.k4.zone);
 }
 
 static void
 llb_dp_ufw42_pdik(struct pdi_rule *new, struct pdi_key *k)
 {
-  PDI_MATCH_COPY(&new->key.dest, &k->dest);
-  PDI_MATCH_COPY(&new->key.source, &k->source);
-  PDI_RMATCH_COPY(&new->key.sport, &k->sport);
-  PDI_RMATCH_COPY(&new->key.dport, &k->dport);
-  PDI_MATCH_COPY(&new->key.inport, &k->inport);
-  PDI_MATCH_COPY(&new->key.protocol, &k->protocol);
-  PDI_MATCH_COPY(&new->key.zone, &k->zone);
+  PDI_MATCH_COPY(&new->key.k4.dest, &k->dest);
+  PDI_MATCH_COPY(&new->key.k4.source, &k->source);
+  PDI_RMATCH_COPY(&new->key.k4.sport, &k->sport);
+  PDI_RMATCH_COPY(&new->key.k4.dport, &k->dport);
+  PDI_MATCH_COPY(&new->key.k4.inport, &k->inport);
+  PDI_MATCH_COPY(&new->key.k4.protocol, &k->protocol);
+  PDI_MATCH_COPY(&new->key.k4.zone, &k->zone);
 }
 
 static void
-llb_dp_pdiop2_ufw4(struct pdi_rule *new, struct dp_fwv4_ent *e) 
+llb_dp_pdik2_ufw6(struct pdi_rule *new, struct pdi6_key *k) 
 {
-  memset(&e->fwa, 0, sizeof(e->fwa));
-  e->fwa.ca.cidx = new->data.rid;
-  e->fwa.ca.mark = new->data.opts.mark;
-  e->fwa.ca.record = new->data.opts.record;
+  memset(k, 0, sizeof(struct pdi6_key));
+
+  PDI_MATCH6_COPY(&k->dest, &new->key.k6.dest);
+  PDI_MATCH6_COPY(&k->source, &new->key.k6.source);
+  PDI_RMATCH_COPY(&k->sport, &new->key.k6.sport);
+  PDI_RMATCH_COPY(&k->dport, &new->key.k6.dport);
+  PDI_MATCH_COPY(&k->inport, &new->key.k6.inport);
+  PDI_MATCH_COPY(&k->protocol, &new->key.k6.protocol);
+  PDI_MATCH_COPY(&k->zone, &new->key.k6.zone);
+}
+
+static void
+llb_dp_ufw62_pdik(struct pdi_rule *new, struct pdi6_key *k)
+{
+  PDI_MATCH6_COPY(&new->key.k6.dest, &k->dest);
+  PDI_MATCH6_COPY(&new->key.k6.source, &k->source);
+  PDI_RMATCH_COPY(&new->key.k6.sport, &k->sport);
+  PDI_RMATCH_COPY(&new->key.k6.dport, &k->dport);
+  PDI_MATCH_COPY(&new->key.k6.inport, &k->inport);
+  PDI_MATCH_COPY(&new->key.k6.protocol, &k->protocol);
+  PDI_MATCH_COPY(&new->key.k6.zone, &k->zone);
+}
+
+static void
+llb_dp_pdiop2_ufwa(struct pdi_rule *new, struct dp_fw_tact *fwa) 
+{
+  memset(fwa, 0, sizeof(*fwa));
+  fwa->ca.cidx = new->data.rid;
+  fwa->ca.mark = new->data.opts.mark;
+  fwa->ca.record = new->data.opts.record;
 
   switch (new->data.op) {
   case PDI_SET_DROP:
-    e->fwa.ca.act_type = DP_SET_DROP;
+    fwa->ca.act_type = DP_SET_DROP;
     break;
   case PDI_SET_TRAP:
-    e->fwa.ca.act_type = DP_SET_TOCP;
+    fwa->ca.act_type = DP_SET_TOCP;
     break;
   case PDI_SET_RDR:
-    e->fwa.ca.act_type = DP_SET_RDR_PORT;
-    e->fwa.port_act.oport = new->data.opts.port;
+    fwa->ca.act_type = DP_SET_RDR_PORT;
+    fwa->port_act.oport = new->data.opts.port;
     break;
   case PDI_SET_FWD:
-    e->fwa.ca.act_type = DP_SET_NOP;
+    fwa->ca.act_type = DP_SET_NOP;
     break;
   default:
     break;
@@ -2064,14 +2095,14 @@ llb_dp_pdiop2_ufw4(struct pdi_rule *new, struct dp_fwv4_ent *e)
 }
 
 static void
-llb_dp_ufw42_pdiop(struct pdi_rule *new, struct dp_fwv4_ent *e) 
+llb_dp_ufw2pdiop(struct pdi_rule *new, struct dp_fw_tact *fwa)
 {
-  new->data.rid = e->fwa.ca.cidx;
-  new->data.pref = e->fwa.ca.oaux; // Overloaded field
-  new->data.opts.mark = e->fwa.ca.mark;
-  new->data.opts.record = e->fwa.ca.record;
+  new->data.rid = fwa->ca.cidx;
+  new->data.pref = fwa->ca.oaux; // Overloaded field
+  new->data.opts.mark = fwa->ca.mark;
+  new->data.opts.record = fwa->ca.record;
 
-  switch (e->fwa.ca.act_type) {
+  switch (fwa->ca.act_type) {
   case DP_SET_DROP:
     new->data.op = PDI_SET_DROP;
     break;
@@ -2080,7 +2111,7 @@ llb_dp_ufw42_pdiop(struct pdi_rule *new, struct dp_fwv4_ent *e)
     break;
   case DP_SET_RDR_PORT:
     new->data.op = PDI_SET_RDR;
-    new->data.opts.port = e->fwa.port_act.oport;
+    new->data.opts.port = fwa->port_act.oport;
     break;
   case DP_SET_NOP:
     new->data.op = PDI_SET_FWD;
@@ -2098,6 +2129,7 @@ llb_add_mf_map_elem__(int tbl, void *k, void *v)
   int n = 0;
   int nr = 0;
   struct dp_fwv4_ent p = { 0 };
+  struct dp_fwv6_ent p6 = { 0 };
 
   if (tbl == LL_DP_FW4_MAP) {
     struct dp_fwv4_ent *e = k;
@@ -2106,7 +2138,7 @@ llb_add_mf_map_elem__(int tbl, void *k, void *v)
     if (!new) return -1;
 
     llb_dp_ufw42_pdik(new, &e->k);
-    llb_dp_ufw42_pdiop(new, e) ;
+    llb_dp_ufw2pdiop(new, &e->fwa);
 
     ret = pdi_rule_insert(xh->ufw4, new, &nr);
     if (ret != 0) {
@@ -2122,7 +2154,7 @@ llb_add_mf_map_elem__(int tbl, void *k, void *v)
       if (n == 0 || n >= nr) {
         memset(&p, 0, sizeof(p));
         llb_dp_pdik2_ufw4(new, &p.k);
-        llb_dp_pdiop2_ufw4(new, &p);
+        llb_dp_pdiop2_ufwa(new, &p.fwa);
         if (n == 0) {
           PDI_VAL_INIT(&p.k.nr, xh->ufw4->nr);
         }
@@ -2135,8 +2167,44 @@ llb_add_mf_map_elem__(int tbl, void *k, void *v)
     }
     PDI_MAP_ULOCK(xh->ufw4);
 
-    if (ret == 0) ll_map_ct_rm_any();
+  } else if (tbl == LL_DP_FW6_MAP) {
+    struct dp_fwv6_ent *e6 = k;
+    struct pdi_rule *new = calloc(1, sizeof(struct pdi_rule));
+
+    if (!new) return -1;
+
+    llb_dp_ufw62_pdik(new, &e6->k);
+    llb_dp_ufw2pdiop(new, &e6->fwa);
+
+    ret = pdi_rule_insert(xh->ufw6, new, &nr);
+    if (ret != 0) {
+      free(new); 
+      if (ret == -EEXIST) {
+        return 0;
+      }
+      return -1;
+    }
+
+    PDI_MAP_LOCK(xh->ufw6);
+    FOR_EACH_PDI_ENT(xh->ufw6, new) {
+      if (n == 0 || n >= nr) {
+        memset(&p6, 0, sizeof(p6));
+        llb_dp_pdik2_ufw6(new, &p6.k);
+        llb_dp_pdiop2_ufwa(new, &p6.fwa);
+        if (n == 0) {
+          PDI_VAL_INIT(&p6.k.nr, xh->ufw6->nr);
+        }
+        ret = bpf_map_update_elem(llb_map2fd(tbl), &n, &p6, 0);
+        if (ret != 0) {
+          ret = -EFAULT;
+        }
+      }  
+      n++;
+    }
+    PDI_MAP_ULOCK(xh->ufw6);
   }
+
+  if (ret == 0) ll_map_ct_rm_any();
   return ret;
 }
 
@@ -2211,11 +2279,15 @@ llb_add_map_elem(int tbl, void *k, void *v)
   if (tbl == LL_DP_NAT_MAP ||
       tbl == LL_DP_TMAC_MAP ||
       tbl == LL_DP_FW4_MAP  ||
+      tbl == LL_DP_FW6_MAP  ||
       tbl == LL_DP_RTV4_MAP) {
     __u32 cidx = 0;
 
     if (tbl == LL_DP_FW4_MAP) {
       struct dp_fwv4_ent *e = k;
+      cidx = e->fwa.ca.cidx;
+    } else if (tbl == LL_DP_FW6_MAP) {
+      struct dp_fwv6_ent *e = k;
       cidx = e->fwa.ca.cidx;
     } else {
       struct dp_cmn_act *ca = v;
@@ -2253,7 +2325,7 @@ llb_add_map_elem(int tbl, void *k, void *v)
     goto ulock_out;
   }
 
-  if (tbl == LL_DP_FW4_MAP) {
+  if (tbl == LL_DP_FW4_MAP || tbl == LL_DP_FW6_MAP) {
     ret = llb_add_mf_map_elem__(tbl, k, v);
   } else {
     ret = bpf_map_update_elem(llb_map2fd(tbl), k, v, 0);
@@ -2319,6 +2391,7 @@ llb_del_mf_map_elem__(int tbl, void *k)
   int n = 0;
   int nr = 0;
   struct dp_fwv4_ent p = { 0 };
+  struct dp_fwv6_ent p6 = { 0 };
 
   if (tbl == LL_DP_FW4_MAP) {
     struct dp_fwv4_ent *e = k;
@@ -2327,7 +2400,7 @@ llb_del_mf_map_elem__(int tbl, void *k)
     if (!new) return -1;
 
     llb_dp_ufw42_pdik(new, &e->k);
-    llb_dp_ufw42_pdiop(new, e) ;
+    llb_dp_ufw2pdiop(new, &e->fwa) ;
 
     ret = pdi_rule_delete(xh->ufw4, &new->key, new->data.pref, &nr);
     if (ret != 0) {
@@ -2342,7 +2415,7 @@ llb_del_mf_map_elem__(int tbl, void *k)
       if (n == 0 || n >= nr) {
         memset(&p, 0, sizeof(p));
         llb_dp_pdik2_ufw4(new, &p.k);
-        llb_dp_pdiop2_ufw4(new, &p);
+        llb_dp_pdiop2_ufwa(new, &p.fwa);
         if (n == 0) {
           PDI_VAL_INIT(&p.k.nr, xh->ufw4->nr);
         }
@@ -2360,9 +2433,50 @@ llb_del_mf_map_elem__(int tbl, void *k)
       bpf_map_update_elem(llb_map2fd(tbl), &n, &p, 0);
       n++;
     }
+  } else if (tbl == LL_DP_FW6_MAP) {
+    struct dp_fwv6_ent *e6 = k;
+    struct pdi_rule *new = calloc(1, sizeof(struct pdi_rule));
+    
+    if (!new) return -1;
 
-    if (ret == 0) ll_map_ct_rm_any();
+    llb_dp_ufw62_pdik(new, &e6->k);
+    llb_dp_ufw2pdiop(new, &e6->fwa) ;
+
+    ret = pdi_rule_delete(xh->ufw6, &new->key, new->data.pref, &nr);
+    if (ret != 0) {
+      free(new);
+      return -1;
+    }
+
+    free(new);
+
+    PDI_MAP_LOCK(xh->ufw6);
+    FOR_EACH_PDI_ENT(xh->ufw6, new) {
+      if (n == 0 || n >= nr) {
+        memset(&p6, 0, sizeof(p6));
+        llb_dp_pdik2_ufw6(new, &p6.k);
+        llb_dp_pdiop2_ufwa(new, &p6.fwa);
+        if (n == 0) {
+          PDI_VAL_INIT(&p6.k.nr, xh->ufw6->nr);
+        }
+        ret = bpf_map_update_elem(llb_map2fd(tbl), &n, &p6, 0);
+        if (ret != 0) {
+          ret = -EFAULT;
+        }
+      }
+      n++;
+    }
+    PDI_MAP_ULOCK(xh->ufw6);
+
+    while (n < LLB_FW6_MAP_ENTRIES) {
+      memset(&p6, 0, sizeof(p6));
+      bpf_map_update_elem(llb_map2fd(tbl), &n, &p6, 0);
+      n++;
+    }
   }
+
+  if (ret == 0) ll_map_ct_rm_any();
+
   return ret;
 }
 
@@ -2410,7 +2524,7 @@ llb_del_map_elem_wval(int tbl, void *k, void *v)
     return 0;
   }
 
-  if (tbl == LL_DP_FW4_MAP) {
+  if (tbl == LL_DP_FW4_MAP || tbl == LL_DP_FW6_MAP) {
     ret = llb_del_mf_map_elem__(tbl, k);
   } else {
     ret = bpf_map_delete_elem(llb_map2fd(tbl), k);

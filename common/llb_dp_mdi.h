@@ -49,6 +49,7 @@ do {                                  \
 
 #define LL_PIPE_FC_CAP(x)                     \
   ((x)->pm.phit & (LLB_DP_FC_HCAP_FLAGS) &&   \
+  (x)->pm.pipe_act & (LLB_PIPE_RDR_MASK) &&   \
   !((x)->pm.phit & LLB_DP_SESS_HIT) &&        \
   ((x)->tm.tun_type == 0) &&                  \
   (x)->l2m.dl_type == bpf_htons(ETH_P_IP) &&  \

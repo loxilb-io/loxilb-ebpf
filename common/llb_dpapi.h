@@ -33,6 +33,7 @@
 #define LLB_NAT_EP_MAP_ENTRIES (4*1024)
 #define LLB_SMAC_MAP_ENTRIES  (LLB_DMAC_MAP_ENTRIES)
 #define LLB_FW4_MAP_ENTRIES   (8*1024)
+#define LLB_FW6_MAP_ENTRIES   (1024)
 #define LLB_INTERFACES        (512)
 #define LLB_PORT_NO           (LLB_INTERFACES-1)
 #define LLB_PORT_PIDX_START   (LLB_PORT_NO - 128)
@@ -139,7 +140,8 @@ enum llb_dp_tid {
   LL_DP_SESS4_MAP,
   LL_DP_SESS4_STATS_MAP,
   LL_DP_FW4_MAP,
-  LL_DP_FW4_STATS_MAP,
+  LL_DP_FW6_MAP,
+  LL_DP_FW_STATS_MAP,
   LL_DP_CRC32C_MAP,
   LL_DP_CTCTR_MAP,
   LL_DP_CPU_MAP,
@@ -752,7 +754,7 @@ struct dp_proxy_ct_ent {
   struct dp_pb_stats st_out;
 };
 
-struct dp_fwv4_tact {
+struct dp_fw_tact {
   struct dp_cmn_act ca; /* Possible actions :
                          *  DP_SET_DROP
                          *  DP_SET_TOCP
@@ -768,7 +770,12 @@ struct dp_fwv4_tact {
 
 struct dp_fwv4_ent {
 	struct pdi_key k;
-  struct dp_fwv4_tact fwa;
+  struct dp_fw_tact fwa;
+};
+
+struct dp_fwv6_ent {
+	struct pdi6_key k;
+  struct dp_fw_tact fwa;
 };
 
 struct dp_nat_key {

@@ -279,11 +279,18 @@ struct bpf_map_def SEC("maps") fw_v4_map = {
   .max_entries = LLB_FW4_MAP_ENTRIES
 };
 
-struct bpf_map_def SEC("maps") fw_v4_stats_map = {
+struct bpf_map_def SEC("maps") fw_stats_map = {
   .type = BPF_MAP_TYPE_PERCPU_ARRAY,
   .key_size = sizeof(__u32),  /* Counter Index */
   .value_size = sizeof(struct dp_pb_stats),
   .max_entries = LLB_FW4_MAP_ENTRIES
+};
+
+struct bpf_map_def SEC("maps") fw_v6_map = {
+  .type = BPF_MAP_TYPE_ARRAY,
+  .key_size = sizeof(__u32),
+  .value_size = sizeof(struct dp_fwv6_ent),
+  .max_entries = LLB_FW6_MAP_ENTRIES
 };
 
 struct bpf_map_def SEC("maps") pgm_tbl = {
@@ -528,12 +535,19 @@ struct fw_v4_map_d {
         __uint(max_entries, LLB_FW4_MAP_ENTRIES);
 } fw_v4_map SEC(".maps");
 
-struct fw_v4_stats_map_d {
+struct fw_stats_map_d {
         __uint(type,        BPF_MAP_TYPE_PERCPU_ARRAY);
         __type(key,         __u32);
         __type(value,       struct dp_pb_stats);
+        __uint(max_entries, LLB_FW4_MAP_ENTRIES + LLB_FW6_MAP_ENTRIES);
+} fw_stats_map SEC(".maps");
+
+struct fw_v6_map_d {
+        __uint(type,        BPF_MAP_TYPE_ARRAY);
+        __type(key,         __u32);
+        __type(value,       struct dp_fwv6_ent);
         __uint(max_entries, LLB_FW4_MAP_ENTRIES);
-} fw_v4_stats_map SEC(".maps");
+} fw_v6_map SEC(".maps");
 
 struct pgm_tbl_d {
         __uint(type,        BPF_MAP_TYPE_PROG_ARRAY);
@@ -636,8 +650,8 @@ dp_do_map_stats(void *ctx,
   case LL_DP_NAT_STATS_MAP:
     map = &nat_stats_map;
     break;
-  case LL_DP_FW4_STATS_MAP:
-    map = &fw_v4_stats_map;
+  case LL_DP_FW_STATS_MAP:
+    map = &fw_stats_map;
     break;
   case LL_DP_PPLAT_MAP:
     map = &pplat_map;
@@ -1481,11 +1495,21 @@ dp_set_udp_dport(void *md, struct xfi *xf, __be16 xport)
 static int __always_inline
 dp_set_icmp_src_ip6(void *md, struct xfi *xf, __be32 *xip)
 {
+  int icmp6_csum_off = xf->pm.l4_off + offsetof(struct icmp6hdr, icmp6_cksum);
   int ip_src_off = xf->pm.l3_off + offsetof(struct ipv6hdr, saddr);
- 
+  __be32 *old_sip = xf->l34m.saddr;
+  __u32 csum = 0;
+  __u16 icmp_csum = 0;
+
+  bpf_skb_load_bytes(md, icmp6_csum_off, &icmp_csum, sizeof(icmp_csum));
+
+  csum = bpf_csum_diff((__be32 *)xip, 16, (__be32 *)old_sip, 16, icmp_csum);
+  icmp_csum = csum_fold_helper_diff((__u32)csum);
+
+  bpf_skb_store_bytes(md, icmp6_csum_off, &icmp_csum, sizeof(icmp_csum), 0);
   bpf_skb_store_bytes(md, ip_src_off, xip, sizeof(struct in6_addr), 0);
   //DP_XADDR_CP(xf->l34m.saddr, xip);
-
+ 
   return 0;
 }
 
@@ -1506,8 +1530,18 @@ dp_set_icmp_src_ip(void *md, struct xfi *xf, __be32 xip)
 static int __always_inline
 dp_set_icmp_dst_ip6(void *md, struct xfi *xf, __be32 *xip)
 {
+  int icmp6_csum_off = xf->pm.l4_off + offsetof(struct icmp6hdr, icmp6_cksum);
   int ip_dst_off = xf->pm.l3_off + offsetof(struct ipv6hdr, daddr);
+  __be32 *old_dip = xf->l34m.daddr;
+  __u32 csum = 0;
+  __u16 icmp_csum = 0;
 
+  bpf_skb_load_bytes(md, icmp6_csum_off, &icmp_csum, sizeof(icmp_csum));
+  
+  csum = bpf_csum_diff((__be32 *)xip, 16, (__be32 *)old_dip, 16, icmp_csum);
+  icmp_csum = csum_fold_helper_diff((__u32)csum);
+
+  bpf_skb_store_bytes(md, icmp6_csum_off, &icmp_csum, sizeof(icmp_csum), 0);
   bpf_skb_store_bytes(md, ip_dst_off, xip, sizeof(struct in6_addr), 0);
   //DP_XADDR_CP(xf->l34m.daddr, xip);
 
@@ -1783,7 +1817,7 @@ dp_do_dnat6(void *ctx, struct xfi *xf, __be32 *xip, __be16 xport)
       DP_LLB_SET_CRC_OFF(ctx, 0);
     }
 #endif
-  } else if (xf->l34m.nw_proto == IPPROTO_ICMP)  {
+  } else if (xf->l34m.nw_proto == IPPROTO_ICMPV6)  {
     if (!DP_XADDR_ISZR(xf->nm.nrip)) {
       dp_set_icmp_src_ip6(ctx, xf, xf->nm.nrip);
     }
@@ -1945,7 +1979,7 @@ dp_do_snat6(void *ctx, struct xfi *xf, __be32 *xip, __be16 xport)
       DP_LLB_SET_CRC_OFF(ctx, 0);
     }
 #endif
-  } else if (xf->l34m.nw_proto == IPPROTO_ICMP)  {
+  } else if (xf->l34m.nw_proto == IPPROTO_ICMPV6)  {
     dp_set_icmp_src_ip6(ctx, xf, xip);
     if (!DP_XADDR_ISZR(xf->nm.nrip)) {
       dp_set_icmp_dst_ip6(ctx, xf, xf->nm.nrip);
