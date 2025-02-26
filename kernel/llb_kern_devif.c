@@ -71,6 +71,7 @@ dp_do_if_lkup(void *ctx, struct xfi *xf)
 #define HAVE_DP_BUF_FIXUP 1
 #define LLB_MARK_SKB_FIXUP 0xbeefdead
 #define LLB_SKB_FIXUP_LEN 1000
+#define LLB_SKB_MIN_DPA_LEN 80
 
 static int __always_inline
 dp_do_fixup_buf(void *ctx)

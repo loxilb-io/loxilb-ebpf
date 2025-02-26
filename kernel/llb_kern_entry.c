@@ -160,6 +160,10 @@ int tc_packet_func_fast(struct __sk_buff *md)
 
   DP_IN_ACCOUNTING(ctx, xf);
 
+  if (md->len > LLB_SKB_FIXUP_LEN) {
+    bpf_skb_pull_data(md, LLB_SKB_MIN_DPA_LEN);
+  }
+
   dp_parse_d0(md, xf, 1);
 
   return dp_ing_fc_main(md, xf);
