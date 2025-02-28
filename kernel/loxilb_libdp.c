@@ -643,8 +643,8 @@ static int
 llb_setup_kern_sock(const char *cgroup_path)
 {
   struct bpf_map *map;
-  struct bpf_prog_load_attr attr;
   struct bpf_object *bpf_obj;
+  struct bpf_program *prog;
   int cgfd = -1;
   int pfd;
 
@@ -665,14 +665,34 @@ llb_setup_kern_sock(const char *cgroup_path)
     cgfd = xh->cgfd;
   }
 
-  memset(&attr, 0, sizeof(struct bpf_prog_load_attr));
-  attr.file = LLB_SOCK_ADDR_IMG_BPF;
-  attr.prog_type = BPF_PROG_TYPE_CGROUP_SOCK_ADDR;
-  attr.expected_attach_type = BPF_CGROUP_INET4_CONNECT;
-  attr.prog_flags = BPF_F_TEST_RND_HI32;
 
-  if (bpf_prog_load_xattr(&attr, &bpf_obj, &pfd)) {
-    log_error("sockaddr: load failed");
+  bpf_obj = bpf_object__open_file(LLB_SOCK_ADDR_IMG_BPF, NULL);
+  if (!bpf_obj) {
+    log_error("sockaddr: failed to open BPF object");
+    goto err;
+  }
+
+  prog = bpf_object__next_program(bpf_obj, NULL);
+  if (!prog) {
+    log_error("sockaddr: no BPF program found in object");
+    bpf_object__close(bpf_obj);
+    goto err;
+  }
+
+  bpf_program__set_type(prog, BPF_PROG_TYPE_CGROUP_SOCK_ADDR);
+  bpf_program__set_expected_attach_type(prog, BPF_CGROUP_INET4_CONNECT);
+  bpf_program__set_flags(prog, BPF_F_TEST_RND_HI32);
+
+  if (bpf_object__load(bpf_obj)) {
+    log_error("sockaddr: failed to load BPF object");
+    bpf_object__close(bpf_obj);
+    goto err;
+  }
+
+  pfd = bpf_program__fd(prog);
+  if (pfd < 0) {
+    log_error("sockaddr: failed to get program fd");
+    bpf_object__close(bpf_obj);
     goto err;
   }
 
