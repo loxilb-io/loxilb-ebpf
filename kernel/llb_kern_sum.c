@@ -5,8 +5,9 @@
  * SPDX-License-Identifier: (GPL-2.0 OR BSD-2-Clause)
  */
 
-#define DP_MAX_LOOPS_PER_TCALL (76)
-#define PBUF_STACK_SZ (32)
+#define DP_MAX_LOOPS_PER_TCALL (152)
+#define PBUF_STACK_SZ (16)
+#define HAVE_CSUM_NDPA
 
 static __u32 __always_inline
 get_crc32c_map(__u32 off)
@@ -21,6 +22,35 @@ get_crc32c_map(__u32 off)
 
   return *val;
 }
+
+#ifndef HAVE_CSUM_NDPA
+static int __always_inline
+dp_pktbuf_read_wrap(void *md, __u32 off, void *buf, __u32 sz)
+{
+  __u8 *start = DP_TC_PTR(DP_PDATA(md));
+  __u8 *end = DP_TC_PTR(DP_PDATA_END(md));
+  __u8 *new = NULL;
+
+  /* Verifier's max limit for packet access in 65519 and not 65535 */
+  if (off > 65519 || sz > PBUF_STACK_SZ) {
+    return -1;
+  }
+
+  if (start + off > end) {
+    return -1;
+  }
+
+  new = start + off;
+  if (new + sz > end) {
+    return -1;
+  }
+
+  memcpy(buf, new, sz);
+  return 0;
+}
+#else
+#define dp_pktbuf_read_wrap dp_pktbuf_read
+#endif
 
 static int __always_inline
 dp_sctp_csum(void *ctx, struct xfi *xf)
@@ -45,7 +75,7 @@ dp_sctp_csum(void *ctx, struct xfi *xf)
   }
 
   for (loop = 0; loop < DP_MAX_LOOPS_PER_TCALL && rlen > 0 && rlen >= PBUF_STACK_SZ; loop++) {
-    int ret = dp_pktbuf_read(ctx, off, pbuf, PBUF_STACK_SZ);
+    int ret = dp_pktbuf_read_wrap(ctx, off, pbuf, PBUF_STACK_SZ);
     if (ret < 0) {
       goto drop;
     }
@@ -61,7 +91,7 @@ dp_sctp_csum(void *ctx, struct xfi *xf)
   }
 
   for (int i = 0; i < PBUF_STACK_SZ && i < rlen && loop < DP_MAX_LOOPS_PER_TCALL; i++) {
-    int ret = dp_pktbuf_read(ctx, off, pbuf, 1);
+    int ret = dp_pktbuf_read_wrap(ctx, off, pbuf, 1);
     if (ret < 0) {
       goto drop;
     }

@@ -56,6 +56,11 @@ struct ll_xmdi {
   };
 } __attribute__((aligned(4)));
 
+#define HAVE_DP_BUF_FIXUP 1
+#define LLB_MARK_SKB_FIXUP 0xbeefdead
+#define LLB_SKB_FIXUP_LEN 1000
+#define LLB_SKB_MIN_DPA_LEN 80
+
 #ifdef HAVE_LEGACY_BPF_MAPS
 
 struct bpf_map_def SEC("maps") intf_map = {
@@ -845,6 +850,7 @@ dp_csum_tcall(void *ctx,  struct xfi *xf)
 {
   int z = 0;
   __u32 crc = 0xffffffff;
+  __u32 pkt_len = DP_GET_LEN(ctx);
 
    /* Init state-variables */
   xf->km.skey[0] = 0;
@@ -853,6 +859,7 @@ dp_csum_tcall(void *ctx,  struct xfi *xf)
   *(__u32 *)&xf->km.skey[8] = crc;
 
   bpf_map_update_elem(&xfis, &z, xf, BPF_ANY);
+  bpf_skb_pull_data(ctx, pkt_len);
 
   TCALL_CRC1();
   return DP_PASS;
