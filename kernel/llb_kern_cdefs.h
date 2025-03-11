@@ -2068,6 +2068,16 @@ dp_do_dnat64(void *md, struct xfi *xf)
 
   dp_ipv4_new_csum(md, xf, (void *)iph);
 
+#ifdef HAVE_NO_UNALIGNED_PA
+	eth = DP_TC_PTR(DP_PDATA(md));
+  dend = DP_TC_PTR(DP_PDATA_END(md));
+  iph = (void *)(eth + 1);
+	if (iph + 1 > dend) {
+    LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLERR);
+	  return -1;
+  }
+#endif
+
   if (xf->l34m.nw_proto == IPPROTO_TCP) {
     tcp = (void *)(iph + 1);
     if (tcp + 1 > dend) {
