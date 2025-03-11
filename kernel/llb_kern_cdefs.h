@@ -681,22 +681,6 @@ dp_do_map_stats(void *ctx,
   return;
 }
 
-static void __always_inline
-dp_ipv4_new_csum(struct iphdr *iph)
-{
-  __u16 *iph16 = (__u16 *)iph;
-  __u32 csum;
-  int i;
-
-  iph->check = 0;
-
-#pragma clang loop unroll(full)
-  for (i = 0, csum = 0; i < sizeof(*iph) >> 1; i++)
-    csum += *iph16++;
-
-  iph->check = ~((csum & 0xffff) + (csum >> 16));
-}
-
 #ifdef LL_TC_EBPF
 #include <linux/pkt_cls.h>
 
@@ -724,6 +708,29 @@ dp_ipv4_new_csum(struct iphdr *iph)
 #define DP_GET_LEN(md) (((struct __sk_buff *)md)->len)
 #define DP_LLB_SET_CRC_HINT(md, crc) (((struct __sk_buff *)md)->priority = crc)
 #define DP_LLB_SET_CRC_OFF(md, val) (((struct __sk_buff *)md)->mark = LLB_PIPE_CRC_DONE_FLAG | (val))
+
+static void __always_inline
+dp_ipv4_new_csum(void *md, struct xfi *xf, struct iphdr *iph)
+{
+  __u16 *iph16 = (__u16 *)iph;
+  __u32 csum;
+  int i;
+
+  iph->check = 0;
+
+#pragma clang loop unroll(full)
+  for (i = 0, csum = 0; i < sizeof(*iph) >> 1; i++)
+    csum += *iph16++;
+
+#ifdef HAVE_NO_UNALIGNED_PA
+	void *start = DP_TC_PTR(DP_PDATA(md));
+  __u16 fold_csum = ~((csum & 0xffff) + (csum >> 16));
+	bpf_skb_store_bytes(md, DP_DIFF_PTR(iph, start) + offsetof(struct iphdr, check),
+											&fold_csum, sizeof(fold_csum), 0);
+#else
+  iph->check = ~((csum & 0xffff) + (csum >> 16));
+#endif
+}
 
 static void __always_inline
 dp_llb_add_crc_off(void *md,  struct xfi *xf, int val)
@@ -1099,7 +1106,7 @@ dp_ins_ppv2(void *md, struct xfi *xf)
     }
 
     iph->tot_len = bpf_htons(xf->pm.l3_len + len);
-    dp_ipv4_new_csum((void *)iph);
+    dp_ipv4_new_csum(md, xf, (void *)iph);
 
     dend = DP_TC_PTR(DP_PDATA_END(md));
     tcp = DP_ADD_PTR(DP_PDATA(md), xf->pm.l4_off + len);
@@ -2059,7 +2066,7 @@ dp_do_dnat64(void *md, struct xfi *xf)
   iph->saddr    = xf->nm.nrip4;
   iph->daddr    = xf->nm.nxip4;
 
-  dp_ipv4_new_csum((void *)iph);
+  dp_ipv4_new_csum(md, xf, (void *)iph);
 
   if (xf->l34m.nw_proto == IPPROTO_TCP) {
     tcp = (void *)(iph + 1);
@@ -2381,6 +2388,29 @@ dp_ins_ppv2(void *md, struct xfi *xf)
 #define DP_MDATA(md) (((struct xdp_md *)md)->data_meta)
 #define DP_GET_LEN(md)  ((((struct xdp_md *)md)->data_end) - \
                          (((struct xdp_md *)md)->data)) \
+
+static void __always_inline
+dp_ipv4_new_csum(void *md, struct xfi *xf, struct iphdr *iph)
+{
+  __u16 *iph16 = (__u16 *)iph;
+  __u32 csum;
+  int i;
+
+  iph->check = 0;
+
+#pragma clang loop unroll(full)
+  for (i = 0, csum = 0; i < sizeof(*iph) >> 1; i++)
+    csum += *iph16++;
+
+#ifdef HAVE_NO_UNALIGNED_PA
+	void *start = DP_TC_PTR(DP_PDATA(md));
+  __u16 fold_csum = ~((csum & 0xffff) + (csum >> 16));
+	bpf_xdp_store_bytes(md, DP_DIFF_PTR(iph, start) + offsetof(struct iphdr, check),
+											&fold_csum, sizeof(fold_csum));
+#else
+  iph->check = ~((csum & 0xffff) + (csum >> 16));
+#endif
+}
 
 static int __always_inline
 dp_remove_vlan_tag(void *ctx, struct xfi *xf)
@@ -2741,7 +2771,7 @@ dp_do_ins_ipip(void *md,
   iph->saddr    = sip;
   iph->daddr    = rip;
 
-  dp_ipv4_new_csum((void *)iph);
+  dp_ipv4_new_csum(md, xf, (void *)iph);
 
   xf->tm.tun_encap = 1;
 
@@ -2897,7 +2927,7 @@ dp_do_ins_vxlan(void *md,
   iph->saddr    = sip;
   iph->daddr    = rip;
 
-  dp_ipv4_new_csum((void *)iph);
+  dp_ipv4_new_csum(md, xf, (void *)iph);
 
   udp = (void *)(iph + 1);
   if (udp + 1 > dend) {
@@ -2906,10 +2936,30 @@ dp_do_ins_vxlan(void *md,
   }
 
   /* Outer UDP header */
+#ifdef HAVE_NO_UNALIGNED_PA
+	uint16_t val = xf->l34m.source + VXLAN_OUDP_SPORT;
+	bpf_skb_store_bytes(md, DP_DIFF_PTR(udp, eth) + offsetof(struct udphdr, source),
+											&val, sizeof(val), 0);
+	val = bpf_htons(VXLAN_OUDP_DPORT);
+	bpf_skb_store_bytes(md, DP_DIFF_PTR(udp, eth) + offsetof(struct udphdr, dest),
+											&val, sizeof(val), 0);
+	val = 0;
+	bpf_skb_store_bytes(md, DP_DIFF_PTR(udp, eth) + offsetof(struct udphdr, check),
+											&val, sizeof(val), 0);
+	val = bpf_htons(xf->pm.l3_len +  olen - sizeof(*iph));
+	bpf_skb_store_bytes(md, DP_DIFF_PTR(udp, eth) + offsetof(struct udphdr, len),
+                      &val, sizeof(val), 0);
+	/* Re-initialize the packet pointers */
+	eth = DP_TC_PTR(DP_PDATA(md));
+  dend = DP_TC_PTR(DP_PDATA_END(md));
+	iph = (void *)(eth + 1);
+	udp = (void *)(iph + 1);
+#else
   udp->source = xf->l34m.source + VXLAN_OUDP_SPORT;
   udp->dest   = bpf_htons(VXLAN_OUDP_DPORT);
   udp->check  = 0;
   udp->len    = bpf_htons(xf->pm.l3_len +  olen - sizeof(*iph));
+#endif
 
   /* VxLAN header */
   vx = (void *)(udp + 1);
@@ -3089,7 +3139,7 @@ dp_do_ins_gtp(void *md,
   iph->saddr    = sip;
   iph->daddr    = rip;
 
-  dp_ipv4_new_csum((void *)iph);
+  dp_ipv4_new_csum(md, xf, (void *)iph);
 
   udp = (void *)(iph + 1);
   if (udp + 1 > dend) {
@@ -3098,10 +3148,30 @@ dp_do_ins_gtp(void *md,
   }
 
   /* Outer UDP header */
+#ifdef HAVE_NO_UNALIGNED_PA
+  uint16_t val = bpf_htons(GTPU_UDP_SPORT);
+  bpf_skb_store_bytes(md, DP_DIFF_PTR(udp, eth) + offsetof(struct udphdr, source),
+                      &val, sizeof(val), 0);
+  val = bpf_htons(GTPU_UDP_DPORT);
+  bpf_skb_store_bytes(md, DP_DIFF_PTR(udp, eth) + offsetof(struct udphdr, dest),
+                      &val, sizeof(val), 0);
+  val = 0;
+  bpf_skb_store_bytes(md, DP_DIFF_PTR(udp, eth) + offsetof(struct udphdr, check),
+                      &val, sizeof(val), 0);
+  val = bpf_htons(xf->pm.l3_len +  olen - sizeof(*iph));
+  bpf_skb_store_bytes(md, DP_DIFF_PTR(udp, eth) + offsetof(struct udphdr, len),
+                      &val, sizeof(val), 0);
+  /* Re-initialize the packet pointers */
+  eth = DP_TC_PTR(DP_PDATA(md));
+  dend = DP_TC_PTR(DP_PDATA_END(md));
+  iph = (void *)(eth + 1);
+  udp = (void *)(iph + 1);
+#else
   udp->source = bpf_htons(GTPU_UDP_SPORT);
   udp->dest   = bpf_htons(GTPU_UDP_DPORT);
   udp->check  = 0;
   udp->len    = bpf_htons(xf->pm.l3_len +  olen - sizeof(*iph));
+#endif
 
   /* GTP header */
   gh = (void *)(udp + 1);

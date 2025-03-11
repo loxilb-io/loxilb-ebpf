@@ -4,9 +4,55 @@
  * 
  * SPDX-License-Identifier: (GPL-2.0 OR BSD-2-Clause)
  */
+
+static int __always_inline
+modify_ip_ttl(void *ctx, struct xfi *xf)
+{
+  int l3_off = xf->pm.l3_off;
+  __be16 check;
+  __u8 ttl;
+
+  /* Load IP TTL field (offset 8 bytes into the IP header) */
+	if (bpf_skb_load_bytes(ctx, l3_off + offsetof(struct iphdr, ttl), &ttl, sizeof(ttl)) < 0) {
+		LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLRT_ERR);
+    return -1;
+ 	}
+
+  if (bpf_skb_load_bytes(ctx, l3_off + offsetof(struct iphdr, check), &check, sizeof(check)) < 0) {
+  	LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLRT_ERR);
+    return -1;
+  }
+
+  if (--ttl == 0) {
+  	LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLRT_ERR);
+    return -1;
+  }
+
+  /* Recalculate the checksum */
+  check += bpf_htons(0x0100);
+  check += (check >= 0xFFFF);
+
+  /* Store the modified TTL field back */
+  if (bpf_skb_store_bytes(ctx, l3_off + offsetof(struct iphdr, ttl), &ttl, sizeof(ttl), 0) < 0) {
+  	LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLRT_ERR);
+    return -1;
+  }
+
+  /* Store the modified checksum field back */
+  if (bpf_skb_store_bytes(ctx, l3_off + offsetof(struct iphdr, check), &check, sizeof(check), 0) < 0) {
+  	LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLRT_ERR);
+    return -1;
+  }
+
+  return 0;
+}
+
 static int __always_inline
 dp_do_rt4_fwdops(void *ctx, struct xfi *xf)
 {
+#ifdef HAVE_NO_UNALIGNED_PA
+	return modify_ip_ttl(ctx, xf);
+#else
   struct iphdr *iph = DP_TC_PTR(DP_PDATA(ctx) + xf->pm.l3_off);
   void *dend = DP_TC_PTR(DP_PDATA_END(ctx));
 
@@ -16,6 +62,7 @@ dp_do_rt4_fwdops(void *ctx, struct xfi *xf)
   }
   ip_decrease_ttl(iph);
   return 0;
+#endif
 }
 
 static int __always_inline

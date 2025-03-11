@@ -41,6 +41,9 @@ ARCH := $(shell uname -m | sed 's/x86_64/x86/')
 ifeq ($(UNAME), aarch64)
 ARCH=arm64
 endif
+ifeq ($(UNAME), loongarch64)
+ARCH=loongarch
+endif
 
 # Get Clang's default includes on this system. We'll explicitly add these dirs
 # to the includes list when compiling with `-target bpf` because otherwise some
@@ -83,7 +86,7 @@ EXTRA_DEPS +=
 # BPF-prog kern and userspace shares struct via header file:
 KERN_USER_H ?= $(wildcard common_kern_user.h)
 
-CFLAGS_ALL ?= -DHAVE_DP_FC=1 -DHAVE_DP_EXTCT=1 -DHAVE_DP_SCTP_SUM=1 -DHAVE_DP_CT_SYNC=1 -DMAX_REAL_CPUS=16 -DHAVE_DP_RSS=1 -DHAVE_DP_PERSIST_TFC=1 -DHAVE_DP_FW=1
+CFLAGS_ALL ?= -DHAVE_DP_FC=1 -DHAVE_DP_EXTCT=1 -DHAVE_DP_SCTP_SUM=1 -DHAVE_DP_CT_SYNC=1 -DMAX_REAL_CPUS=16 -DHAVE_DP_RSS=1 -DHAVE_DP_PERSIST_TFC=1 -DHAVE_DP_FW=1 -DHAVE_NO_UNALIGNED_PA=1
 ifeq ($(CLANG), clang-13)
 CFLAGS_ALL += -DHAVE_CLANG13
 endif
@@ -104,8 +107,8 @@ all: llvm-check $(USER_TARGETS) $(XDP_OBJ) $(TC_OBJ) $(TC_EOBJ) $(MON_OBJ) $(SOC
 .PHONY: clean $(CLANG) $(LLC)
 
 clean:
-	rm -rf $(LIBBPF_DIR)/build
-	$(MAKE) -C $(LIBBPF_DIR) clean
+	#rm -rf $(LIBBPF_DIR)/build
+	#$(MAKE) -C $(LIBBPF_DIR) clean
 	$(MAKE) -C $(COMMON_DIR) clean
 	rm -f $(USER_TARGETS) $(XDP_OBJ) $(USER_OBJ) $(TC_OBJ) $(TC_EOBJ) $(MON_OBJ) $(MON_OBJ) $(SOCK_OBJ) $(SM_OBJ) $(STREAM_OBJ) $(SOCKDIR_OBJ) $(USER_TARGETS_LIB)
 	rm -f loxilb_dp_debug 

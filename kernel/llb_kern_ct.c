@@ -294,34 +294,41 @@ dp_ct_tcp_sm(void *ctx, struct xfi *xf,
   struct dp_ct_dat *tdat = &atdat->ctd;
   struct dp_ct_dat *xtdat = &axtdat->ctd;
   ct_tcp_pinf_t *ts = &tdat->pi.t;
-  ct_tcp_pinf_t *rts = &xtdat->pi.t;
-  void *dend = DP_TC_PTR(DP_PDATA_END(ctx));
-  struct tcphdr *t = DP_ADD_PTR(DP_PDATA(ctx), xf->pm.l4_off);
-  uint8_t tcp_flags = xf->pm.tcp_flags;
-  ct_tcp_pinfd_t *td = &ts->tcp_cts[dir];
-  ct_tcp_pinfd_t *rtd;
-  uint32_t seq;
-  uint32_t ack;
-  uint32_t nstate = 0;
+	ct_tcp_pinf_t *rts = &xtdat->pi.t;
+	uint8_t tcp_flags = xf->pm.tcp_flags;
+	ct_tcp_pinfd_t *td = &ts->tcp_cts[dir];
+	ct_tcp_pinfd_t *rtd;
+	uint32_t seq, ack;
+	uint32_t nstate = 0;
+	uint32_t seq_net, ack_net;
+	int l4_off = xf->pm.l4_off;
 
-  if (t + 1 > dend) {
+	/* Load seq (offset 4 bytes into TCP header) */
+	if (bpf_skb_load_bytes(ctx, l4_off + 4, &seq_net, sizeof(seq_net)) < 0) {
     LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLCT_ERR);
     return -1;
-  }
+	}
 
-  seq = bpf_ntohl(t->seq);
-  ack = bpf_ntohl(t->ack_seq);
+	/* Load ack_seq (offset 8 bytes into TCP header) */
+	if (bpf_skb_load_bytes(ctx, l4_off + 8, &ack_net, sizeof(ack_net)) < 0) {
+    LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLCT_ERR);
+    return -1;
+	}
 
+	/* Convert from network byte order to host byte order */
+	seq = bpf_ntohl(seq_net);
+	ack = bpf_ntohl(ack_net);
+	
   bpf_spin_lock(&atdat->lock);
 
   if (dir == CT_DIR_IN) {
-    tdat->pi.t.tcp_cts[0].pseq = t->seq;
-    tdat->pi.t.tcp_cts[0].pack = t->ack_seq;
+    tdat->pi.t.tcp_cts[0].pseq = seq_net;
+    tdat->pi.t.tcp_cts[0].pack = ack_net;
     tdat->pb.bytes += xf->pm.l3_len;
     tdat->pb.packets += 1;
   } else {
-    xtdat->pi.t.tcp_cts[0].pseq = t->seq;
-    xtdat->pi.t.tcp_cts[0].pack = t->ack_seq;
+    xtdat->pi.t.tcp_cts[0].pseq = seq_net;
+    xtdat->pi.t.tcp_cts[0].pack = ack_net;
     xtdat->pb.bytes += xf->pm.l3_len;
     xtdat->pb.packets += 1;
   }
@@ -616,6 +623,7 @@ dp_ct_icmp6_sm(void *ctx, struct xfi *xf,
                struct dp_ct_tact *axtdat,
                ct_dir_t dir)
 {
+#if 0
   struct dp_ct_dat *tdat = &atdat->ctd;
   struct dp_ct_dat *xtdat = &axtdat->ctd;
   ct_icmp_pinf_t *is = &tdat->pi.i;
@@ -705,6 +713,8 @@ end:
     return CT_SMR_EST;
 
   return CT_SMR_INPROG;
+#endif
+	return 0;
 }
 
 static int __always_inline
@@ -715,24 +725,31 @@ dp_ct_icmp_sm(void *ctx, struct xfi *xf,
 {
   struct dp_ct_dat *tdat = &atdat->ctd;
   struct dp_ct_dat *xtdat = &axtdat->ctd;
-  ct_icmp_pinf_t *is = &tdat->pi.i;
-  ct_icmp_pinf_t *xis = &xtdat->pi.i;
-  void *dend = DP_TC_PTR(DP_PDATA_END(ctx));
-  struct icmphdr *i = DP_ADD_PTR(DP_PDATA(ctx), xf->pm.l4_off);
-  uint32_t nstate;
-  uint16_t seq;
+	ct_icmp_pinf_t *is = &tdat->pi.i;
+	ct_icmp_pinf_t *xis = &xtdat->pi.i;
+	uint32_t nstate;
+	uint16_t seq;
+	uint8_t type;
+	int l4_off = xf->pm.l4_off;
 
-  if (i + 1 > dend) {
+	/* Load the ICMP type (offset 0 bytes into ICMP header) */
+	if (bpf_skb_load_bytes(ctx, l4_off, &type, sizeof(type)) < 0) {
     LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLCT_ERR);
     return -1;
-  }
+	}
 
-  /* We fetch the sequence number even if icmp may not be
+	/* Load the ICMP sequence number (offset 6 bytes into ICMP header) */
+	if (bpf_skb_load_bytes(ctx, l4_off + 6, &seq, sizeof(seq)) < 0) {
+    LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLCT_ERR);
+    return -1;
+	}
+
+	/* We fetch the sequence number even if icmp may not be
    * echo type because we can't call another fn holding
    * spinlock
    */
-  seq = bpf_ntohs(i->un.echo.sequence);
-
+	seq = bpf_ntohs(seq);
+		
   bpf_spin_lock(&atdat->lock);
 
   if (dir == CT_DIR_IN) {
@@ -745,7 +762,7 @@ dp_ct_icmp_sm(void *ctx, struct xfi *xf,
 
   nstate = is->state;
 
-  switch (i->type) {
+  switch (type) {
   case ICMP_DEST_UNREACH:
     is->state |= CT_ICMP_DUNR;
     goto end;
@@ -771,7 +788,7 @@ dp_ct_icmp_sm(void *ctx, struct xfi *xf,
       goto end;
     }
 
-    if (i->type != ICMP_ECHO) { 
+    if (type != ICMP_ECHO) { 
       is->errs = 1;
       goto end;
     }
@@ -779,9 +796,9 @@ dp_ct_icmp_sm(void *ctx, struct xfi *xf,
     is->lseq = seq;
     break;
   case CT_ICMP_REQS:
-    if (i->type == ICMP_ECHO) {
+    if (type == ICMP_ECHO) {
       is->lseq = seq;
-    } else if (i->type == ICMP_ECHOREPLY) {
+    } else if (type == ICMP_ECHOREPLY) {
       if (is->lseq != seq) {
         is->errs = 1;
         goto end;
@@ -814,6 +831,7 @@ dp_ct_sctp_sm(void *ctx, struct xfi *xf,
               struct dp_ct_tact *axtdat,
               ct_dir_t dir)
 {
+#if 0
   struct dp_ct_dat *tdat = &atdat->ctd;
   struct dp_ct_dat *xtdat = &axtdat->ctd;
   ct_sctp_pinf_t *ss = &tdat->pi.s;
@@ -822,27 +840,52 @@ dp_ct_sctp_sm(void *ctx, struct xfi *xf,
   ct_sctp_pinfd_t *pxss = &ss->sctp_cts[CT_DIR_OUT];
   uint32_t nstate = 0;
   uint32_t npmhh = tdat->pi.npmhh;
-  void *dend = DP_TC_PTR(DP_PDATA_END(ctx));
-  struct sctphdr *s = DP_ADD_PTR(DP_PDATA(ctx), xf->pm.l4_off);
-  struct sctp_dch *c;
-  struct sctp_init_ch *ic;
-  struct sctp_cookie *ck;
-  struct sctp_param  *pm;
-  uint16_t poff = 0;
-  uint32_t nh = 0;
-  int i = 0;
+	void *dend = DP_TC_PTR(DP_PDATA_END(ctx));
+	uint16_t poff = 0;
+	uint32_t nh = 0;
+	int i = 0;
+	struct sctphdr s;
+	struct sctp_dch c;
+	struct sctp_init_ch ic;
+	struct sctp_cookie ck;
+	struct sctp_param pm;
 
-  if (s + 1 > dend) {
+	/* Load SCTP header */
+	if (bpf_skb_load_bytes(ctx, xf->pm.l4_off, &s, sizeof(s)) < 0) {
     LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLCT_ERR);
     return -1;
-  }
+	}
 
-  c = DP_TC_PTR(DP_ADD_PTR(s, sizeof(*s)));
-  
-  if (c + 1 > dend) {
+	/* Check SCTP header bounds */
+	if ((uintptr_t)&s + sizeof(s) > (uintptr_t)dend) {
     LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLCT_ERR);
     return -1;
-  }
+	}
+
+	/* Load SCTP DCH */
+	if (bpf_skb_load_bytes(ctx, xf->pm.l4_off + sizeof(s), &c, sizeof(c)) < 0) {
+    LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLCT_ERR);
+    return -1;
+	}
+
+	/* Check SCTP DCH bounds */
+	if ((uintptr_t)&c + sizeof(c) > (uintptr_t)dend) {
+    LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLCT_ERR);
+    return -1;
+	}
+
+	/* Load SCTP INIT Chunk's 'tag' field directly */
+	uint32_t tag;
+	if (bpf_skb_load_bytes(ctx, xf->pm.l4_off + sizeof(s) + sizeof(c), &tag, sizeof(tag)) < 0) {
+    LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLCT_ERR);
+    return -1;
+	}
+
+	/* Check if the 'tag' is within bounds */
+	if ((uintptr_t)&tag + sizeof(tag) > (uintptr_t)dend) {
+    LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLCT_ERR);
+    return -1;
+	}
 
   poff = xf->pm.l4_off + sizeof(*s);
 
@@ -887,7 +930,7 @@ dp_ct_sctp_sm(void *ctx, struct xfi *xf,
     }
     poff += sizeof(*c);
 
-    ss->itag = ic->tag;
+    ss->itag = bpf_ntohl(tag);
     nstate = CT_SCTP_INIT;
 
     pm = DP_TC_PTR(DP_ADD_PTR(ic, sizeof(*ic)));
@@ -1039,7 +1082,7 @@ add_nph0:
     poff += sizeof(*c);
 
     if (c->type == SCTP_INIT_CHUNK) {
-      ss->itag = ic->tag;
+      ss->itag = bpf_ntohl(tag);
       ss->otag = 0;
       nstate = CT_SCTP_INIT;
     } else {
@@ -1048,7 +1091,7 @@ add_nph0:
         goto end;
       }
 
-      ss->otag = ic->tag;
+      ss->otag = bpf_ntohl(tag);
       nstate = CT_SCTP_INITA;
     }
 
@@ -1199,7 +1242,7 @@ add_nph1:
         goto end;
       }
 
-      ss->itag = ic->tag;
+      ss->itag = bpf_ntohl(tag);
       ss->otag = 0;
       nstate = CT_SCTP_INIT;
       goto end;
@@ -1372,6 +1415,8 @@ end:
   }
 
   return CT_SMR_INPROG;
+#endif
+	return 0;
 }
 
 static int __always_inline

@@ -159,9 +159,9 @@ dp_parse_tcp(struct parser *p,
 
     xf->il34m.source = tcp->source;
     xf->il34m.dest = tcp->dest;
-    xf->il34m.seq = tcp->seq;
-    xf->il34m.ack = tcp->ack_seq;
-    xf->pm.itcp_flags = tcp_flags;
+    //xf->il34m.seq = tcp->seq;
+    //xf->il34m.ack = tcp->ack_seq;
+    //xf->pm.itcp_flags = tcp_flags;
   } else {
     if (tcp_flags & (LLB_TCP_FIN|LLB_TCP_RST)) {
       xf->pm.l4fin = 1;
@@ -169,9 +169,9 @@ dp_parse_tcp(struct parser *p,
 
     xf->l34m.source = tcp->source;
     xf->l34m.dest = tcp->dest;
-    xf->l34m.seq = tcp->seq;
-    xf->l34m.ack = tcp->ack_seq;
-    xf->pm.tcp_flags = tcp_flags;
+   // xf->l34m.seq = tcp->seq;
+   // xf->l34m.ack = tcp->ack_seq;
+   // xf->pm.tcp_flags = tcp_flags;
   }
 
   return DP_PRET_OK;
@@ -316,8 +316,8 @@ dp_parse_ipv4_d1(struct parser *p,
   xf->il34m.valid = 1;
   xf->il34m.tos = iph->tos & 0xfc;
   xf->il34m.nw_proto = iph->protocol;
-  xf->il34m.saddr4 = iph->saddr;
-  xf->il34m.daddr4 = iph->daddr;
+  //xf->il34m.saddr4 = iph->saddr;
+  //xf->il34m.daddr4 = iph->daddr;
 
   if (ip_is_first_fragment(iph)) {
     xf->pm.il4_off = DP_DIFF_PTR(DP_ADD_PTR(iph, iphl), p->start);
@@ -358,10 +358,27 @@ dp_parse_ipv6_d1(struct parser *p,
     return DP_PRET_FAIL;
   }
 
+#ifdef HAVE_NO_UNALIGNED_PA
+	struct in6_addr saddr, daddr;
+  if (bpf_skb_load_bytes(md, (uintptr_t)ip6 + offsetof(struct ipv6hdr, daddr),
+													&daddr, sizeof(daddr)) < 0) {
+		return DP_PRET_FAIL;
+  }
+
+  if (bpf_skb_load_bytes(md, (uintptr_t)ip6 + offsetof(struct ipv6hdr, saddr),
+                         &saddr, sizeof(saddr)) < 0) {
+ 		return DP_PRET_FAIL;
+  }
+
+  if (ipv6_addr_is_multicast(&daddr) || ipv6_addr_is_multicast(&saddr)) {
+  	return DP_PRET_PASS;
+  }
+#else
   if (ipv6_addr_is_multicast(&ip6->daddr) ||
       ipv6_addr_is_multicast(&ip6->saddr)) {
     return DP_PRET_PASS;
   }
+#endif
 
   xf->pm.il3_plen = bpf_ntohs(ip6->payload_len);
   xf->pm.il3_len =  xf->pm.il3_plen + sizeof(*ip6);
@@ -693,9 +710,9 @@ dp_parse_llb(struct parser *p,
       return DP_PRET_FAIL;
     }
 
+    memset(&xm, 0, sizeof(*xm));
     xm->pi.oport = xf->pm.oport;
     xm->pi.iport = xf->pm.iport;
-    xm->pi.skip = 0;
   }
 #endif
   return DP_PRET_OK;
@@ -825,10 +842,27 @@ dp_parse_ipv6(struct parser *p,
     return DP_PRET_FAIL;
   }
 
+#ifdef HAVE_NO_UNALIGNED_PA
+  struct in6_addr saddr, daddr;
+  if (bpf_skb_load_bytes(md, (uintptr_t)ip6 + offsetof(struct ipv6hdr, daddr),
+                          &daddr, sizeof(daddr)) < 0) {
+    return DP_PRET_FAIL;
+  }
+
+  if (bpf_skb_load_bytes(md, (uintptr_t)ip6 + offsetof(struct ipv6hdr, saddr),
+                         &saddr, sizeof(saddr)) < 0) {
+    return DP_PRET_FAIL;
+  }
+
+  if (ipv6_addr_is_multicast(&daddr) || ipv6_addr_is_multicast(&saddr)) {
+    return DP_PRET_PASS;
+  }
+#else
   if (ipv6_addr_is_multicast(&ip6->daddr) ||
       ipv6_addr_is_multicast(&ip6->saddr)) {
     return DP_PRET_PASS;
   }
+#endif
 
   xf->pm.l3_plen = bpf_ntohs(ip6->payload_len);
   xf->pm.l3_len =  xf->pm.l3_plen + sizeof(*ip6);
