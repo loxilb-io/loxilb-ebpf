@@ -625,7 +625,7 @@ dp_parse_outer_udp(struct parser *p,
     vx_next = vx + 1;
     xf->pm.tun_off = DP_DIFF_PTR(vx_next, DP_PDATA(md));
 
-    LL_DBG_PRINTK("[PRSR] UDP VXLAN %u\n", xf->tm.tunnel_id);
+    BPF_DBG_PRINTK("[PRSR] vxlan tun-id %u", xf->tm.tunnel_id);
     p->inp = 1;
     p->skip_l2 = 0;
     p->dbegin = vx_next;
@@ -656,7 +656,7 @@ dp_parse_llb(struct parser *p,
   struct ethhdr *eth;
   struct llb_ethhdr *llb = DP_TC_PTR(p->dbegin);
 
-  LL_DBG_PRINTK("[PRSR] LLB \n");
+  BPF_TRACE_PRINTK("[PRSR] LLB header parser");
 
 #ifdef LL_TC_EBPF
   return DP_PRET_FAIL;
@@ -683,7 +683,7 @@ dp_parse_llb(struct parser *p,
   if (1) {
     struct ll_xmdi *xm;
     if (bpf_xdp_adjust_meta(md, -(int)sizeof(*xm)) < 0) {
-      LL_DBG_PRINTK("[PRSR] adjust meta fail\n");
+      BPF_ERR_PRINTK("[PRSR] adjust meta fail");
       return DP_PRET_FAIL;
     }
 
@@ -881,7 +881,7 @@ dp_parse_d0(void *md,
 
   if (DP_NEED_MIRR(md)) {
     xf->pm.mirr = DP_GET_MIRR(md);
-    LL_DBG_PRINTK("[PRSR] LB %d %d\n", xf->pm.mirr, DP_IFI(md));
+    BPF_DBG_PRINTK("[PRSR] mirror to %d:%d", xf->pm.mirr, DP_IFI(md));
   }
 
 #ifdef HAVE_DP_IPC
@@ -938,7 +938,6 @@ dp_unparse_packet_always_slow(void *ctx,  struct xfi *xf)
   xf->pm.phit |= LLB_DP_UNPS_HIT;
 
   if (xf->pm.nf & LLB_NAT_SRC) {
-    LL_DBG_PRINTK("[DEPR] LL_SNAT 0x%lx:%x\n", xf->nm.nxip4, xf->nm.nxport);
     /* If packet is v6 */
     if (xf->l2m.dl_type == bpf_ntohs(ETH_P_IPV6)) {
         if (xf->nm.nv6) {
@@ -966,8 +965,6 @@ dp_unparse_packet_always_slow(void *ctx,  struct xfi *xf)
       }
     }
   } else if (xf->pm.nf & LLB_NAT_DST) {
-    LL_DBG_PRINTK("[DEPR] LL_DNAT 0x%x\n", xf->nm.nxip4, xf->nm.nxport);
-
     /* If packet is v6 */
     if (xf->l2m.dl_type == bpf_ntohs(ETH_P_IPV6)) {
       if (xf->nm.nv6 == 1) {
@@ -1003,8 +1000,6 @@ dp_unparse_packet_always(void *ctx,  struct xfi *xf)
 {
 
   if (xf->pm.nf & LLB_NAT_DST && xf->nm.dsr == 0) {
-    LL_DBG_PRINTK("[DEPR] LL_DNAT 0x%x\n",
-                  xf->nm.nxip4, xf->nm.nxport);
     if (xf->l2m.dl_type == bpf_ntohs(ETH_P_IPV6)) {
       dp_sunp_tcall(ctx, xf);
     } else {
@@ -1015,8 +1010,6 @@ dp_unparse_packet_always(void *ctx,  struct xfi *xf)
   }
   if (xf->tm.new_tunnel_id) {
     if (xf->pm.nf & LLB_NAT_SRC && xf->nm.dsr == 0) {
-      LL_DBG_PRINTK("[DEPR] LL_SNAT 0x%lx:%x\n",
-                   xf->nm.nxip4, xf->nm.nxport);
       if (xf->pm.rcode & (LLB_PIPE_RC_NODMAC|LLB_PIPE_RC_NH_UNK|LLB_PIPE_RC_RT_TRAP)) {
         xf->pm.pten = DP_PTEN_ALL;
         xf->pm.rcode |= LLB_PIPE_RC_RESOLVE;
@@ -1034,7 +1027,6 @@ dp_unparse_packet_always(void *ctx,  struct xfi *xf)
 
   if (xf->tm.tun_decap) {
     if (xf->tm.tun_type == LLB_TUN_GTP) {
-      LL_DBG_PRINTK("[DEPR] LL STRIP-GTP\n");
       if (dp_do_strip_gtp(ctx, xf, xf->pm.tun_off) != 0) {
         return DP_DROP;
       }
@@ -1060,8 +1052,6 @@ dp_unparse_packet(void *ctx,  struct xfi *xf, int egr)
 {
   if (xf->tm.new_tunnel_id == 0) {
     if (xf->pm.nf & LLB_NAT_SRC && xf->nm.dsr == 0) {
-      LL_DBG_PRINTK("[DEPR] LL_SNAT 0x%lx:%x\n",
-               xf->nm.nxip4, xf->nm.nxport);
       if (xf->pm.rcode & (LLB_PIPE_RC_NODMAC|LLB_PIPE_RC_NH_UNK|LLB_PIPE_RC_RT_TRAP)) {
         xf->pm.pten = DP_PTEN_ALL;
         xf->pm.rcode |= LLB_PIPE_RC_RESOLVE;
@@ -1079,19 +1069,19 @@ dp_unparse_packet(void *ctx,  struct xfi *xf, int egr)
 
   if (xf->tm.tun_decap) {
     if (xf->tm.tun_type == LLB_TUN_VXLAN) {
-      LL_DBG_PRINTK("[DEPR] LL STRIP-VXLAN\n");
+      BPF_TRACE_PRINTK("[DEPR] strip-vxlan");
       if (dp_do_strip_vxlan(ctx, xf, xf->pm.tun_off) != 0) {
         return DP_DROP;
       }
     } else if (xf->tm.tun_type == LLB_TUN_IPIP) {
-      LL_DBG_PRINTK("[DEPR] LL STRIP-IPIP\n");
+      BPF_TRACE_PRINTK("[DEPR] strip-ipip");
       if (dp_do_strip_ipip(ctx, xf) != 0) {
         return DP_DROP;
       }
     }
   } else if (xf->tm.new_tunnel_id) {
-    LL_DBG_PRINTK("[DEPR] LL_NEW-TUN 0x%x\n",
-                  bpf_ntohl(xf->tm.new_tunnel_id));
+    BPF_TRACE_PRINTK("[DEPR] new-tun %d:0x%x",
+                  xf->tm.tun_type, bpf_ntohl(xf->tm.new_tunnel_id));
     if (xf->tm.tun_type == LLB_TUN_VXLAN) {
       if (dp_do_ins_vxlan(ctx, xf,
                           xf->tm.tun_rip,
@@ -1101,8 +1091,6 @@ dp_unparse_packet(void *ctx,  struct xfi *xf, int egr)
         return DP_DROP;
       }
     } else if (xf->tm.tun_type == LLB_TUN_IPIP) {
-      LL_DBG_PRINTK("[DEPR] LL_NEW-IPTUN 0x%x\n",
-                  bpf_ntohl(xf->tm.new_tunnel_id));
       if (dp_do_ins_ipip(ctx, xf,
                          xf->tm.tun_rip,
                          xf->tm.tun_sip,

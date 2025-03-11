@@ -669,7 +669,6 @@ dp_do_map_stats(void *ctx,
   if (pb) {
     pb->bytes += xf->pm.py_bytes;
     pb->packets += 1;
-    LL_DBG_PRINTK("[STAT] %d %llu %llu\n", key, pb->bytes, pb->packets);
     return;
   }
 
@@ -809,7 +808,7 @@ dp_ring_event(void *ctx,  struct xfi *xf, int cp)
   pmd = bpf_map_lookup_elem(&pkts, &z);
   if (!pmd) return 0;
 
-  LL_DBG_PRINTK("[TRACE] START--");
+  BPF_TRACE_PRINTK("[TRACE] Ring event --");
 
   pmd->ifindex = DP_IFI(ctx);
   pmd->phit = xf->pm.phit;
@@ -834,12 +833,12 @@ dp_ring_event(void *ctx,  struct xfi *xf, int cp)
   if (cp == 0) {
     if (bpf_perf_event_output(ctx, &pkt_ring, flags,
                             pmd, sizeof(*pmd))) {
-      LL_DBG_PRINTK("[TRACE] PKT FAIL--");
+      BPF_ERR_PRINTK("[TRACE] PKT ring event failed");
     }
   } else {
     if (bpf_perf_event_output(ctx, &cp_ring, flags,
                             pmd, sizeof(*pmd))) {
-      LL_DBG_PRINTK("[TRACE] CP FAIL--");
+      BPF_ERR_PRINTK("[TRACE] CP ring event failed");
     }
   }
   return DP_DROP;
@@ -966,7 +965,7 @@ dp_redirect_port(void *tbl, struct xfi *xf)
   if (!oif) {
     return TC_ACT_SHOT;
   }
-  LL_DBG_PRINTK("[REDR] port %d OIF %d", key, *oif);
+  BPF_DBG_PRINTK("[REDR] port %d OIF %d", key, *oif);
   return bpf_redirect(*oif, 0);
 }
 
@@ -2653,7 +2652,7 @@ dp_do_strip_ipip(void *md, struct xfi *xf)
   int olen = sizeof(struct iphdr);
 
   if (dp_buf_delete_room(md, olen, BPF_F_ADJ_ROOM_FIXED_GSO)  < 0) {
-    LL_DBG_PRINTK("Failed ipip remove");
+    BPF_ERR_PRINTK("[IPIP] Failed to delete room");
     LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLERR);
     return -1;
   }
@@ -2777,7 +2776,7 @@ dp_do_strip_vxlan(void *md, struct xfi *xf, int olen)
   void *dend;
 
   if (dp_buf_delete_room(md, olen, BPF_F_ADJ_ROOM_FIXED_GSO)  < 0) {
-    LL_DBG_PRINTK("Failed MAC remove\n");
+    BPF_ERR_PRINTK("[VXLAN] Failed to remove header");
     LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLERR);
     return -1;
   }
@@ -2989,7 +2988,7 @@ dp_do_strip_gtp(void *md, struct xfi *xf, int olen)
   }
 
   if (dp_buf_delete_room(md, olen - sizeof(*eth), BPF_F_ADJ_ROOM_FIXED_GSO)  < 0) {
-    LL_DBG_PRINTK("Failed gtph remove\n");
+    BPF_ERR_PRINTK("[GTP] Failed to remove hdr");
     LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLERR);
     return -1;
   }

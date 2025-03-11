@@ -44,7 +44,6 @@ pdi_key2str(struct pdi_map *map, pdi_key_t *key, char *fstr)
     PDI_MATCH_PRINT(&key->k4.zone, "zone", fstr, l, none);
     PDI_MATCH_PRINT(&key->k4.bd, "bd", fstr, l, none);
   } else {
-    printf("ipv6\n");
     PDI_MATCH6_PRINT(&key->k6.dest, "dest6", fstr, l, none);
     PDI_MATCH6_PRINT(&key->k6.source, "source6", fstr, l, none);
     PDI_RMATCH_PRINT(&key->k6.dport, "dport", fstr, l, none);
@@ -194,7 +193,6 @@ pdi_rule_delete(struct pdi_map *map, union pdi_key_un *key, uint32_t pref, int *
         map->pdi_del_map_em(&val->val);
       }
       free(val);
-      printf("Hash del\n");
     }
     free(node);
     PDI_MAP_ULOCK(map);
@@ -231,12 +229,10 @@ pdi_add_val(struct pdi_map *map, union pdi_key_un *kval)
 
   rule = pdi_rule_get__(map, kval);
   if (rule != NULL) {
-    printf("Found match --\n");
     pdi_rule2str(map, rule);
 
     HASH_FIND(hh, rule->hash, kval, sizeof(union pdi_key_un), hval);
     if (hval) {
-      printf("hval exists\n");
       if (map->pdi_add_map_em) {
         map->pdi_add_map_em(kval, &rule->data, sizeof(rule->data));
       }
@@ -267,12 +263,10 @@ pdi_del_val(struct pdi_map *map, union pdi_key_un *kval)
 
   rule = pdi_rule_get__(map, kval);
   if (rule != NULL) {
-    printf("Found match --\n");
     pdi_rule2str(map, rule);
 
     HASH_FIND(hh, rule->hash, kval, sizeof(union pdi_key_un), hval);
     if (hval == NULL) {
-      printf("hval does not exist\n");
       PDI_MAP_ULOCK(map);
       return -EINVAL;
     }
@@ -312,7 +306,6 @@ pdi_map_run(struct pdi_map *map)
           map->pdi_del_map_em(&val->val);
         }
         pdi_key2str(map, &val->val, fmtstr);
-        printf("Expired entry %s\n", fmtstr);
         free(val);
       }
     }

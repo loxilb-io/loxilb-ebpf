@@ -123,7 +123,6 @@ typedef struct llb_sockmap_key smap_key_t;
 
 static proxy_struct_t *proxy_struct;
 
-//#define HAVE_PROXY_MAPFD
 #ifdef HAVE_PROXY_MAPFD
 static int
 fd_in_use(int fd)
@@ -178,8 +177,6 @@ get_mapped_proxy_fd(int fd, int check_slot)
     log_error("mapfd (%d) dup2 failed", fd);
     return fd;
   }
-
-  //log_debug("mapfd tid %d %d->%d\n", tid, fd, dfd);
 
   close(fd);
   return dfd;
@@ -1382,7 +1379,6 @@ proxy_dump_entry(proxy_info_cb_t cb)
           }
         }
       }
-      //printf("proxy_dump_entry\n");
       fd_ent = fd_ent->next;
     }
     node = node->next;

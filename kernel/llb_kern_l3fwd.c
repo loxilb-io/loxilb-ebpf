@@ -62,7 +62,7 @@ dp_pipe_set_l32_tun_nh(void *ctx, struct xfi *xf,
   memcpy(xf->pm.lkup_dmac, nl2->dmac, 6);
   xf->pm.bd = nl2->bd;
 
-  LL_DBG_PRINTK("[RTFW] new-vx nh %u\n", xf->pm.nh_num);
+  BPF_DBG_PRINTK("[RTFW] new-vx nh %u\n", xf->pm.nh_num);
   return 0;
 }
 
@@ -103,7 +103,7 @@ dp_do_rtops(void *ctx, struct xfi *xf, void *fa_, struct dp_rt_tact *act)
   struct dp_fc_tacts *fa = fa_;
 #endif
 
-  LL_DBG_PRINTK("[RTFW] action %d pipe %x\n",
+  BPF_DBG_PRINTK("[RTFW] action %d pipe %x\n",
                 act->ca.act_type, xf->pm.pipe_act);
 
   if (act->ca.act_type == DP_SET_DROP) {
@@ -185,11 +185,11 @@ dp_do_rtv6(void *ctx, struct xfi *xf, void *fa_)
     }
   }
 
-  LL_DBG_PRINTK("[RT6FW] --Lookup");
-  LL_DBG_PRINTK("[RT6FW] --addr0 %x", key->addr[0]);
-  LL_DBG_PRINTK("[RT6FW] --addr1 %x", key->addr[1]);
-  LL_DBG_PRINTK("[RT6FW] --addr2 %x", key->addr[2]);
-  LL_DBG_PRINTK("[RT6FW] --addr3 %x", key->addr[3]);
+  BPF_DBG_PRINTK("[RT6FW] --Lookup");
+  BPF_DBG_PRINTK("[RT6FW] --addr0 %x", key->addr[0]);
+  BPF_DBG_PRINTK("[RT6FW] --addr1 %x", key->addr[1]);
+  BPF_DBG_PRINTK("[RT6FW] --addr2 %x", key->addr[2]);
+  BPF_DBG_PRINTK("[RT6FW] --addr3 %x", key->addr[3]);
 
   xf->pm.table_id = LL_DP_RTV6_MAP;
 
@@ -224,8 +224,8 @@ dp_do_rtv4(void *ctx, struct xfi *xf, void *fa_)
 
   *(__u32 *)&key->v4k[2] = dp_rtv4_get_ipkey(xf);
   
-  LL_DBG_PRINTK("[RTFW] Lookup");
-  LL_DBG_PRINTK("[RTFW] Zone %d 0x%x",
+  BPF_DBG_PRINTK("[RTFW] Lookup");
+  BPF_DBG_PRINTK("[RTFW] Zone %d 0x%x",
                  xf->pm.zone, *(__u32 *)&key->v4k[2]);
 
   xf->pm.table_id = LL_DP_RTV4_MAP;
@@ -260,7 +260,7 @@ dp_pipe_set_nat(void *ctx, struct xfi *xf,
   xf->nm.cdis = na->cdis;
   xf->nm.ppv2 = na->ppv2 ? 1 : 0;
   xf->nm.npmhh = na->nmh;
-  LL_DBG_PRINTK("[CT] NAT ACT %x", xf->pm.nf);
+  BPF_DBG_PRINTK("[CT] NAT ACT %x", xf->pm.nf);
 
   return 0;
 }
@@ -274,7 +274,7 @@ dp_do_ctops(void *ctx, struct xfi *xf, void *fa_,
 #endif
 
   if (!act) {
-    LL_DBG_PRINTK("[CT] miss");
+    BPF_DBG_PRINTK("[CT] miss");
     goto ct_trk;
   }
 
@@ -382,19 +382,19 @@ dp_do_ing_ct(void *ctx, struct xfi *xf, void *fa_)
 
   CT_KEY_GEN(&key, xf);
 
-  LL_DBG_PRINTK("[CT] Lookup");
-  LL_DBG_PRINTK("[CT] daddr %x", key.daddr[0]);
-  LL_DBG_PRINTK("[CT] saddr %x", key.saddr[0]);
-  LL_DBG_PRINTK("[CT] sport %d", key.sport);
-  LL_DBG_PRINTK("[CT] dport %d", key.dport);
-  LL_DBG_PRINTK("[CT] l4proto %d", key.l4proto);
-  LL_DBG_PRINTK("[CT] ident %lu", key.ident);
-  LL_DBG_PRINTK("[CT] type %lu", key.type);
+  BPF_DBG_PRINTK("[CT] Lookup");
+  BPF_DBG_PRINTK("[CT] daddr %x", key.daddr[0]);
+  BPF_DBG_PRINTK("[CT] saddr %x", key.saddr[0]);
+  BPF_DBG_PRINTK("[CT] sport %d", key.sport);
+  BPF_DBG_PRINTK("[CT] dport %d", key.dport);
+  BPF_DBG_PRINTK("[CT] l4proto %d", key.l4proto);
+  BPF_DBG_PRINTK("[CT] ident %lu", key.ident);
+  BPF_DBG_PRINTK("[CT] type %lu", key.type);
 
   xf->pm.table_id = LL_DP_CT_MAP;
   act = bpf_map_lookup_elem(&ct_map, &key);
   if (!act) {
-    LL_DBG_PRINTK("[CT] miss");
+    BPF_DBG_PRINTK("[CT] miss");
   }
 
   return dp_do_ctops(ctx, xf, fa_, act);

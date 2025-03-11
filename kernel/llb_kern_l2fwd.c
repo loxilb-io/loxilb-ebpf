@@ -17,24 +17,25 @@ dp_do_smac_lkup(void *ctx, struct xfi *xf, void *fc)
   memcpy(key.smac, xf->l2m.dl_src, 6);
   key.bd = xf->pm.bd;
 
-  LL_DBG_PRINTK("[SMAC] -- Lookup\n");
-  LL_DBG_PRINTK("[SMAC] %x:%x:%x\n",
+  BPF_TRACE_PRINTK("[SMAC] lookup--");
+  BPF_TRACE_PRINTK("[SMAC] %x:%x:%x",
                  key.smac[0], key.smac[1], key.smac[2]);
-  LL_DBG_PRINTK("[SMAC] %x:%x:%x\n",
+  BPF_TRACE_PRINTK("[SMAC] %x:%x:%x",
                  key.smac[3], key.smac[4], key.smac[5]);
-  LL_DBG_PRINTK("[SMAC] BD%d\n", key.bd);
+  BPF_TRACE_PRINTK("[SMAC] bd-%d", key.bd);
 
   xf->pm.table_id = LL_DP_SMAC_MAP;
 
   sma = bpf_map_lookup_elem(&smac_map, &key);
   if (!sma) {
     /* Default action */
+    BPF_DBG_PRINTK("[SMAC] lkup miss");
     LLBS_PPLN_PASSC(xf, LLB_PIPE_RC_NOSMAC);
     return 0;
   }
 
   xf->pm.phit |= LLB_DP_SMAC_HIT;
-  LL_DBG_PRINTK("[SMAC] action %d\n", sma->ca.act_type);
+  BPF_TRACE_PRINTK("[SMAC] action %d", sma->ca.act_type);
 
   if (sma->ca.act_type == DP_SET_DROP) {
     LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_ACT_DROP);
@@ -61,7 +62,6 @@ dp_pipe_set_l22_tun_nh(void *ctx, struct xfi *xf, struct dp_rt_nh_act *rnh)
    */
   /*xf->pm.bd = rnh->bd;*/
   xf->tm.new_tunnel_id = rnh->tid;
-  LL_DBG_PRINTK("[TMAC] new-vx nh %u\n", xf->pm.nh_num);
   return 0;
 }
 
@@ -71,7 +71,6 @@ dp_pipe_set_rm_vx_tun(void *ctx, struct xfi *xf, struct dp_rt_nh_act *rnh)
   xf->pm.phit &= ~LLB_DP_TMAC_HIT;
   xf->pm.bd = rnh->bd;
 
-  LL_DBG_PRINTK("[TMAC] rm-vx newbd %d \n", xf->pm.bd);
   return dp_pop_outer_metadata(ctx, xf, 1);
 }
 
@@ -95,23 +94,24 @@ __dp_do_tmac_lkup(void *ctx, struct xfi *xf,
     key.tun_type  = 0;
   }
 
-  LL_DBG_PRINTK("[TMAC] -- Lookup\n");
-  LL_DBG_PRINTK("[TMAC] %x:%x:%x\n",
+  BPF_TRACE_PRINTK("[TMAC] lookup--");
+  BPF_TRACE_PRINTK("[TMAC] %x:%x:%x\n",
                  key.mac[0], key.mac[1], key.mac[2]);
-  LL_DBG_PRINTK("[TMAC] %x:%x:%x\n",
+  BPF_TRACE_PRINTK("[TMAC] %x:%x:%x\n",
                  key.mac[3], key.mac[4], key.mac[5]);
-  LL_DBG_PRINTK("[TMAC] %x:%x\n", key.tunnel_id, key.tun_type);
+  BPF_TRACE_PRINTK("[TMAC] %x:%x\n", key.tunnel_id, key.tun_type);
 
   xf->pm.table_id = LL_DP_TMAC_MAP;
 
   tma = bpf_map_lookup_elem(&tmac_map, &key);
   if (!tma) {
     /* No L3 lookup */
+    BPF_TRACE_PRINTK("[TMAC] lkup failed");
     return 0;
   }
 
   xf->pm.phit |= LLB_DP_TMAC_HIT;
-  LL_DBG_PRINTK("[TMAC] action %d %d\n", tma->ca.act_type, tma->ca.cidx);
+  BPF_TRACE_PRINTK("[TMAC] action %d %d", tma->ca.act_type, tma->ca.cidx);
 
   if (tma->ca.cidx != 0) {
     dp_do_map_stats(ctx, xf, LL_DP_TMAC_STATS_MAP, tma->ca.cidx);
@@ -165,7 +165,6 @@ dp_set_egr_vlan(void *ctx, struct xfi *xf,
   LLBS_PPLN_RDR(xf);
   xf->pm.oport = oport;
   xf->pm.bd = vlan;
-  LL_DBG_PRINTK("[SETVLAN] OP %u V %u\n", oport, vlan);
   return 0;
 }
 
@@ -182,24 +181,24 @@ dp_do_dmac_lkup(void *ctx, struct xfi *xf, void *fa_)
   key.bd = xf->pm.bd;
   xf->pm.table_id = LL_DP_DMAC_MAP;
 
-  LL_DBG_PRINTK("[DMAC] -- Lookup \n");
-  LL_DBG_PRINTK("[DMAC] %x:%x:%x\n",
+  BPF_TRACE_PRINTK("[DMAC] lookup--");
+  BPF_TRACE_PRINTK("[DMAC] %x:%x:%x",
                  key.dmac[0], key.dmac[1], key.dmac[2]);
-  LL_DBG_PRINTK("[DMAC] %x:%x:%x\n", 
+  BPF_TRACE_PRINTK("[DMAC] %x:%x:%x", 
                  key.dmac[3], key.dmac[4], key.dmac[5]);
-  LL_DBG_PRINTK("[DMAC] BD %d\n", key.bd);
+  BPF_TRACE_PRINTK("[DMAC] BD %d", key.bd);
 
   dma = bpf_map_lookup_elem(&dmac_map, &key);
   if (!dma) {
     /* No DMAC lookup */
-    LL_DBG_PRINTK("[DMAC] not found\n");
+    BPF_DBG_PRINTK("[DMAC] not found");
     LLBS_PPLN_PASSC(xf, LLB_PIPE_RC_NODMAC);
     return 0;
   }
 
   xf->pm.phit |= LLB_DP_DMAC_HIT;
-  LL_DBG_PRINTK("[DMAC] action %d pipe %d\n",
-                 dma->ca.act_type, xf->pm.pipe_act);
+  BPF_TRACE_PRINTK("[DMAC] action %d pipe %d",
+                  dma->ca.act_type, xf->pm.pipe_act);
 
   if (dma->ca.act_type == DP_SET_DROP) {
     LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_ACT_DROP);
@@ -210,7 +209,6 @@ dp_do_dmac_lkup(void *ctx, struct xfi *xf, void *fa_)
 
     LLBS_PPLN_RDR(xf);
     xf->pm.oport = ra->oport;
-    LL_DBG_PRINTK("[DMAC] oport %lu\n", xf->pm.oport);
     return 0;
   } else if (dma->ca.act_type == DP_SET_ADD_L2VLAN || 
              dma->ca.act_type == DP_SET_RM_L2VLAN) {
@@ -279,7 +277,7 @@ dp_do_nh_lkup(void *ctx, struct xfi *xf, void *fa_)
 
   key.nh_num = (__u32)xf->pm.nh_num;
 
-  LL_DBG_PRINTK("[NHFW] -- Lookup ID %d\n", key.nh_num);
+  BPF_TRACE_PRINTK("[NHFW] lkup %d", key.nh_num);
   xf->pm.table_id = LL_DP_NH_MAP;
 
   nha = bpf_map_lookup_elem(&nh_map, &key);
@@ -290,7 +288,7 @@ dp_do_nh_lkup(void *ctx, struct xfi *xf, void *fa_)
   }
 
   xf->pm.phit |= LLB_DP_NEIGH_HIT;
-  LL_DBG_PRINTK("[NHFW] action %d pipe %x\n",
+  BPF_TRACE_PRINTK("[NHFW] action %d pipe %x",
                 nha->ca.act_type, xf->pm.pipe_act);
 
   if (nha->ca.act_type == DP_SET_DROP) {
@@ -374,7 +372,6 @@ dp_ing_l2_top(void *ctx,  struct xfi *xf, void *fa)
 static int __always_inline
 dp_ing_l2(void *ctx,  struct xfi *xf, void *fa)
 {
-  LL_DBG_PRINTK("[ING L2]");
   dp_ing_l2_top(ctx, xf, fa);
   return dp_ing_fwd(ctx, xf, fa);
 }

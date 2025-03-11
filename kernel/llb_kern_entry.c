@@ -31,13 +31,7 @@
 static int __always_inline
 dp_ing_pkt_main(struct __sk_buff *md, struct xfi *xf)
 {
-  LL_DBG_PRINTK("[PRSR] START cpu %d \n", bpf_get_smp_processor_id());
-  LL_DBG_PRINTK("[PRSR] fi  %d\n", sizeof(*xf));
-  LL_DBG_PRINTK("[PRSR] fm  %d\n", sizeof(xf->fm));
-  LL_DBG_PRINTK("[PRSR] l2m %d\n", sizeof(xf->l2m));
-  LL_DBG_PRINTK("[PRSR] l34m %d\n", sizeof(xf->l34m));
-  LL_DBG_PRINTK("[PRSR] tm  %d\n", sizeof(xf->tm));
-  LL_DBG_PRINTK("[PRSR] qm  %d\n", sizeof(xf->qm));
+  BPF_TRACE_PRINTK("[PRSR] start%d", bpf_get_smp_processor_id());
 
   if (xf->pm.phit & LLB_DP_FC_HIT) {
     dp_parse_d0(md, xf, 0);
@@ -66,7 +60,7 @@ int  xdp_packet_func(struct xdp_md *ctx)
   int z = 0;
   struct xfi *xf;
 
-  LL_FC_PRINTK("[PRSR] xdp start\n");
+  BPF_TRACE_PRINTK("[PRSR] xdp start");
 
   xf = bpf_map_lookup_elem(&xfis, &z);
   if (!xf) {

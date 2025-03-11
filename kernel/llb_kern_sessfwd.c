@@ -15,7 +15,7 @@
 static int __always_inline
 dp_pipe_set_rm_gtp_tun(void *ctx, struct xfi *xf)
 {
-  LL_DBG_PRINTK("[SESS] rm-gtp \n");
+  BPF_TRACE_PRINTK("[SESS] rm-gtp");
   dp_pop_outer_metadata(ctx, xf, 0);
   xf->tm.tun_type = LLB_TUN_GTP;
   return 0;
@@ -24,7 +24,7 @@ dp_pipe_set_rm_gtp_tun(void *ctx, struct xfi *xf)
 static int __always_inline
 dp_pipe_set_rm_ipip_tun(void *ctx, struct xfi *xf)
 {
-  LL_DBG_PRINTK("[SESS] rm-ipip \n");
+  BPF_TRACE_PRINTK("[SESS] rm-ipip");
   dp_pop_outer_metadata(ctx, xf, 0);
   xf->tm.tun_type = LLB_TUN_IPIP;
   return 0;
@@ -55,16 +55,15 @@ dp_do_sess4_lkup(void *ctx, struct xfi *xf)
     key.teid = 0;
   }
 
-  LL_DBG_PRINTK("[SESS4] -- Lookup\n");
-  LL_DBG_PRINTK("[SESS4] daddr %x\n", key.daddr);
-  LL_DBG_PRINTK("[SESS4] saddr %x\n", key.saddr);
-  LL_DBG_PRINTK("[SESS4] teid 0x%x\n", key.teid);
+  BPF_TRACE_PRINTK("[SESS4] lookup--");
+  BPF_TRACE_PRINTK("[SESS4] daddr %x saddr %x", key.daddr,  key.saddr);
+  BPF_TRACE_PRINTK("[SESS4] teid 0x%x", key.teid);
 
   xf->pm.table_id = LL_DP_SESS4_MAP;
 
   act = bpf_map_lookup_elem(&sess_v4_map, &key);
   if (!act) {
-    LL_DBG_PRINTK("[SESS4] miss");
+    BPF_DBG_PRINTK("[SESS4] lkup miss");
     return 0;
   }
 
