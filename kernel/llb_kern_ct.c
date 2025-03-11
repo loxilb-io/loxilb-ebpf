@@ -68,7 +68,7 @@ dp_run_ct_helper(struct xfi *xf)
 
   act = bpf_map_lookup_elem(&ct_map, &key);
   if (!act) {
-    LL_DBG_PRINTK("[FCH4] miss");
+    BPF_ERR_PRINTK("[FCH] ct-miss");
     return -1;
   }
 
@@ -1517,12 +1517,12 @@ dp_ct_est(struct xfi *xf,
             axdat->ctd.xi.nat_xip[0] = mhvip;
             axdat->nat_act.xip[0] = mhvip;
 
-            LL_DBG_PRINTK("[CTRK] xASSOC %d 0x%x->0x%x", i, key->saddr[0], key->daddr[0]);
+            BPF_DBG_PRINTK("[CTRK] xASSOC %d 0x%x->0x%x", i, key->saddr[0], key->daddr[0]);
             axdat->nat_act.rip[0] = primary_src;
             axdat->ctd.xi.nat_rip[0] = primary_src;
             bpf_map_update_elem(&ct_map, xkey, axdat, BPF_ANY);
 
-            LL_DBG_PRINTK("[CTRK] ASSOC 0x%x->0x%x",key->saddr[0], key->daddr[0]);
+            BPF_DBG_PRINTK("[CTRK] ASSOC 0x%x->0x%x",key->saddr[0], key->daddr[0]);
             bpf_map_update_elem(&ct_map, key, adat, BPF_ANY);
           }
         }
@@ -1553,12 +1553,12 @@ dp_ct_est(struct xfi *xf,
           axdat->ctd.xi.nat_xip[0] = mhvip;
           axdat->nat_act.xip[0] = mhvip;
 
-          LL_DBG_PRINTK("[CTRK] xASSOC %d 0x%x->0x%x", i, key->saddr[0], key->daddr[0]);
+          BPF_DBG_PRINTK("[CTRK] xASSOC %d 0x%x->0x%x", i, key->saddr[0], key->daddr[0]);
           axdat->nat_act.rip[0] = primary_src;
           axdat->ctd.xi.nat_rip[0] = primary_src;
           bpf_map_update_elem(&ct_map, xkey, axdat, BPF_ANY);
 
-          LL_DBG_PRINTK("[CTRK] ASSOC 0x%x->0x%x",key->saddr[0], key->daddr[0]);
+          BPF_DBG_PRINTK("[CTRK] ASSOC 0x%x->0x%x",key->saddr[0], key->daddr[0]);
           bpf_map_update_elem(&ct_map, key, adat, BPF_ANY);
         }
       }
@@ -1699,7 +1699,7 @@ dp_ct_in(void *ctx, struct xfi *xf)
   atdat = bpf_map_lookup_elem(&ct_map, &key);
   if (atdat == NULL) {
 
-    LL_DBG_PRINTK("[CTRK] new-ct4");
+    BPF_TRACE_PRINTK("[CTRK] new-ct ent");
     adat->ca.ftrap = 0;
     adat->ca.oaux = 0;
     adat->ca.cidx = dp_ct_get_newctr(&adat->ctd.nid);
@@ -1799,17 +1799,17 @@ dp_ct_in(void *ctx, struct xfi *xf)
     axtdat->lts = atdat->lts;
     if (atdat->ctd.dir == CT_DIR_IN) {
       xf->pm.dir = CT_DIR_IN;
-      LL_DBG_PRINTK("[CTRK] in-dir");
+      BPF_TRACE_PRINTK("[CTRK] ct in-dir");
       xf->pm.phit |= LLB_DP_CTSI_HIT;
       smr = dp_ct_sm(ctx, xf, atdat, axtdat, CT_DIR_IN);
     } else {
-      LL_DBG_PRINTK("[CTRK] out-dir");
+      BPF_TRACE_PRINTK("[CTRK] ct out-dir");
       xf->pm.dir = CT_DIR_OUT;
       xf->pm.phit |= LLB_DP_CTSO_HIT;
       smr = dp_ct_sm(ctx, xf, axtdat, atdat, CT_DIR_OUT);
     }
 
-    LL_DBG_PRINTK("[CTRK] smr %d", smr);
+    BPF_TRACE_PRINTK("[CTRK] ct smr %d", smr);
 
     if (smr == CT_SMR_EST) {
       if (xi->nat_flags) {

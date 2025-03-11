@@ -49,14 +49,11 @@ dp_do_fw4_main(void *ctx, struct xfi *xf)
   PDI_RVAL_INIT(&key.sport, bpf_htons(xf->l34m.source));
   PDI_VAL_INIT(&key.protocol, xf->l34m.nw_proto);
 
-  LL_DBG_PRINTK("[FW4] -- Lookup\n");
-  LL_DBG_PRINTK("[FW4] key-sz %d\n", sizeof(key));
-  LL_DBG_PRINTK("[FW4] port %x\n", key.inport);
-  LL_DBG_PRINTK("[FW4] daddr 0x%x", key.dest);
-  LL_DBG_PRINTK("[FW4] saddr 0x%x", key.source);
-  LL_DBG_PRINTK("[FW4] sport %d\n", key.sport);
-  LL_DBG_PRINTK("[FW4] dport %d\n", key.dport);
-  LL_DBG_PRINTK("[FW4] l4proto %d\n", key.protocol);
+  BPF_TRACE_PRINTK("[FW4] lookup--");
+  BPF_TRACE_PRINTK("[FW4] port %x", key.inport);
+  BPF_TRACE_PRINTK("[FW4] daddr 0x%x saddr 0x%x", key.dest, key.source);
+  BPF_TRACE_PRINTK("[FW4] sport %d dport %d", key.sport, key.dport);
+  BPF_TRACE_PRINTK("[FW4] l4proto %d", key.protocol);
 
   xf->pm.table_id = LL_DP_FW4_MAP;
 
@@ -66,7 +63,7 @@ dp_do_fw4_main(void *ctx, struct xfi *xf)
 
     fwe = bpf_map_lookup_elem(&fw_v4_map, &idx);
     if (!fwe) {
-      LL_DBG_PRINTK("[FW4] miss");
+      BPF_DBG_PRINTK("[FW4] lkup miss");
       /* End of lookup */
       xf->pm.fw_lid = LLB_FW4_MAP_ENTRIES;
       RETURN_TO_MP();
@@ -99,7 +96,7 @@ dp_do_fw4_main(void *ctx, struct xfi *xf)
       /* End of lookup */
       xf->pm.fw_lid = LLB_FW4_MAP_ENTRIES;
     }
-    LL_DBG_PRINTK("[FW4] done");
+    BPF_TRACE_PRINTK("[FW4] lkup done");
     RETURN_TO_MP();
     return DP_DROP;
   }
@@ -157,14 +154,14 @@ dp_do_fw6_main(void *ctx, struct xfi *xf)
   PDI_RVAL_INIT(&key.sport, bpf_htons(xf->l34m.source));
   PDI_VAL_INIT(&key.protocol, xf->l34m.nw_proto);
 
-  LL_DBG_PRINTK("[FW6] -- Lookup\n");
-  LL_DBG_PRINTK("[FW6] key-sz %d\n", sizeof(key));
-  LL_DBG_PRINTK("[FW6] port %x\n", key.inport);
-  LL_DBG_PRINTK("[FW6] daddr 0x%x", key.dest.val[0]);
-  LL_DBG_PRINTK("[FW6] saddr 0x%x", key.source.val[0]);
-  LL_DBG_PRINTK("[FW6] sport %d\n", key.sport);
-  LL_DBG_PRINTK("[FW6] dport %d\n", key.dport);
-  LL_DBG_PRINTK("[FW6] l4proto %d\n", key.protocol);
+  BPF_TRACE_PRINTK("[FW6] lookup--");
+  BPF_TRACE_PRINTK("[FW6] port %x", key.inport);
+  BPF_TRACE_PRINTK("[FW6] daddr %x:%x:%x:%x", key.dest.val[0], key.dest.val[1], 
+                key.dest.val[2], key.dest.val[3]);
+  BPF_TRACE_PRINTK("[FW6] saddr %x:%x:%x:%x", key.source.val[0], key.source.val[1],
+                key.source.val[2], key.source.val[3]);
+  BPF_TRACE_PRINTK("[FW6] sport %d dport %d", key.sport, key.dport);
+  BPF_TRACE_PRINTK("[FW6] l4proto %d", key.protocol);
 
   xf->pm.table_id = LL_DP_FW6_MAP;
 
@@ -174,7 +171,7 @@ dp_do_fw6_main(void *ctx, struct xfi *xf)
 
     fwe = bpf_map_lookup_elem(&fw_v6_map, &idx);
     if (!fwe) {
-      LL_DBG_PRINTK("[FW6] miss");
+      BPF_DBG_PRINTK("[FW6] lkup miss");
       /* End of lookup */
       xf->pm.fw_lid = LLB_FW4_MAP_ENTRIES;
       RETURN_TO_MP();
@@ -192,7 +189,10 @@ dp_do_fw6_main(void *ctx, struct xfi *xf)
       if (fwe->k.zone.val != 0 && 
           PDI_PKEY6_EQ(&key, &fwe->k)) {
 
-        /* End of lookup  - Note that we are setting LLB_FW4_MAP_ENTRIES instead of LLB_FW6_MAP_ENTRIES */
+        /* End of lookup - Note that we are setting LLB_FW4_MAP_ENTRIES 
+         * instead of LLB_FW6_MAP_ENTRIES because LLB_FW4_MAP_ENTRIES is
+         * used as a marker for end of tailcall to fw
+         */
         xf->pm.fw_lid = LLB_FW4_MAP_ENTRIES;
         break;
       }
@@ -207,7 +207,7 @@ dp_do_fw6_main(void *ctx, struct xfi *xf)
       /* End of lookup */
       xf->pm.fw_lid = LLB_FW4_MAP_ENTRIES;
     }
-    LL_DBG_PRINTK("[FW6] done");
+    BPF_TRACE_PRINTK("[FW6] lkup done");
     RETURN_TO_MP();
     return DP_DROP;
   }

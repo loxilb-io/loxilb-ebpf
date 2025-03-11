@@ -542,45 +542,6 @@ llb_maptrace_output(void *ctx, int cpu, void *data, __u32 size)
   struct map_update_data *map_data = (struct map_update_data*)data;
   struct ll_dp_map_notif noti;
 
-#if 0
-  char out_val;
-  if (map_data->updater == UPDATER_KERNEL) {
-    printf("Map Updated From Kernel:\n");
-  } else if (map_data->updater == UPDATER_USERMODE) {
-    printf("Map Updated From User:\n");
-  } else if (map_data->updater == UPDATER_SYSCALL_GET) {
-    printf("Syscall used to get a map handle:\n");
-  } else if (map_data->updater == UPDATER_SYSCALL_UPDATE) {
-    printf("Syscall used to get a update map using handle:\n");
-  } else if (map_data->updater == DELETE_KERNEL) {
-    printf("Map Deleted From Kernel:\n");
-  }
-  printf("  PID:   %d\n",  map_data->pid);
-  if (map_data->updater == UPDATER_SYSCALL_UPDATE) {
-    printf("  FD:    %d\n",  map_data->map_id);
-  } else {
-    printf("  ID:    %d\n",  map_data->map_id);
-  }
-  if (map_data->name[0] != '\x00')
-    printf("  Name:  %s\n",  map_data->name);
-  if (map_data->key_size > 0) {
-    printf("  Key:   ");
-    for (int i = 0; i < map_data->key_size; i++) {
-      out_val = map_data->key[i];
-      printf("%02x ", out_val);
-    }
-    printf("\n");
-  }
-  if (map_data->value_size > 0 && map_data->updater != DELETE_KERNEL) {
-    printf("  Value: ");
-    for (int i = 0; i < map_data->value_size; i++) {
-      out_val = map_data->value[i];
-      printf("%02x ", out_val);
-    }
-    printf("\n");
-  }
-#endif
-
   memset(&noti, 0, sizeof(noti));
   if (map_data->updater == UPDATER_KERNEL) {
     noti.addop = 1;

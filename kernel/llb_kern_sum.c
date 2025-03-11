@@ -145,7 +145,7 @@ dp_sctp_csum(void *ctx, struct xfi *xf)
     TCALL_CRC1();
   }
 
-  bpf_printk("Too many tcalls");
+  BPF_CRIT_PRINTK("Too many tcalls");
   xf->pm.rcode |= LLB_PIPE_RC_TCALL_ERR;
  
 drop:

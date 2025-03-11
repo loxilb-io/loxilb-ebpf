@@ -31,21 +31,20 @@ dp_do_if_lkup(void *ctx, struct xfi *xf)
     xf->pm.phit |= LLB_DP_TMAC_HIT;
   }
 
-  LL_DBG_PRINTK("[INTF] -- Lookup\n");
-  LL_DBG_PRINTK("[INTF] ifidx %d vid %d\n",
+  BPF_TRACE_PRINTK("[INTF] lkup ifidx %d vid %d",
                 key.ifindex, bpf_ntohs(key.ing_vid));
   
   xf->pm.table_id = LL_DP_SMAC_MAP;
 
   l2a = bpf_map_lookup_elem(&intf_map, &key);
   if (!l2a) {
-    LL_DBG_PRINTK("[INTF] not found");
+    BPF_DBG_PRINTK("[INTF] intf not found");
     LLBS_PPLN_PASSC(xf, LLB_PIPE_RC_UNX_DRP);
     return -1;
   }
 
   xf->pm.phit |= LLB_DP_IF_HIT;
-  LL_DBG_PRINTK("[INTF] L2 action %d\n", l2a->ca.act_type);
+  BPF_TRACE_PRINTK("[INTF] table action %d", l2a->ca.act_type);
 
   if (l2a->ca.act_type == DP_SET_DROP) {
     LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_ACT_DROP);
@@ -125,7 +124,7 @@ dp_do_mark_mirr(void *ctx, struct xfi *xf)
   skb->cb[0] = LLB_MIRR_MARK;
   skb->cb[1] = xf->pm.mirr; 
 
-  LL_DBG_PRINTK("[REDR] Mirr port %d OIF %d\n", key, *oif);
+  BPF_TRACE_PRINTK("[REDR] mark mirror to port %d:%d", key, *oif);
   return bpf_clone_redirect(skb, *oif, BPF_F_INGRESS);
 }
 
@@ -135,8 +134,7 @@ dp_do_mirr_lkup(void *ctx, struct xfi *xf)
   struct dp_mirr_tact *ma;
   __u32 mkey = xf->pm.mirr;
 
-  LL_DBG_PRINTK("[MIRR] -- Lookup\n");
-  LL_DBG_PRINTK("[MIRR] -- Key %u\n", mkey);
+  BPF_TRACE_PRINTK("[MIRR] lkup key %u", mkey);
 
   ma = bpf_map_lookup_elem(&mirr_map, &mkey);
   if (!ma) {
@@ -144,7 +142,7 @@ dp_do_mirr_lkup(void *ctx, struct xfi *xf)
     return -1;
   }
 
-  LL_DBG_PRINTK("[MIRR] Action %d\n", ma->ca.act_type);
+  BPF_TRACE_PRINTK("[MIRR] action %d", ma->ca.act_type);
 
   if (ma->ca.act_type == DP_SET_ADD_L2VLAN ||
       ma->ca.act_type == DP_SET_RM_L2VLAN) {
@@ -186,7 +184,7 @@ dp_trap_packet(void *ctx,  struct xfi *xf, void *fa_)
   struct llb_ethhdr *llb;
   void *dend = DP_TC_PTR(DP_PDATA_END(ctx));
 
-  LL_DBG_PRINTK("[TRAP] START--");
+  BPF_TRACE_PRINTK("[TRAP] start --");
 
   /* FIXME - There is a problem right now if we send decapped
    * packet up the stack. So, this is a safety check for now
@@ -237,7 +235,7 @@ dp_trap_packet(void *ctx,  struct xfi *xf, void *fa_)
 
   xf->pm.oport = LLB_PORT_NO;
   if (dp_redirect_port(&tx_intf_map, xf) != DP_REDIRECT) {
-    LL_DBG_PRINTK("[TRAP] FAIL--");
+    BPF_ERR_PRINTK("[TRAP] failed");
     return DP_DROP;
   }
 
@@ -248,10 +246,8 @@ dp_trap_packet(void *ctx,  struct xfi *xf, void *fa_)
 static int __always_inline
 dp_redir_packet(void *ctx,  struct xfi *xf)
 {
-  LL_DBG_PRINTK("[REDI]");
-
   if (dp_redirect_port(&tx_intf_map, xf) != DP_REDIRECT) {
-    LL_DBG_PRINTK("[REDI] FAIL");
+    BPF_ERR_PRINTK("[REDI] failed");
     return DP_DROP;
   }
 
@@ -265,10 +261,8 @@ dp_redir_packet(void *ctx,  struct xfi *xf)
 static int __always_inline
 dp_rewire_packet(void *ctx,  struct xfi *xf)
 {
-  LL_DBG_PRINTK("[REWR]");
-
   if (dp_rewire_port(&tx_intf_map, xf) != DP_REDIRECT) {
-    LL_DBG_PRINTK("[REWR] FAIL");
+    BPF_ERR_PRINTK("[REWR] failed");
     return DP_DROP;
   }
 
@@ -282,7 +276,7 @@ static int __always_inline
 #endif
 dp_pipe_check_res(void *ctx, struct xfi *xf, void *fa)
 {
-  LL_DBG_PRINTK("[PIPE] act 0x%x", xf->pm.pipe_act);
+  BPF_TRACE_PRINTK("[PIPE] res act 0x%x", xf->pm.pipe_act);
 
   DP_EG_ACCOUNTING(ctx, xf);
 
@@ -386,7 +380,7 @@ dp_insert_fcv4(void *ctx, struct xfi *xf, struct dp_fc_tacts *acts)
     acts->ca.oaux = *oif;
   } 
 
-  LL_DBG_PRINTK("[FCH4] INS--");
+  BPF_TRACE_PRINTK("[FCH] tbl insert");
 
   key = bpf_map_lookup_elem(&xfck, &z);
   if (key == NULL) {
@@ -426,7 +420,7 @@ dp_ing_slow_main(struct __sk_buff *ctx,  struct xfi *xf)
   /*memset(fa->fcta, 0, sizeof(fa->fcta));*/
 #endif
 
-  LL_DBG_PRINTK("[INGR] START--\n");
+  BPF_TRACE_PRINTK("[INGR] start proc--");
 
   /* If there are any packets marked for mirroring, we do
    * it here and immediately get it out of way without
@@ -450,7 +444,7 @@ dp_ing_slow_main(struct __sk_buff *ctx,  struct xfi *xf)
 
 #ifdef HAVE_DP_FC
   /* fast-cache is used only when certain conditions are met */
-  if (LL_PIPE_FC_CAP(xf)) {
+  if (LLB_PIPE_FC_CAP(xf)) {
     fa->zone = xf->pm.zone;
     dp_insert_fcv4(ctx, xf, fa);
   }
@@ -533,7 +527,7 @@ dp_ing_ct_main(struct __sk_buff *ctx,  struct xfi *xf)
 
 ct_start:
   /* Perform conntrack */
-  LL_DBG_PRINTK("[CTRK] start");
+  BPF_TRACE_PRINTK("[CTRK] ct-start");
   val = dp_ct_in(ctx, xf);
   if (val < 0) {
     return DP_PASS;
@@ -547,7 +541,7 @@ res_end:
   if (1) {
     int ret = dp_pipe_check_res(ctx, xf, fa);
     if (ret == DP_DROP) {
-      LL_DBG_PRINTK("Drop RC 0x%x", xf->pm.rcode);
+      BPF_TRACE_PRINTK("[RESO] dropped RC 0x%x", xf->pm.rcode);
     }
     return ret;
   }
@@ -556,7 +550,7 @@ res_end:
 static int __always_inline
 dp_ing_pass_main(void *ctx)
 {
-  LL_DBG_PRINTK("[INGR] PASS--\n");
+  BPF_TRACE_PRINTK("[INGR] pass--");
 
   return DP_PASS;
 }

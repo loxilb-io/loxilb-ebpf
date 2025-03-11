@@ -47,7 +47,7 @@ do {                                  \
 
 #define LLB_DP_FC_HCAP_FLAGS  (LLB_DP_CTM_HIT|LLB_DP_NAT_HIT)
 
-#define LL_PIPE_FC_CAP(x)                     \
+#define LLB_PIPE_FC_CAP(x)                    \
   ((x)->pm.phit & (LLB_DP_FC_HCAP_FLAGS) &&   \
   (x)->pm.pipe_act & (LLB_PIPE_RDR_MASK) &&   \
   !((x)->pm.phit & LLB_DP_SESS_HIT) &&        \
@@ -60,18 +60,48 @@ do {                                  \
   (x)->l2m.ssnid == 0 &&                      \
   (x)->pm.mirr == 0)
 
-#define LL_PIPELINE_CONT(F) (!F->pm.pipe_act)
+#define LLB_PIPELINE_CONT(F) (!F->pm.pipe_act)
 
-#ifdef LL_DP_DEBUG 
-#define LL_DBG_PRINTK bpf_printk
+#ifdef HAVE_DP_LOG_LVL_CRIT
+#define BPF_CRIT_PRINTK bpf_printk
 #else
-#define LL_DBG_PRINTK(fmt, ...)  do { } while (0) 
+#define BPF_CRIT_PRINTK(fmt, ...)  do { } while (0)
 #endif
 
-#ifdef LL_FC_XDP_DEBUG 
-#define LL_FC_PRINTK bpf_printk
+#ifdef HAVE_DP_LOG_LVL_WARN
+#define BPF_WARN_PRINTK bpf_printk
 #else
-#define LL_FC_PRINTK(fmt, ...)  do { } while (0) 
+#define BPF_WARN_PRINTK(fmt, ...)  do { } while (0)
+#endif
+
+#ifdef HAVE_DP_LOG_LVL_ERR
+#define BPF_ERR_PRINTK bpf_printk
+#else
+#define BPF_ERR_PRINTK(fmt, ...)  do { } while (0)
+#endif
+
+#ifdef HAVE_DP_LOG_LVL_INFO
+#define BPF_INFO_PRINTK bpf_printk
+#else
+#define BPF_INFO_PRINTK(fmt, ...)  do { } while (0)
+#endif
+
+#ifdef HAVE_DP_LOG_LVL_DBG
+#define BPF_DBG_PRINTK bpf_printk
+#else
+#define BPF_DBG_PRINTK(fmt, ...)  do { } while (0)
+#endif
+
+#ifdef HAVE_DP_LOG_LVL_TRACE
+#define BPF_TRACE_PRINTK bpf_printk
+#else
+#define BPF_TRACE_PRINTK(fmt, ...)  do { } while (0)
+#endif
+
+#ifdef HAVE_DP_FC_LOG
+#define BPF_FC_PRINTK bpf_printk
+#else
+#define BPF_FC_PRINTK(fmt, ...)  do { } while (0)
 #endif
 
 #define LLB_PIPE_RDR_MASK     (LLB_PIPE_RDR | LLB_PIPE_RDR_PRIO | LLB_PIPE_TRAP)

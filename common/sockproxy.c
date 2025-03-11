@@ -1379,7 +1379,6 @@ proxy_dump_entry(proxy_info_cb_t cb)
           }
         }
       }
-      //printf("proxy_dump_entry\n");
       fd_ent = fd_ent->next;
     }
     node = node->next;

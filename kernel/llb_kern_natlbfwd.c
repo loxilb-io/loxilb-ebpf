@@ -143,7 +143,7 @@ dp_sel_nat_ep(void *ctx, struct xfi *xf, struct dp_proxy_tacts *act)
     }
   }
 
-  LL_DBG_PRINTK("lb-sel %d", sel);
+  BPF_TRACE_PRINTK("[NAT] lb-sel %d", sel);
 
   return sel;
 }
@@ -181,7 +181,7 @@ dp_do_nat(void *ctx, struct xfi *xf)
     }
   }
 
-  LL_DBG_PRINTK("[NAT] Lookup");
+  BPF_TRACE_PRINTK("[NAT] lookup--");
 
   xf->pm.table_id = LL_DP_NAT_MAP;
 
@@ -193,8 +193,8 @@ dp_do_nat(void *ctx, struct xfi *xf)
   }
 
   xf->pm.phit |= LLB_DP_NAT_HIT;
-  LL_DBG_PRINTK("[NAT] action %d pipe %x\n",
-                 act->ca.act_type, xf->pm.pipe_act);
+  BPF_TRACE_PRINTK("[NAT] action %d pipe %x",
+                   act->ca.act_type, xf->pm.pipe_act);
 
   if (act->opflags & NAT_LB_OP_CHKSRC) {
     __u32 bm = (1 << act->ca.cidx) & 0xffffff;
@@ -232,7 +232,7 @@ dp_do_nat(void *ctx, struct xfi *xf)
       xf->nm.sel_aid = sel;
       xf->nm.ito = act->ito;
       xf->pm.rule_id =  act->ca.cidx;
-      LL_DBG_PRINTK("[NAT] ACT %x", xf->pm.nf);
+      BPF_TRACE_PRINTK("[NAT] action %x", xf->pm.nf);
       /* Special case related to host-dnat */
       if (!xf->nm.nv6 && xf->l34m.saddr4 == xf->nm.nxip4 && xf->pm.nf == LLB_NAT_DST) {
         xf->nm.nxip4 = 0;

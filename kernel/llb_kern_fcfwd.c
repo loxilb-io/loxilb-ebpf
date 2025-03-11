@@ -46,18 +46,18 @@ dp_do_fcv4_lkup(void *ctx, struct xfi *xf)
 
   dp_mk_fcv4_key(xf, &key);
 
-  LL_FC_PRINTK("[FCH4] -- Lookup\n");
-  LL_FC_PRINTK("[FCH4] key-sz %d\n", sizeof(key));
-  LL_FC_PRINTK("[FCH4] daddr %x\n", key.daddr);
-  LL_FC_PRINTK("[FCH4] saddr %x\n", key.saddr);
-  LL_FC_PRINTK("[FCH4] sport %x\n", key.sport);
-  LL_FC_PRINTK("[FCH4] dport %x\n", key.dport);
-  LL_FC_PRINTK("[FCH4] l4proto %x\n", key.l4proto);
-  LL_FC_PRINTK("[FCH4] idaddr %x\n", key.in_daddr);
-  LL_FC_PRINTK("[FCH4] isaddr %x\n", key.in_saddr);
-  LL_FC_PRINTK("[FCH4] isport %x\n", key.in_sport);
-  LL_FC_PRINTK("[FCH4] idport %x\n", key.in_dport);
-  LL_FC_PRINTK("[FCH4] il4proto %x\n", key.in_l4proto);
+  BPF_FC_PRINTK("[FCH4] lookup--");
+  BPF_FC_PRINTK("[FCH4] key-sz %d", sizeof(key));
+  BPF_FC_PRINTK("[FCH4] daddr %x", key.daddr);
+  BPF_FC_PRINTK("[FCH4] saddr %x", key.saddr);
+  BPF_FC_PRINTK("[FCH4] sport %x", key.sport);
+  BPF_FC_PRINTK("[FCH4] dport %x", key.dport);
+  BPF_FC_PRINTK("[FCH4] l4proto %x", key.l4proto);
+  BPF_FC_PRINTK("[FCH4] idaddr %x", key.in_daddr);
+  BPF_FC_PRINTK("[FCH4] isaddr %x", key.in_saddr);
+  BPF_FC_PRINTK("[FCH4] isport %x", key.in_sport);
+  BPF_FC_PRINTK("[FCH4] idport %x", key.in_dport);
+  BPF_FC_PRINTK("[FCH4] il4proto %x", key.in_l4proto);
 
   xf->pm.table_id = LL_DP_FCV4_MAP;
   acts = bpf_map_lookup_elem(&fc_v4_map, &key);
@@ -66,6 +66,7 @@ dp_do_fcv4_lkup(void *ctx, struct xfi *xf)
      * there is no need to make fcv4 key again in
      * tail-call sections
      */
+    BPF_FC_PRINTK("[FCH4] lkup miss");
     bpf_map_update_elem(&xfck, &z, &key, BPF_ANY);
     return 0; 
   }
@@ -73,15 +74,13 @@ dp_do_fcv4_lkup(void *ctx, struct xfi *xf)
 #ifdef HAVE_DP_FC_TMO
   /* Check timeout */ 
   if (bpf_ktime_get_ns() - acts->its > FC_V4_DPTO) {
-    LL_FC_PRINTK("[FCH4] hto");
+    BPF_FC_PRINTK("[FCH4] hto");
     bpf_map_update_elem(&xfck, &z, &key, BPF_ANY);
     bpf_map_delete_elem(&fc_v4_map, &key);
     xf->pm.rcode |= LLB_PIPE_RC_FCTO;
     return 0; 
   }
 #endif
-
-  LL_FC_PRINTK("[FCH4] key found act-sz %d\n", sizeof(struct dp_fc_tacts));
 
   if (acts->ca.ftrap) {
     xf->pm.rcode |= LLB_PIPE_RC_FCBP;
@@ -94,14 +93,14 @@ dp_do_fcv4_lkup(void *ctx, struct xfi *xf)
 
 #ifdef HAVE_DP_EXTFC
   if (acts->fcta[DP_SET_RM_VXLAN].ca.act_type == DP_SET_RM_VXLAN) {
-    LL_FC_PRINTK("[FCH4] strip-vxlan-act\n");
+    BPF_FC_PRINTK("[FCH4] strip-vxlan-act");
     ta = &acts->fcta[DP_SET_RM_VXLAN];
     dp_pipe_set_rm_vx_tun(ctx, xf, &ta->nh_act);
   }
 #endif
 
   if (acts->fcta[DP_SET_SNAT].ca.act_type == DP_SET_SNAT) {
-    LL_FC_PRINTK("[FCH4] snat-act\n");
+    BPF_FC_PRINTK("[FCH4] snat-act");
     ta = &acts->fcta[DP_SET_SNAT];
 
     if (ta->nat_act.fr == 1 || ta->nat_act.doct) {
@@ -112,7 +111,7 @@ dp_do_fcv4_lkup(void *ctx, struct xfi *xf)
     dp_pipe_set_nat(ctx, xf, &ta->nat_act, 1);
     dp_do_map_stats(ctx, xf, LL_DP_NAT_STATS_MAP, LLB_NAT_STAT_CID(ta->nat_act.rid, ta->nat_act.aid));
   } else if (acts->fcta[DP_SET_DNAT].ca.act_type == DP_SET_DNAT) {
-    LL_FC_PRINTK("[FCH4] dnat-act\n");
+    BPF_FC_PRINTK("[FCH4] dnat-act");
     ta = &acts->fcta[DP_SET_DNAT];
 
     if (ta->nat_act.fr == 1 || ta->nat_act.doct) {
@@ -128,39 +127,39 @@ dp_do_fcv4_lkup(void *ctx, struct xfi *xf)
 #ifdef HAVE_DP_EXTFC
   if (acts->fcta[DP_SET_RT_TUN_NH].ca.act_type == DP_SET_RT_TUN_NH) {
     ta = &acts->fcta[DP_SET_RT_TUN_NH];
-    LL_FC_PRINTK("[FCH4] tun-nh found\n");
+    BPF_FC_PRINTK("[FCH4] tun-nh found");
     dp_pipe_set_l22_tun_nh(ctx, xf, &ta->nh_act);
   } else if (acts->fcta[DP_SET_L3RT_TUN_NH].ca.act_type == DP_SET_L3RT_TUN_NH) {
-    LL_FC_PRINTK("[FCH4] l3-rt-tnh-act\n");
+    BPF_FC_PRINTK("[FCH4] l3-rt-tnh-act");
     ta = &acts->fcta[DP_SET_L3RT_TUN_NH];
     dp_pipe_set_l32_tun_nh(ctx, xf, &ta->nh_act);
   }
 #endif
 
   if (acts->fcta[DP_SET_NEIGH_L2].ca.act_type == DP_SET_NEIGH_L2) {
-    LL_FC_PRINTK("[FCH4] l2-rt-nh-act\n");
+    BPF_FC_PRINTK("[FCH4] l2-rt-nh-act");
     ta = &acts->fcta[DP_SET_NEIGH_L2];
     dp_do_rt_l2_nh(ctx, xf, &ta->nl2);
   }
 
 #ifdef HAVE_DP_EXTFC
   if (acts->fcta[DP_SET_NEIGH_VXLAN].ca.act_type == DP_SET_NEIGH_VXLAN) {
-    LL_FC_PRINTK("[FCH4] rt-l2-nh-vxlan-act\n");
+    BPF_FC_PRINTK("[FCH4] rt-l2-nh-vxlan-act");
     ta = &acts->fcta[DP_SET_NEIGH_VXLAN];
     dp_do_rt_tun_nh(ctx, xf, LLB_TUN_VXLAN, &ta->ntun);
   }
 #endif
 
   if (acts->fcta[DP_SET_ADD_L2VLAN].ca.act_type == DP_SET_ADD_L2VLAN) {
-    LL_FC_PRINTK("[FCH4] new-l2-vlan-act\n");
+    BPF_FC_PRINTK("[FCH4] new-l2-vlan-act");
     ta = &acts->fcta[DP_SET_ADD_L2VLAN];
     dp_set_egr_vlan(ctx, xf, ta->l2ov.vlan, ta->l2ov.oport);
   } else if (acts->fcta[DP_SET_RM_L2VLAN].ca.act_type == DP_SET_RM_L2VLAN) {
-    LL_FC_PRINTK("[FCH4] strip-l2-vlan-act\n");
+    BPF_FC_PRINTK("[FCH4] strip-l2-vlan-act");
     ta = &acts->fcta[DP_SET_RM_L2VLAN];
     dp_set_egr_vlan(ctx, xf, 0, ta->l2ov.oport);
   } else if (acts->fcta[DP_SET_TOCP].ca.act_type == DP_SET_TOCP) {
-    LL_FC_PRINTK("[FCH4] to-cp-act\n");
+    BPF_FC_PRINTK("[FCH4] to-cp-act");
     LLBS_PPLN_TRAPC(xf, LLB_PIPE_RC_ACT_TRAP);
   } else {
     goto slow_pout;
@@ -180,7 +179,7 @@ dp_do_fcv4_lkup(void *ctx, struct xfi *xf)
 
   dp_do_map_stats(ctx, xf, LL_DP_CT_STATS_MAP, acts->ca.cidx);
 
-  LL_FC_PRINTK("[FCH4] oport %d\n",  xf->pm.oport);
+  BPF_FC_PRINTK("[FCH4] oport %d",  xf->pm.oport);
   dp_unparse_packet_always(ctx, xf);
   dp_unparse_packet(ctx, xf, 0);
 
@@ -200,7 +199,7 @@ dp_ing_fc_main(void *ctx, struct xfi *xf)
   int z = 0;
   int oif;
   __u32 idx = LLB_DP_PKT_SLOW_PGM_ID;
-  LL_FC_PRINTK("[FCHM] Main--\n");
+  BPF_FC_PRINTK("[FCHM] Main--");
   if (xf->pm.pipe_act == 0 &&
       xf->l2m.dl_type == bpf_ntohs(ETH_P_IP)) {
     if (dp_do_fcv4_lkup(ctx, xf) == 1) {
