@@ -287,6 +287,14 @@ struct dp_key_mdi {
     __u8             skey[16];     /* Scratch key space */
 };
 
+/*
+ * xfi (eXecution Flow Information)
+ * ----------------------------------
+ * This structure holds per-packet metadata used throughout
+ * the pipeline for classification, tracking, and policy enforcement.
+ * It contains parsed headers, connection tracking info,
+ * and various flags required for decision-making in fast-path processing.
+ */
 struct xfi {
     struct dp_fr_mdi  fm;
     struct dp_l2_mdi  l2m;
