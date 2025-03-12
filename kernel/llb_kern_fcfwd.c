@@ -46,25 +46,11 @@ dp_do_fcv4_lkup(void *ctx, struct xfi *xf)
 
   dp_mk_fcv4_key(xf, &key);
 
-  BPF_FC_PRINTK("[FCH4] lookup--");
-  BPF_FC_PRINTK("[FCH4] key-sz %d", sizeof(key));
-  BPF_FC_PRINTK("[FCH4] daddr %x", key.daddr);
-  BPF_FC_PRINTK("[FCH4] saddr %x", key.saddr);
-  BPF_FC_PRINTK("[FCH4] sport %x", key.sport);
-  BPF_FC_PRINTK("[FCH4] dport %x", key.dport);
-  BPF_FC_PRINTK("[FCH4] l4proto %x", key.l4proto);
-  BPF_FC_PRINTK("[FCH4] idaddr %x", key.in_daddr);
-  BPF_FC_PRINTK("[FCH4] isaddr %x", key.in_saddr);
-  BPF_FC_PRINTK("[FCH4] isport %x", key.in_sport);
-  BPF_FC_PRINTK("[FCH4] idport %x", key.in_dport);
-  BPF_FC_PRINTK("[FCH4] il4proto %x", key.in_l4proto);
-
   xf->pm.table_id = LL_DP_FCV4_MAP;
   acts = bpf_map_lookup_elem(&fc_v4_map, &key);
   if (!acts) {
-    /* xfck - fcache key table is maintained so that 
-     * there is no need to make fcv4 key again in
-     * tail-call sections
+    /* xfck - fast-cache key table is maintained so that
+     * there is no need to make fcv4 key again in tail-call sections
      */
     BPF_FC_PRINTK("[FCH4] lkup miss");
     bpf_map_update_elem(&xfck, &z, &key, BPF_ANY);
@@ -122,7 +108,6 @@ dp_do_fcv4_lkup(void *ctx, struct xfi *xf)
     dp_pipe_set_nat(ctx, xf, &ta->nat_act, 0);
     dp_do_map_stats(ctx, xf, LL_DP_NAT_STATS_MAP, LLB_NAT_STAT_CID(ta->nat_act.rid, ta->nat_act.aid));
   }
-
 
 #ifdef HAVE_DP_EXTFC
   if (acts->fcta[DP_SET_RT_TUN_NH].ca.act_type == DP_SET_RT_TUN_NH) {
@@ -193,8 +178,25 @@ slow_pout:
   return 0;
 }
 
+/*
+ * dp_ingress_fast_main - Cache-based fast-path packet forwarding
+ * --------------------------------------------------------------
+ * This function handles ingress packet processing with a focus on
+ * high-speed forwarding using precomputed cache lookups.
+ * Instead of performing full packet inspection and policy evaluation
+ * for every packet, it leverages cached state to to make
+ * near-instant forwarding decisions.
+ *
+ * Key optimizations:
+ * - Bypasses expensive lookups when a cached entry is available.
+ * - Reduces per-packet processing latency in the fast path.
+ * - Ensures minimal verifier complexity while maintaining efficiency.
+ *
+ * If a packet does not have a valid cache entry, it falls back to
+ * a more detailed processing pipeline for further handling.
+ */
 static int __always_inline
-dp_ing_fc_main(void *ctx, struct xfi *xf)
+ dp_ingress_fast_main(void *ctx, struct xfi *xf)
 {
   int z = 0;
   int oif;

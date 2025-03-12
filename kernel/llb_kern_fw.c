@@ -49,12 +49,6 @@ dp_do_fw4_main(void *ctx, struct xfi *xf)
   PDI_RVAL_INIT(&key.sport, bpf_htons(xf->l34m.source));
   PDI_VAL_INIT(&key.protocol, xf->l34m.nw_proto);
 
-  BPF_TRACE_PRINTK("[FW4] lookup--");
-  BPF_TRACE_PRINTK("[FW4] port %x", key.inport);
-  BPF_TRACE_PRINTK("[FW4] daddr 0x%x saddr 0x%x", key.dest, key.source);
-  BPF_TRACE_PRINTK("[FW4] sport %d dport %d", key.sport, key.dport);
-  BPF_TRACE_PRINTK("[FW4] l4proto %d", key.protocol);
-
   xf->pm.table_id = LL_DP_FW4_MAP;
 
   idx = xf->pm.fw_lid;
@@ -153,15 +147,6 @@ dp_do_fw6_main(void *ctx, struct xfi *xf)
   PDI_RVAL_INIT(&key.dport, bpf_htons(xf->l34m.dest));
   PDI_RVAL_INIT(&key.sport, bpf_htons(xf->l34m.source));
   PDI_VAL_INIT(&key.protocol, xf->l34m.nw_proto);
-
-  BPF_TRACE_PRINTK("[FW6] lookup--");
-  BPF_TRACE_PRINTK("[FW6] port %x", key.inport);
-  BPF_TRACE_PRINTK("[FW6] daddr %x:%x:%x:%x", key.dest.val[0], key.dest.val[1], 
-                key.dest.val[2], key.dest.val[3]);
-  BPF_TRACE_PRINTK("[FW6] saddr %x:%x:%x:%x", key.source.val[0], key.source.val[1],
-                key.source.val[2], key.source.val[3]);
-  BPF_TRACE_PRINTK("[FW6] sport %d dport %d", key.sport, key.dport);
-  BPF_TRACE_PRINTK("[FW6] l4proto %d", key.protocol);
 
   xf->pm.table_id = LL_DP_FW6_MAP;
 

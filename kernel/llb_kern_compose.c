@@ -5,6 +5,43 @@
  * SPDX-License-Identifier: (GPL-2.0 OR BSD-2-Clause)
  */
 
+#ifdef HAVE_DP_LOG_LVL_TRACE
+static void __always_inline
+dp_dump_xfi(struct xfi *xf)
+{
+  /* Dump the execution metadata information */
+
+  BPF_TRACE_PRINTK("[PRSR] port %x",  xf->pm.iport);
+  BPF_TRACE_PRINTK("[PRSR] smac0 %x:%x:%x",
+                    xf->l2m.dl_src[0], xf->l2m.dl_src[1], xf->l2m.dl_src[2]);
+  BPF_TRACE_PRINTK("[PRSR] smac1 %x:%x:%x",
+                    xf->l2m.dl_src[3], xf->l2m.dl_src[4], xf->l2m.dl_src[5]);
+  BPF_TRACE_PRINTK("[PRSR] dmac0 %x:%x:%x",
+                    xf->l2m.dl_dst[0], xf->l2m.dl_dst[1], xf->l2m.dl_dst[2]);
+  BPF_TRACE_PRINTK("[PRSR] dmac1 %x:%x:%x",
+                    xf->l2m.dl_dst[3], xf->l2m.dl_dst[4], xf->l2m.dl_dst[5]);
+  BPF_TRACE_PRINTK("[PRSR] vid %d", xf->l2m.vlan[0]);
+
+  if (xf->l2m.dl_type == bpf_ntohs(ETH_P_IPV6)) {
+    BPF_TRACE_PRINTK("[PRSR] daddr6 %x:%x:%x",
+                    xf->l34m.daddr[0], xf->l34m.daddr[1], xf->l34m.daddr[2]);
+    BPF_TRACE_PRINTK("[PRSR] daddr6 %x", xf->l34m.daddr[3]);
+    BPF_TRACE_PRINTK("[PRSR] saddr6 %x:%x:%x",
+                    xf->l34m.saddr[0], xf->l34m.saddr[1], xf->l34m.saddr[2]);
+    BPF_TRACE_PRINTK("[PRSR] saddr6 %x", xf->l34m.saddr[3]);
+  } else {
+    BPF_TRACE_PRINTK("[PRSR] daddr %x", bpf_ntohl(xf->l34m.daddr4));
+    BPF_TRACE_PRINTK("[PRSR] saddr %x", bpf_ntohl(xf->l34m.saddr4));
+  }
+
+  BPF_TRACE_PRINTK("[PRSR] nwproto %d", xf->l34m.nw_proto);
+  BPF_TRACE_PRINTK("[PRSR] sport %d dport %d",
+                    bpf_htons(xf->l34m.source), bpf_htons(xf->l34m.dest));
+}
+#else
+#define dp_dump_xfi(x)
+#endif
+
 static int __always_inline
 dp_parse_eth(struct parser *p,
              void *md,
@@ -72,9 +109,9 @@ dp_parse_vlan(struct parser *p,
 }
 
 static int __always_inline
-dp_parse_vlan_d1(struct parser *p,
-               void *md,
-               struct xfi *xf)
+dp_parse_vlan_depth1(struct parser *p,
+                     void *md,
+                     struct xfi *xf)
 {
   struct vlanhdr *vlh;
 
@@ -295,9 +332,9 @@ dp_parse_icmp6(struct parser *p,
 }
 
 static int __always_inline
-dp_parse_ipv4_d1(struct parser *p,
-                 void *md,
-                 struct xfi *xf)
+dp_parse_ipv4_depth1(struct parser *p,
+                     void *md,
+                     struct xfi *xf)
 {
   struct iphdr *iph = DP_TC_PTR(p->dbegin);
   int iphl = iph->ihl << 2;
@@ -348,9 +385,9 @@ dp_parse_ipv4_d1(struct parser *p,
 }
 
 static int __always_inline
-dp_parse_ipv6_d1(struct parser *p,
-                 void *md,
-                 struct xfi *xf)
+dp_parse_ipv6_depth1(struct parser *p,
+                     void *md,
+                     struct xfi *xf)
 {
   struct ipv6hdr *ip6 = DP_TC_PTR(p->dbegin);
 
@@ -387,9 +424,9 @@ dp_parse_ipv6_d1(struct parser *p,
 }
 
 static int __always_inline
-dp_parse_d1(struct parser *p,
-            void *md,
-            struct xfi *xf)
+dp_parse_depth1(struct parser *p,
+                void *md,
+                struct xfi *xf)
 {
   int ret = 0;
 
@@ -403,7 +440,7 @@ dp_parse_d1(struct parser *p,
     return ret;
   }
 
-  if ((ret = dp_parse_vlan_d1(p, md, xf))) {
+  if ((ret = dp_parse_vlan_depth1(p, md, xf))) {
     return ret;
   }
 
@@ -413,10 +450,10 @@ proc_inl3:
   if (xf->il2m.dl_type == bpf_htons(ETH_P_ARP)) {
     ret = dp_parse_arp(p, md, xf);
   } else if (xf->il2m.dl_type == bpf_htons(ETH_P_IP)) {
-    ret = dp_parse_ipv4_d1(p, md, xf);
+    ret = dp_parse_ipv4_depth1(p, md, xf);
   } else if (xf->il2m.dl_type == bpf_htons(ETH_P_IPV6)) {
     if (p->skip_v6 == 0)
-      ret = dp_parse_ipv6_d1(p, md, xf);
+      ret = dp_parse_ipv6_depth1(p, md, xf);
   }
 
   return ret;
@@ -593,7 +630,7 @@ done:
   p->inp = 1;
   p->skip_l2 = 1;
   p->dbegin = gp->gtp_next;
-  return dp_parse_d1(p, md, xf);
+  return dp_parse_depth1(p, md, xf);
 
 drop:
   return DP_PRET_FAIL;
@@ -629,7 +666,7 @@ dp_parse_outer_udp(struct parser *p,
     p->inp = 1;
     p->skip_l2 = 0;
     p->dbegin = vx_next;
-    return dp_parse_d1(p, md, xf);
+    return dp_parse_depth1(p, md, xf);
     break;
   case bpf_htons(GTPU_UDP_DPORT):
   case bpf_htons(GTPC_UDP_DPORT):
@@ -750,7 +787,7 @@ dp_parse_ipip(struct parser *p,
   p->inp = 1;
   p->skip_l2 = 1;
   p->dbegin = ip;
-  return dp_parse_d1(p, md, xf);
+  return dp_parse_depth1(p, md, xf);
 }
 
 static int __always_inline
@@ -799,7 +836,7 @@ dp_parse_ipv4(struct parser *p,
       return dp_parse_ipip(p, md, xf);
     } else if (xf->l34m.nw_proto == IPPROTO_ESP ||
              xf->l34m.nw_proto == IPPROTO_AH) {
-    /* Let xfrm handle it */
+      /* Let xfrm handle it */
       return DP_PRET_PASS;
     }
   } else {
@@ -860,9 +897,9 @@ dp_parse_ipv6(struct parser *p,
 }
 
 static int __always_inline
-dp_parse_d0(void *md,
-            struct xfi *xf,
-            int skip_v6)
+dp_parse_depth0(void *md,
+                struct xfi *xf,
+                int skip_v6)
 {
   int ret = 0;
   struct parser p;
@@ -921,11 +958,7 @@ dp_parse_d0(void *md,
 
 handle_excp:
   if (ret > DP_PRET_OK) {
-    //if (ret == DP_PRET_PASS) {
-      LLBS_PPLN_PASSC(xf, LLB_PIPE_RC_PARSER);
-    //} else {
-    //  LLBS_PPLN_TRAPC(xf, LLB_PIPE_RC_PARSER);
-    //}
+    LLBS_PPLN_PASSC(xf, LLB_PIPE_RC_PARSER);
   } else if (ret < DP_PRET_OK) {
     LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PARSER);
   }

@@ -17,13 +17,6 @@ dp_do_smac_lkup(void *ctx, struct xfi *xf, void *fc)
   memcpy(key.smac, xf->l2m.dl_src, 6);
   key.bd = xf->pm.bd;
 
-  BPF_TRACE_PRINTK("[SMAC] lookup--");
-  BPF_TRACE_PRINTK("[SMAC] %x:%x:%x",
-                 key.smac[0], key.smac[1], key.smac[2]);
-  BPF_TRACE_PRINTK("[SMAC] %x:%x:%x",
-                 key.smac[3], key.smac[4], key.smac[5]);
-  BPF_TRACE_PRINTK("[SMAC] bd-%d", key.bd);
-
   xf->pm.table_id = LL_DP_SMAC_MAP;
 
   sma = bpf_map_lookup_elem(&smac_map, &key);
@@ -93,13 +86,6 @@ __dp_do_tmac_lkup(void *ctx, struct xfi *xf,
     key.tunnel_id = 0;
     key.tun_type  = 0;
   }
-
-  BPF_TRACE_PRINTK("[TMAC] lookup--");
-  BPF_TRACE_PRINTK("[TMAC] %x:%x:%x\n",
-                 key.mac[0], key.mac[1], key.mac[2]);
-  BPF_TRACE_PRINTK("[TMAC] %x:%x:%x\n",
-                 key.mac[3], key.mac[4], key.mac[5]);
-  BPF_TRACE_PRINTK("[TMAC] %x:%x\n", key.tunnel_id, key.tun_type);
 
   xf->pm.table_id = LL_DP_TMAC_MAP;
 
@@ -180,13 +166,6 @@ dp_do_dmac_lkup(void *ctx, struct xfi *xf, void *fa_)
   memcpy(key.dmac, xf->pm.lkup_dmac, 6);
   key.bd = xf->pm.bd;
   xf->pm.table_id = LL_DP_DMAC_MAP;
-
-  BPF_TRACE_PRINTK("[DMAC] lookup--");
-  BPF_TRACE_PRINTK("[DMAC] %x:%x:%x",
-                 key.dmac[0], key.dmac[1], key.dmac[2]);
-  BPF_TRACE_PRINTK("[DMAC] %x:%x:%x", 
-                 key.dmac[3], key.dmac[4], key.dmac[5]);
-  BPF_TRACE_PRINTK("[DMAC] BD %d", key.bd);
 
   dma = bpf_map_lookup_elem(&dmac_map, &key);
   if (!dma) {
@@ -347,14 +326,14 @@ dp_eg_l2(void *ctx,  struct xfi *xf, void *fa)
 }
 
 static int __always_inline
-dp_ing_fwd(void *ctx,  struct xfi *xf, void *fa)
+dp_ingress_fwd(void *ctx,  struct xfi *xf, void *fa)
 {
-  dp_ing_l3(ctx, xf, fa);
+  dp_ingress_l3(ctx, xf, fa);
   return dp_eg_l2(ctx, xf, fa);
 }
 
 static int __always_inline
-dp_ing_l2_top(void *ctx,  struct xfi *xf, void *fa)
+dp_ingress_l2_top(void *ctx,  struct xfi *xf, void *fa)
 {
   dp_do_smac_lkup(ctx, xf, fa);
   dp_do_tmac_lkup(ctx, xf, fa);
@@ -370,8 +349,8 @@ dp_ing_l2_top(void *ctx,  struct xfi *xf, void *fa)
 }
 
 static int __always_inline
-dp_ing_l2(void *ctx,  struct xfi *xf, void *fa)
+dp_ingress_l2(void *ctx,  struct xfi *xf, void *fa)
 {
-  dp_ing_l2_top(ctx, xf, fa);
-  return dp_ing_fwd(ctx, xf, fa);
+  dp_ingress_l2_top(ctx, xf, fa);
+  return dp_ingress_fwd(ctx, xf, fa);
 }

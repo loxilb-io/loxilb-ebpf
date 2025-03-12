@@ -375,7 +375,7 @@ ct_trk:
 }
 
 static int __always_inline
-dp_do_ing_ct(void *ctx, struct xfi *xf, void *fa_)
+dp_do_ingress_ct(void *ctx, struct xfi *xf, void *fa_)
 {
   struct dp_ct_key key;
   struct dp_ct_tact *act;
@@ -477,7 +477,7 @@ dp_l3_fwd(void *ctx,  struct xfi *xf, void *fa, int dir)
 }
 
 static int __always_inline
-dp_ing_l3(void *ctx,  struct xfi *xf, void *fa)
+dp_ingress_l3(void *ctx,  struct xfi *xf, void *fa)
 {
   if (xf->l2m.dl_type == bpf_htons(ETH_P_IP)) {
     /* Check termination */
@@ -487,7 +487,7 @@ dp_ing_l3(void *ctx,  struct xfi *xf, void *fa)
     }
   }
 
-  dp_do_ing_ct(ctx, xf, fa);
+  dp_do_ingress_ct(ctx, xf, fa);
   dp_l3_fwd(ctx, xf, fa, 1);
 
   return 0;
