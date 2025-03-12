@@ -29,12 +29,12 @@
 #include "llb_kern_fcfwd.c"
 
 static int __always_inline
-dp_ing_pkt_main(struct __sk_buff *md, struct xfi *xf)
+dp_ingress_pkt_main(struct __sk_buff *md, struct xfi *xf)
 {
-  BPF_TRACE_PRINTK("[PRSR] start%d", bpf_get_smp_processor_id());
+  BPF_TRACE_PRINTK("[ENTRY] start%d", bpf_get_smp_processor_id());
 
   if (xf->pm.phit & LLB_DP_FC_HIT) {
-    dp_parse_d0(md, xf, 0);
+    dp_parse_depth0(md, xf, 0);
   }
 
   /* Handle parser results */
@@ -50,7 +50,7 @@ dp_ing_pkt_main(struct __sk_buff *md, struct xfi *xf)
     return DP_PASS;
   }
 
-  return dp_ing_slow_main(md, xf);
+  return dp_ingress_slow_main(md, xf);
 }
 
 #ifndef LL_TC_EBPF
@@ -60,7 +60,7 @@ int  xdp_packet_func(struct xdp_md *ctx)
   int z = 0;
   struct xfi *xf;
 
-  BPF_TRACE_PRINTK("[PRSR] xdp start");
+  BPF_TRACE_PRINTK("[ENTRY] xdp start");
 
   xf = bpf_map_lookup_elem(&xfis, &z);
   if (!xf) {
@@ -68,7 +68,7 @@ int  xdp_packet_func(struct xdp_md *ctx)
   }
   memset(xf, 0, sizeof *xf);
 
-  dp_parse_d0(ctx, xf, 1);
+  dp_parse_depth0(ctx, xf, 1);
 
 #ifdef HAVE_DP_RSS
   if (xf->l2m.dl_type == bpf_ntohs(ETH_P_IP) &&
@@ -99,7 +99,7 @@ int  xdp_packet_func(struct xdp_md *ctx)
 SEC("xdp_pass")
 int xdp_pass_func(struct xdp_md *ctx)
 {
-  return dp_ing_pass_main(ctx);
+  return dp_ingress_pass_main(ctx);
 }
 
 #else
@@ -118,16 +118,12 @@ tc_packet_func__(struct __sk_buff *md)
 #ifndef HAVE_DP_FC
   DP_IN_ACCOUNTING(ctx, xf);
 #endif
-  //if (xf->pm.phit & LLB_DP_FC_HIT) {
-  //  memset(xf, 0, sizeof(*xf));
-  //  xf->pm.phit |= LLB_DP_FC_HIT;
-  //}
 
   memset(xf, 0, sizeof(*xf));
   xf->pm.phit |= LLB_DP_FC_HIT;
   xf->pm.tc = 1;
 
-  return dp_ing_pkt_main(md, xf);
+  return dp_ingress_pkt_main(md, xf);
 }
 
 SEC("tc_packet_hook0")
@@ -158,9 +154,9 @@ int tc_packet_func_fast(struct __sk_buff *md)
     bpf_skb_pull_data(md, LLB_SKB_MIN_DPA_LEN);
   }
 
-  dp_parse_d0(md, xf, 1);
+  dp_parse_depth0(md, xf, 1);
 
-  return dp_ing_fc_main(md, xf);
+  return  dp_ingress_fast_main(md, xf);
 #else
   return tc_packet_func__(md);
 #endif
@@ -183,7 +179,7 @@ int tc_packet_func_slow(struct __sk_buff *md)
     return DP_DROP;
   }
 
-  return dp_ing_ct_main(md, xf);
+  return dp_ingress_ct_main(md, xf);
 }
 
 SEC("tc_packet_hook3")

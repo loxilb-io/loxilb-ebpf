@@ -55,10 +55,6 @@ dp_do_sess4_lkup(void *ctx, struct xfi *xf)
     key.teid = 0;
   }
 
-  BPF_TRACE_PRINTK("[SESS4] lookup--");
-  BPF_TRACE_PRINTK("[SESS4] daddr %x saddr %x", key.daddr,  key.saddr);
-  BPF_TRACE_PRINTK("[SESS4] teid 0x%x", key.teid);
-
   xf->pm.table_id = LL_DP_SESS4_MAP;
 
   act = bpf_map_lookup_elem(&sess_v4_map, &key);

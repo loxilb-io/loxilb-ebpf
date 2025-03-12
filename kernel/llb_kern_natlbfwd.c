@@ -188,6 +188,7 @@ dp_do_nat(void *ctx, struct xfi *xf)
   act = bpf_map_lookup_elem(&nat_map, &key);
   if (!act) {
     /* Default action - Nothing to do */
+    BPF_DBG_PRINTK("[NAT] lkup miss");
     xf->pm.nf &= ~LLB_NAT_SRC;
     return 0;
   }

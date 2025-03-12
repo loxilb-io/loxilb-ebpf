@@ -396,8 +396,27 @@ dp_insert_fcv4(void *ctx, struct xfi *xf, struct dp_fc_tacts *acts)
   return 0;
 }
 
+/*
+ * dp_ingress_slow_main - Detailed ingress processing (slow path)
+ * ---------------------------------------------------------------
+ * This function handles ingress packets that cannot be processed
+ * through the fast-path cache (dp_ingress_fast_main).
+ * It performs full packet inspection, policy evaluation, and
+ * necessary state updates before determining the forwarding
+ * or processing action.
+ *
+ * Key aspects:
+ * - Handles cache misses and new updates new cache states.
+ * - Performs deep packet inspection for L2-L4 fields.
+ * - Updates connection tracking and policy enforcement state.
+ * - Ensures packets are either forwarded, dropped, or passed
+ *   to a fallback processing stage.
+ *
+ * While slower than the fast path, this function is essential
+ * for learning and ensuring accurate forwarding decisions.
+ */
 static int __always_inline
-dp_ing_slow_main(struct __sk_buff *ctx,  struct xfi *xf)
+dp_ingress_slow_main(struct __sk_buff *ctx,  struct xfi *xf)
 {
   struct dp_fc_tacts *fa = NULL;
 #ifdef HAVE_DP_FC
@@ -440,7 +459,7 @@ dp_ing_slow_main(struct __sk_buff *ctx,  struct xfi *xf)
     goto out;
   }
 
-  dp_ing_l2(ctx, xf, fa);
+  dp_ingress_l2(ctx, xf, fa);
 
 #ifdef HAVE_DP_FC
   /* fast-cache is used only when certain conditions are met */
@@ -458,7 +477,7 @@ out:
 }
 
 static int __always_inline
-dp_ing_ct_main(struct __sk_buff *ctx,  struct xfi *xf)
+dp_ingress_ct_main(struct __sk_buff *ctx,  struct xfi *xf)
 {
   int val = 0;
   struct dp_fc_tacts *fa = NULL;
@@ -548,7 +567,7 @@ res_end:
 }
  
 static int __always_inline
-dp_ing_pass_main(void *ctx)
+dp_ingress_pass_main(void *ctx)
 {
   BPF_TRACE_PRINTK("[INGR] pass--");
 
