@@ -104,7 +104,7 @@ do {                                  \
 #define BPF_FC_PRINTK(fmt, ...)  do { } while (0)
 #endif
 
-#define LLB_PIPE_RDR_MASK     (LLB_PIPE_RDR | LLB_PIPE_RDR_PRIO | LLB_PIPE_TRAP)
+#define LLB_PIPE_RDR_MASK     (LLB_PIPE_RDR | LLB_PIPE_RDR_PRIO )
 #define LLB_PIPE_EXCP_MASK    (LLB_PIPE_TRAP | LLB_PIPE_PASS | LLB_PIPE_DROP)
 
 struct dp_pi_mdi {

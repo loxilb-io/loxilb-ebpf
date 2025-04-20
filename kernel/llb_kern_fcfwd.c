@@ -165,9 +165,7 @@ dp_do_fcv4_lkup(void *ctx, struct xfi *xf)
   dp_do_map_stats(ctx, xf, LL_DP_CT_STATS_MAP, acts->ca.cidx);
 
   BPF_FC_PRINTK("[FCH4] oport %d",  xf->pm.oport);
-  dp_unparse_packet_always(ctx, xf);
-  dp_unparse_packet(ctx, xf, 0);
-
+ 
   xf->pm.oport = acts->ca.oaux; /* Field overloaded as oif */
 
   return ret;
@@ -206,6 +204,8 @@ static int __always_inline
       xf->l2m.dl_type == bpf_ntohs(ETH_P_IP)) {
     if (dp_do_fcv4_lkup(ctx, xf) == 1) {
       if (xf->pm.pipe_act == LLB_PIPE_RDR) {
+        dp_unparse_packet_always(ctx, xf);
+        dp_unparse_packet(ctx, xf, 0);
         DP_EG_ACCOUNTING(ctx, xf);
         oif = xf->pm.oport;
         return bpf_redirect(oif, 0);         

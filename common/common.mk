@@ -11,7 +11,7 @@
 # as a space-separated list
 #
 LLC = llc
-CLANG := $(shell if [ -f /usr/bin/clang-10 ];then echo clang-10; else echo clang; fi;)
+CLANG := $(shell if [ -f /usr/bin/clang-14 ];then echo clang-14; else echo clang; fi;)
 CC ?= gcc
 BPFTOOL ?= bpftool
 
