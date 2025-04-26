@@ -36,7 +36,7 @@ dp_mk_fcv4_key(struct xfi *xf, struct dp_fcv4_key *key)
 }
 
 static int __always_inline
-dp_do_fcv4_lkup(void *ctx, struct xfi *xf)
+dp_do_fcv4_lkup(void *ctx, struct xfi *xf, int *oif)
 {
   struct dp_fcv4_key key;
   struct dp_fc_tacts *acts;
@@ -164,9 +164,10 @@ dp_do_fcv4_lkup(void *ctx, struct xfi *xf)
 
   dp_do_map_stats(ctx, xf, LL_DP_CT_STATS_MAP, acts->ca.cidx);
 
-  BPF_FC_PRINTK("[FCH4] oport %d",  xf->pm.oport);
- 
-  xf->pm.oport = acts->ca.oaux; /* Field overloaded as oif */
+  if (oif) {
+    BPF_FC_PRINTK("[FCH4] oport %d:%d", xf->pm.oport, acts->ca.oaux);
+    *oif = acts->ca.oaux; /* Field overloaded as oif */
+  }
 
   return ret;
 
@@ -197,20 +198,17 @@ static int __always_inline
  dp_ingress_fast_main(void *ctx, struct xfi *xf)
 {
   int z = 0;
-  int oif;
+  int oif = 0;
   __u32 idx = LLB_DP_PKT_SLOW_PGM_ID;
   BPF_FC_PRINTK("[FCHM] Main--");
   if (xf->pm.pipe_act == 0 &&
       xf->l2m.dl_type == bpf_ntohs(ETH_P_IP)) {
-    if (dp_do_fcv4_lkup(ctx, xf) == 1) {
+    if (dp_do_fcv4_lkup(ctx, xf, &oif) == 1) {
       if (xf->pm.pipe_act == LLB_PIPE_RDR) {
         dp_unparse_packet_always(ctx, xf);
         dp_unparse_packet(ctx, xf, 0);
         DP_EG_ACCOUNTING(ctx, xf);
-        oif = xf->pm.oport;
         return bpf_redirect(oif, 0);         
-      } else if (xf->pm.pipe_act & LLB_PIPE_TRAP) {
-        return DP_PASS;
       }
     }
   }
