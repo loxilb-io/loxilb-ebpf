@@ -488,7 +488,7 @@ dp_ingress_l3(void *ctx,  struct xfi *xf, void *fa)
   }
 
   dp_do_ingress_ct(ctx, xf, fa);
-  dp_l3_fwd(ctx, xf, fa, 1);
+  dp_l3_fwd(ctx, xf, fa, 0);
 
   return 0;
 }
