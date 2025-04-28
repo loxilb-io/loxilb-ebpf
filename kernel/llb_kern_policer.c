@@ -1,6 +1,6 @@
 /*
  *  llb_kern_policer.c: LoxiLB eBPF Policer Processing Implementation
- *  Copyright (C) 2022,  NetLOX <www.netlox.io>
+ *  Copyright (c) 2022-2025 LoxiLB Authors
  * 
  *  SPDX-License-Identifier: (GPL-2.0 OR BSD-2-Clause)
  */
