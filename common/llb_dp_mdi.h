@@ -1,6 +1,6 @@
 /*
  * llb_dp_mdi.h: LoxiLB DP Private Definitions
- * Copyright (C) 2022,  NetLOX <www.netlox.io>
+ * Copyright (c) 2022-2025  LoxiLB Authors
  *
  * SPDX-License-Identifier: (GPL-2.0-or-later OR BSD-2-clause) 
  */

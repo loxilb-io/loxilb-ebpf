@@ -1,6 +1,6 @@
 /*
  *  llb_sockmap.h: LoxiLB sockmap definitions 
- *  Copyright (C) 2024,  NetLOX <www.netlox.io>
+ *  Copyright (c) 2024-2025 LoxiLB Authors
  * 
  *  SPDX-License-Identifier: (GPL-2.0-or-later OR BSD-2-clause) 
  */

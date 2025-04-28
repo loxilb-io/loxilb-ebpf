@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023 NetLOX Inc
+ * Copyright (c) 2023-2025 LoxiLB Authors
  *
  * SPDX short identifier: BSD-3-Clause
  */
