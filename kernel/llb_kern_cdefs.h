@@ -667,12 +667,12 @@ dp_do_map_stats(void *ctx,
 
   pb = bpf_map_lookup_elem(map, &key);
   if (pb) {
-    pb->bytes += xf->pm.py_bytes;
+    pb->bytes += xf->pm.l3_plen;
     pb->packets += 1;
     return;
   }
 
-  pb_new.bytes =  xf->pm.py_bytes;;
+  pb_new.bytes =  xf->pm.l3_plen;
   pb_new.packets = 1;
 
   bpf_map_update_elem(map, &key, &pb_new, BPF_ANY);

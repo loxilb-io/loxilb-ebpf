@@ -1,6 +1,6 @@
 /*
  *  llb-csum-kprobe.c: LoxiLB checksum fixup probe
- *  Copyright (C) 2023  NetLOX <www.netlox.io>
+ *  Copyright (c) 2023-2025 LoxiLB Authors
  * 
  * SPDX-License-Identifier: (GPL-2.0 OR BSD-2-Clause)
  */

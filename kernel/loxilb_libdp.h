@@ -1,5 +1,5 @@
 /* 
- * Copyright (c) 2022 NetLOX Inc
+ * Copyright (c) 2022-2025 LoxiLB Authors
  *
  * SPDX-License-Identifier: (GPL-2.0 OR BSD-2-Clause) 
  */
