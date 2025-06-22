@@ -59,7 +59,7 @@ PDI_DEF_ARR_FIELD(8, 16);
 (((v2)->valid == (v1)->valid) && (((v1)->val & (v2)->valid) == (v2)->val))
 
 #define PDI_RMATCH_ALL(v1, v2) \
-((((v2)->has_range == (v1)->has_range) && ((v1)->u.v.val >= (v2)->u.r.min && (v1)->u.v.val <= (v2)->u.r.max)) || \
+((((v2)->has_range == (v1)->has_range) && ((v1)->u.v.val == (v2)->u.r.min && (v1)->u.v.val == (v2)->u.r.max)) || \
  (((v2)->has_range != 0) &&(((v2)->u.v.valid == (v1)->u.v.valid) && (((v1)->u.v.val & (v2)->u.v.valid) == (v2)->u.v.val))))
 
 #define PDI_MATCH6(v1, v2) ({ \
