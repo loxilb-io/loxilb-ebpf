@@ -2011,11 +2011,63 @@ dp_do_dnat64(void *md, struct xfi *xf)
     LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLERR);
     return -1;
   }
-
+  
+  /* Pre-conversion validation */
+  void *orig_data = DP_TC_PTR(DP_PDATA(md));
+  void *orig_data_end = DP_TC_PTR(DP_PDATA_END(md));
+  __u32 orig_len = (__u32)(orig_data_end - orig_data);  
+  
+  /* Validate packet size before conversion */
+  if (xf->pm.l3_len > 1500) {  /* Standard Ethernet MTU */
+    LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLERR);
+    return -1;
+  }
+  
+  /* Validate IPv6 packet structure */
+  if (xf->pm.l3_plen < 40) {  /* Minimum IPv6 header size */
+    LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLERR);
+    return -1;
+  }
+  
+  /* Validate NAT64 address mappings */
+  if (xf->nm.nrip4 == 0 || xf->nm.nxip4 == 0) {
+    LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLERR);
+    return -1;
+  }
+  
+  /* Check for invalid destination addresses */
+  __u32 dst_addr_host = bpf_ntohl(xf->nm.nxip4);
+  if ((dst_addr_host & 0xF0000000) == 0xE0000000 ||  /* Multicast */
+      (dst_addr_host & 0xFF000000) == 0xFF000000) {   /* Broadcast */
+    LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLERR);
+    return -1;
+  }
+  
+  /* Perform protocol conversion */
   if (bpf_skb_change_proto(md, bpf_htons(ETH_P_IP), 0) < 0) {
     LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PROTO_ERR);
     return -1;
   }
+  
+  /* Post-conversion validation */
+  void *new_data = DP_TC_PTR(DP_PDATA(md));
+  void *new_data_end = DP_TC_PTR(DP_PDATA_END(md));
+  __u32 new_len = (__u32)(new_data_end - new_data);
+  
+  
+  /* Validate packet structure after conversion */
+  if (new_len < sizeof(struct ethhdr) + sizeof(struct iphdr)) {
+    LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PROTO_ERR);
+    return -1;
+  }
+  
+  /* Check for suspicious length changes that might indicate corruption */
+  __s32 len_diff = new_len - orig_len;
+  if (len_diff < -40 || len_diff > 40) {  /* IPv6 header (40) vs IPv4 header (20) = ±20 expected */
+    BPF_TRACE_PRINTK("[TRACE-V6] Suspicious length change after conversion: %d->%d (diff=%d)", 
+                     orig_len, new_len, len_diff);
+    /* Don't fail immediately, but log for debugging */
+  }  
 
   eth = DP_TC_PTR(DP_PDATA(md));
   dend = DP_TC_PTR(DP_PDATA_END(md));
@@ -2024,6 +2076,13 @@ dp_do_dnat64(void *md, struct xfi *xf)
     LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLERR);
     return -1;
   }
+  
+  /* Enhanced packet integrity validation after protocol conversion */
+  __u32 total_pkt_len = (__u32)(dend - (void*)eth);
+  if (total_pkt_len < sizeof(struct ethhdr) + sizeof(struct iphdr)) {
+    LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLERR);
+    return -1;
+  }  
 
   xf->l2m.dl_type = bpf_htons(ETH_P_IP);
   memcpy(eth->h_dest, xf->l2m.dl_dst, 2*6);
@@ -2057,8 +2116,69 @@ dp_do_dnat64(void *md, struct xfi *xf)
   iph->protocol = xf->l34m.nw_proto;
   iph->saddr    = xf->nm.nrip4;
   iph->daddr    = xf->nm.nxip4;
+  
+  /* Explicitly clear fields that may be corrupted by bpf_skb_change_proto */
+  iph->id       = 0;      // Clear identification field
+  iph->frag_off = 0;      // Clear fragment offset - prevents IPv6 address contamination
+  iph->tos      = 0;      // Clear type of service field
 
   dp_ipv4_new_csum((void *)iph);
+  
+  /* Validate IPv4 header integrity after construction */
+  if (iph->version != 4) {
+    LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLERR);
+    return -1;
+  }
+  
+  if (iph->ihl != 5) {  /* Standard 20-byte header */
+    LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLERR);
+    return -1;
+  }
+  
+  /* Validate IPv4 total length without storing in variable to satisfy verifier */
+  __u16 tot_len_temp = bpf_ntohs(iph->tot_len);
+  if (tot_len_temp < 20) {  /* Minimum IPv4 header size */
+    LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLERR);
+    return -1;
+  }
+  if (tot_len_temp > 1500) {  /* Standard MTU */
+    LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLERR);
+    return -1;
+  }
+  
+  /* Use safe bounds checking that the verifier understands */
+  /* Don't do arithmetic with total_len - use fixed offsets instead */
+  if (iph + 1 > dend) {
+    LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLERR);
+    return -1;
+  }
+  
+  /* Validate L4 header bounds using fixed sizes */
+  void *l4_hdr = (void *)(iph + 1);
+  if (xf->l34m.nw_proto == IPPROTO_TCP) {
+    struct tcphdr *tcp_check = (struct tcphdr *)l4_hdr;
+    if (tcp_check + 1 > dend) {
+      LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLERR);
+      return -1;
+    }
+  } else if (xf->l34m.nw_proto == IPPROTO_UDP) {
+    struct udphdr *udp_check = (struct udphdr *)l4_hdr;
+    if (udp_check + 1 > dend) {
+      LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLERR);
+      return -1;
+    }
+  }
+  
+  /* Check for fragmentation flags that might indicate corruption */
+  __u16 frag_off = bpf_ntohs(iph->frag_off);
+  if ((frag_off & 0x3FFF) != 0) {  /* Fragment offset should be 0 for new packets */    
+    /* Fix the corruption by clearing fragment fields */
+    iph->frag_off = 0;  /* Clear corrupted fragment offset */
+    iph->id = 0;        /* Clear potentially corrupted ID field */
+    
+    /* Recalculate checksum after fixing corruption */
+    dp_ipv4_new_csum((void *)iph);    
+  }  
 
   if (xf->l34m.nw_proto == IPPROTO_TCP) {
     tcp = (void *)(iph + 1);
@@ -2088,6 +2208,53 @@ dp_do_dnat64(void *md, struct xfi *xf)
     dp_set_udp_dport(md, xf, xf->nm.nxport);
   }
 
+  /* Final packet structure validation - avoid pkt_end arithmetic */
+  void *final_data_end = DP_TC_PTR(DP_PDATA_END(md));
+  
+  /* Use safe bounds checking without arithmetic on pkt_end */
+  if ((void*)eth + sizeof(struct ethhdr) + sizeof(struct iphdr) > final_data_end) {
+    LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLERR);
+    return -1;
+  }
+  
+  /* Check reasonable maximum size using fixed offset */
+  if ((void*)eth + 1514 < final_data_end) {
+    /* Packet is larger than max Ethernet frame - just log, don't fail */
+    BPF_TRACE_PRINTK("[TRACE-V6] Final packet larger than standard Ethernet frame");
+  }
+  
+  /* Verify IPv4 header is still valid after all modifications */
+  if (iph + 1 > final_data_end) {
+    LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLERR);
+    return -1;
+  }
+  
+  /* Verify L4 header is within bounds */
+  if (xf->l34m.nw_proto == IPPROTO_TCP) {
+    struct tcphdr *final_tcp = (void *)(iph + 1);
+    if (final_tcp + 1 > final_data_end) {
+      LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLERR);
+      return -1;
+    }
+  } else if (xf->l34m.nw_proto == IPPROTO_UDP) {
+    struct udphdr *final_udp = (void *)(iph + 1);
+    if (final_udp + 1 > final_data_end) {
+      LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLERR);
+      return -1;
+    }
+  }  
+  
+  /* Re-establish packet pointers for final logging to satisfy verifier */
+  struct ethhdr *final_eth = DP_TC_PTR(DP_PDATA(md));
+  void *final_dend = DP_TC_PTR(DP_PDATA_END(md));
+  
+  if (final_eth + 1 <= final_dend) {
+    struct iphdr *final_iph = (void *)(final_eth + 1);
+    if (final_iph + 1 <= final_dend) {
+      BPF_TRACE_PRINTK("[TRACE-V6] Final IPv4: %x->%x proto=%d", 
+                       bpf_ntohl(final_iph->saddr), bpf_ntohl(final_iph->daddr), final_iph->protocol);
+    }
+  }
   return 0;
 }
 
