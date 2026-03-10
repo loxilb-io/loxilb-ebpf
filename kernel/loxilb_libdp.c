@@ -2635,11 +2635,22 @@ typedef struct ct_arg_struct
 {
   uint64_t curr_ns;
   uint32_t rid;
+  uint8_t flush_mode;
+  uint32_t tdaddr[4];
+  uint16_t tdport;
+  uint16_t tzone;
+  uint8_t tl4proto;
+  uint8_t tv6;
   uint32_t aid[LLB_MAX_NXFRMS];
   int n_aids;
   int n_aged;
   int dir;
 } ct_arg_struct_t;
+
+enum {
+  CT_FLUSH_RID_MATCH_OR_ZERO = 0,
+  CT_FLUSH_RID_ZERO_ONLY = 1,
+};
 
 static int
 ctm_proto_xfk_init(struct dp_ct_key *key,
@@ -3108,6 +3119,68 @@ ll_ct_map_ent_rm_related(int tid, void *k, void *ita)
 }
 
 static int
+ll_addr4_eq(uint32_t *a, uint32_t *b)
+{
+  return (a[0] == b[0]);
+}
+
+static int
+ll_addr6_eq(uint32_t *a, uint32_t *b)
+{
+  return (a[0] == b[0] && a[1] == b[1] && a[2] == b[2] && a[3] == b[3]);
+}
+
+static int
+ll_ct_map_ent_rm_vtuple(int tid, void *k, void *ita)
+{
+  struct dp_ct_key *key = k;
+  dp_map_ita_t *it = ita;
+  struct dp_ct_tact *adat;
+  ct_arg_struct_t *as;
+  int dm = 0;
+  int sm = 0;
+
+  if (!it || !it->uarg || !it->val) return 0;
+
+  as = it->uarg;
+  adat = it->val;
+
+  if (key->v6 != as->tv6 || key->l4proto != as->tl4proto || key->zone != as->tzone) {
+    return 0;
+  }
+
+  if (as->flush_mode == CT_FLUSH_RID_ZERO_ONLY) {
+    if (adat->ctd.rid != 0) {
+      return 0;
+    }
+  } else {
+    if (as->rid && adat->ctd.rid != as->rid && adat->ctd.rid != 0) {
+      return 0;
+    }
+  }
+
+  if (key->v6) {
+    dm = ll_addr6_eq(&key->daddr[0], &as->tdaddr[0]);
+    sm = ll_addr6_eq(&key->saddr[0], &as->tdaddr[0]);
+  } else {
+    dm = ll_addr4_eq(&key->daddr[0], &as->tdaddr[0]);
+    sm = ll_addr4_eq(&key->saddr[0], &as->tdaddr[0]);
+  }
+
+  if (!((dm && key->dport == as->tdport) || (sm && key->sport == as->tdport))) {
+    return 0;
+  }
+
+  if (!key->v6) {
+    llb_del_map_elem_with_cidx(LL_DP_FCV4_MAP, adat->ca.cidx);
+  }
+  llb_clear_map_stats(LL_DP_CT_STATS_MAP, adat->ca.cidx);
+  as->n_aged++;
+
+  return 1;
+}
+
+static int
 ll_ct_map_ent_rm_any(int tid, void *k, void *ita)
 {
   struct dp_ct_key *key = k;
@@ -3192,6 +3265,62 @@ ll_map_ct_rm_any(void)
   llb_map_loop_and_delete(LL_DP_CT_MAP, ll_ct_map_ent_rm_any, &it);
   if (adat) free(adat);
   if (as) free(as);
+}
+
+int
+llb_flush_ct_by_nat(void *k, uint32_t rid)
+{
+  dp_map_ita_t it;
+  struct dp_nat_key *nk = k;
+  struct dp_ct_key next_key;
+  struct dp_ct_tact *adat;
+  ct_arg_struct_t *as;
+  uint64_t ns = get_os_nsecs();
+  int ret = 0;
+  uint8_t mode = CT_FLUSH_RID_MATCH_OR_ZERO;
+
+  if (!nk) {
+    return -EINVAL;
+  }
+
+  adat = calloc(1, sizeof(*adat));
+  if (!adat) return -ENOMEM;
+
+  as = calloc(1, sizeof(*as));
+  if (!as) {
+    free(adat);
+    return -ENOMEM;
+  }
+
+  if (rid & (1U << 31)) {
+    mode = CT_FLUSH_RID_ZERO_ONLY;
+    rid &= ~(1U << 31);
+  }
+
+  as->curr_ns = ns;
+  as->rid = rid;
+  as->flush_mode = mode;
+  as->tdport = nk->dport;
+  as->tzone = nk->zone;
+  as->tl4proto = nk->l4proto;
+  as->tv6 = nk->v6;
+  DP_XADDR_CP(as->tdaddr, nk->daddr);
+
+  memset(&it, 0, sizeof(it));
+  it.next_key = &next_key;
+  it.key_sz = sizeof(next_key);
+  it.val = adat;
+  it.uarg = as;
+
+  XH_LOCK();
+  llb_map_loop_and_delete(LL_DP_CT_MAP, ll_ct_map_ent_rm_vtuple, &it);
+  XH_UNLOCK();
+
+  ret = as->n_aged;
+  if (adat) free(adat);
+  if (as) free(as);
+
+  return ret;
 }
 
 
