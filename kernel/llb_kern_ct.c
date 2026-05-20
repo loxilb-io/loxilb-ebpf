@@ -876,6 +876,13 @@ dp_ct_sctp_sm(void *ctx, struct xfi *xf,
       goto end;
     }
 
+    if (dir == CT_DIR_IN && tdat->xi.nat_flags && s->vtag != 0 &&
+        (c->type == SCTP_DATA || c->type == SCTP_SACK ||
+         c->type == SCTP_HB_REQ || c->type == SCTP_HB_ACK)) {
+      nstate = CT_SCTP_EST;
+      goto end;
+    }
+
     if (c->type != SCTP_INIT_CHUNK || dir != CT_DIR_IN) {
       nstate = CT_SCTP_ERR;
       goto end;
@@ -1335,18 +1342,38 @@ add_nph1:
     nstate = CT_SCTP_ABRT;
     break;
   case CT_SCTP_SHUT:
-    if (c->type != SCTP_SHUT_ACK && dir != CT_DIR_OUT) {
+    if (c->type == SCTP_SHUT_ACK) {
+      if (dir != CT_DIR_OUT) {
+        nstate = CT_SCTP_ERR;
+        goto end;
+      }
+      nstate = CT_SCTP_SHUTA;
+      break;
+    }
+    if (c->type == SCTP_SHUT_COMPLETE) {
       nstate = CT_SCTP_ERR;
       goto end;
     }
-    nstate = CT_SCTP_SHUTA;
+    nstate = CT_SCTP_SHUT;
     break;
   case CT_SCTP_SHUTA:
-    if (c->type != SCTP_SHUT_COMPLETE && dir != CT_DIR_IN) {
-      nstate = CT_SCTP_ERR;
-      goto end;
+    if (c->type == SCTP_SHUT_COMPLETE) {
+      if (dir != CT_DIR_IN) {
+        nstate = CT_SCTP_ERR;
+        goto end;
+      }
+      nstate = CT_SCTP_SHUTC;
+      break;
     }
-    nstate = CT_SCTP_SHUTC;
+    if (c->type == SCTP_SHUT_ACK) {
+      if (dir != CT_DIR_OUT) {
+        nstate = CT_SCTP_ERR;
+        goto end;
+      }
+      nstate = CT_SCTP_SHUTA;
+      break;
+    }
+    nstate = CT_SCTP_SHUTA;
     break;
   default:
     break;

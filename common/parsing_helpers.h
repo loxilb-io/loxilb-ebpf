@@ -323,8 +323,10 @@ struct sctphdr {
 	__le32 checksum;
 };
 
+#define SCTP_DATA           0
 #define SCTP_INIT_CHUNK     1
 #define SCTP_INIT_CHUNK_ACK 2
+#define SCTP_SACK           3
 #define SCTP_HB_REQ         4
 #define SCTP_HB_ACK         5
 #define SCTP_ABORT          6
