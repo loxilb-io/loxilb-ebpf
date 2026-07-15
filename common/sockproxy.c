@@ -84,6 +84,7 @@ struct proxy_val {
   int main_fd;
   int have_ssl;
   int have_epssl;
+  int ppv2;
   int sched_free;
   void *ssl_ctx;
   void *ssl_epctx;
@@ -725,8 +726,49 @@ proxy_ssl_connect(int fd, void *ssl)
   return 0;
 }
 
+/* Build an IPv4 PROXY protocol v2 header (28 bytes) into buf. All addr/port args
+ * are in network byte order. Returns bytes written, or 0 if buf too small. */
+static int
+proxy_build_ppv2_v4(uint8_t *buf, size_t bufsz, uint32_t sip, uint16_t sport,
+                    uint32_t dip, uint16_t dport)
+{
+  static const uint8_t sig[12] = { 0x0D, 0x0A, 0x0D, 0x0A, 0x00, 0x0D,
+                                   0x0A, 0x51, 0x55, 0x49, 0x54, 0x0A };
+  if (bufsz < 28) return 0;
+  memcpy(buf, sig, 12);
+  buf[12] = 0x21;                    /* ver_cmd: version 2, PROXY command */
+  buf[13] = 0x11;                    /* family: AF_INET + STREAM (TCP) */
+  buf[14] = 0x00; buf[15] = 0x0c;    /* len = 12 (network order) */
+  memcpy(buf + 16, &sip, 4);         /* src_addr (client) */
+  memcpy(buf + 20, &dip, 4);         /* dst_addr (VIP) */
+  memcpy(buf + 24, &sport, 2);       /* src_port */
+  memcpy(buf + 26, &dport, 2);       /* dst_port */
+  return 28;
+}
+
+/* Send the whole buffer, handling short writes / EAGAIN on the non-blocking fd. */
+static int
+proxy_send_all(int fd, const void *buf, size_t len)
+{
+  const uint8_t *p = buf;
+  size_t off = 0;
+
+  while (off < len) {
+    ssize_t n = send(fd, p + off, len - off, MSG_NOSIGNAL);
+    if (n > 0) { off += (size_t)n; continue; }
+    if (n < 0 && (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR)) {
+      struct pollfd pf = { .fd = fd, .events = POLLOUT|POLLERR };
+      if (poll(&pf, 1, 500) <= 0 || (pf.revents & POLLERR)) return -1;
+      continue;
+    }
+    return -1;
+  }
+  return 0;
+}
+
 static int
 proxy_setup_ep_connect(uint32_t epip, uint16_t epport, uint8_t protocol,
+                       const void *pp2hdr, int pp2len,
                        void *ssl_ctx, void **ssl)
 {
   int fd, rc;
@@ -777,6 +819,19 @@ proxy_setup_ep_connect(uint32_t epip, uint16_t epport, uint8_t protocol,
     }
   }
 
+  /* PROXY protocol v2 header must be the FIRST bytes on the backend connection,
+   * before any client payload and before the (optional) backend TLS handshake,
+   * since PROXY protocol is a layer below TLS. Sending here on the freshly
+   * connected socket is stream-level, hence immune to the GSO issue that breaks
+   * the eBPF inline insertion (see docs/tls13-proxyproto-v2-issue/). */
+  if (pp2hdr && pp2len > 0) {
+    if (proxy_send_all(fd, pp2hdr, (size_t)pp2len)) {
+      log_error("ppv2 send failed %s:%u", inet_ntoa(*(struct in_addr *)(&epip)), ntohs(epport));
+      close(fd);
+      return -1;
+    }
+  }
+
   if (ssl_ctx) {
     void *nssl = SSL_new(ssl_ctx);
     assert(nssl);
@@ -797,6 +852,7 @@ static int
 proxy_setup_ep__(uint32_t xip, uint16_t xport, uint8_t protocol,
                  const char *host_str, proxy_ep_sel_t *ep_sel,
                  proxy_epval_t **epv, int *seltype, uint32_t *rid,
+                 const void *pp2hdr, int pp2len,
                  void *ssl_ctx, void **ssl)
 {
   int sel = 0;
@@ -829,7 +885,7 @@ proxy_setup_ep__(uint32_t xip, uint16_t xport, uint8_t protocol,
         epprotocol = tepval->eps[sel].protocol;
         tepval->ep_sel++;
         ep_sel->ep_cfds[0].ep_cfd = proxy_setup_ep_connect(epip, epport, (uint8_t)epprotocol,
-                                                           ssl_ctx, ssl);
+                                                           pp2hdr, pp2len, ssl_ctx, ssl);
         if (ep_sel->ep_cfds[0].ep_cfd < 0) {
           return -1;
         }
@@ -854,8 +910,8 @@ proxy_setup_ep__(uint32_t xip, uint16_t xport, uint8_t protocol,
           epip = tepval->eps[ep].xip;
           epport = tepval->eps[ep].xport;
           epprotocol = tepval->eps[ep].protocol;
-          ep_sel->ep_cfds[sel].ep_cfd = proxy_setup_ep_connect(epip, epport, (uint8_t)epprotocol, 
-                                                               NULL, NULL);
+          ep_sel->ep_cfds[sel].ep_cfd = proxy_setup_ep_connect(epip, epport, (uint8_t)epprotocol,
+                                                               pp2hdr, pp2len, NULL, NULL);
           if (ep_sel->ep_cfds[sel].ep_cfd > 0) {
             ep_sel->ep_cfds[sel].ep_num = sel;
             sel++;
@@ -1177,6 +1233,7 @@ proxy_add_entry(proxy_ent_t *new_ent, proxy_arg_t *arg)
   memcpy(&node->key, new_ent, sizeof(proxy_ent_t));
   node->val.main_fd = -1;
   node->val.have_ssl = arg->have_ssl;
+  node->val.ppv2 = arg->ppv2;
 
   if (arg->have_ssl) {
     ssl_ctx = proxy_server_ssl_ctx_init();
@@ -1786,9 +1843,22 @@ setup_proxy_path(smap_key_t *key, smap_key_t *rkey, proxy_fd_ent_t *pfe, const c
     return -1;
   }
 
+  /* If PROXY protocol v2 is enabled for this rule, build the header once from the
+   * client socket's addresses: key->dip/dport = the real client (getpeername),
+   * key->sip/sport = the VIP the client dialed (getsockname). It is sent as the
+   * first bytes of each backend connection by proxy_setup_ep_connect(). */
+  uint8_t pp2buf[28];
+  int pp2len = 0;
+  if (ent->val.ppv2 && protocol == IPPROTO_TCP) {
+    pp2len = proxy_build_ppv2_v4(pp2buf, sizeof(pp2buf),
+                                 key->dip, (uint16_t)(key->dport >> 16),   /* src = client */
+                                 key->sip, (uint16_t)(key->sport >> 16));  /* dst = VIP */
+  }
+
   memset(&ep_sel, 0, sizeof(ep_sel));
   if (proxy_setup_ep__(key->sip, key->sport >> 16, (uint8_t)(protocol),
-                       flt_url, &ep_sel, &tepval, &seltype, &rid, ent->val.ssl_epctx, &ssl)) {
+                       flt_url, &ep_sel, &tepval, &seltype, &rid,
+                       pp2len ? pp2buf : NULL, pp2len, ent->val.ssl_epctx, &ssl)) {
     proxy_log_always("no endpoint", key);
     proxy_destroy_eps(pfe->fd, &ep_sel);
     shutdown(pfe->fd, SHUT_RDWR);

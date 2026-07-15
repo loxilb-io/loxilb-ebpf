@@ -2231,6 +2231,8 @@ llb_conv_nat2proxy(void *k, void *v, struct proxy_ent *pent, struct proxy_arg *p
   pent->xport = nat_key->dport;
   pent->protocol = nat_key->l4proto;
 
+  pval->ppv2 = dat->ppv2;
+
   strncpy(pval->host_url, (const char *)dat->host_url, sizeof(pval->host_url) - 1);
   pval->host_url[sizeof(pval->host_url) - 1] = '\0';
 
