@@ -91,6 +91,7 @@ struct proxy_arg {
   uint32_t _id;
   int have_ssl;
   int have_epssl;
+  int ppv2;
   int proxy_mode;
   int select;
   int n_eps;
