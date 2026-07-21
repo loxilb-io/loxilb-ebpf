@@ -303,6 +303,10 @@ dp_ct_tcp_sm(void *ctx, struct xfi *xf,
   uint32_t seq;
   uint32_t ack;
   uint32_t nstate = 0;
+  /* Read outside the spin-lock section below: no helper calls are allowed
+   * while the lock is held */
+  int is_gso = dp_skb_is_gso(ctx);
+  int defer_ppv2 = 0;
 
   if (t + 1 > dend) {
     LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLCT_ERR);
@@ -446,10 +450,30 @@ dp_ct_tcp_sm(void *ctx, struct xfi *xf,
     }
 
     td->seq = seq;
-    if (xf->nm.ppv2)
+    if (xf->nm.ppv2) {
       nstate = CT_TCP_PEST;
-    else
+      /* Insert the ppv2 header early, on this handshake ACK: an empty ACK
+       * is never a GSO super-packet, so dp_ins_ppv2 runs on the proven
+       * single-segment path. The first data packet (e.g. TLS ClientHello,
+       * which GRO can turn into a GSO super-packet) then only needs the
+       * GSO-safe seq fixup, avoiding the FIXED_GSO stream corruption
+       * (issue #1044/#1089). If this packet itself carries piggybacked
+       * data and was GRO-merged (is_gso), defer: leave the connection
+       * unmarked and drop it, so the retransmit (a single non-GSO MSS
+       * segment) gets the header inserted instead.
+       */
+      if (td->ppv2 == 0) {
+        if (!is_gso) {
+          xf->pm.ppv2 = 1;
+          td->ppv2 = 1;
+          rtd->ppv2 = 1;
+        } else {
+          defer_ppv2 = 1;
+        }
+      }
+    } else {
       nstate = CT_TCP_EST;
+    }
     break;
 
   case CT_TCP_PEST:
@@ -461,9 +485,17 @@ dp_ct_tcp_sm(void *ctx, struct xfi *xf,
       nstate = CT_TCP_PEST;
       if (dir == CT_DIR_IN) {
         if (td->ppv2 == 0) {
-          xf->pm.ppv2 = 1;
-          td->ppv2 = 1;
-          rtd->ppv2 = 1;
+          if (!is_gso) {
+            xf->pm.ppv2 = 1;
+            td->ppv2 = 1;
+            rtd->ppv2 = 1;
+          } else {
+            /* GSO super-packet: inline insertion would corrupt the byte
+             * stream (28-byte seq hole). Drop without marking so the
+             * retransmit carries the header instead.
+             */
+            defer_ppv2 = 1;
+          }
         }
       }
     }
@@ -521,6 +553,13 @@ end:
   }
 
   bpf_spin_unlock(&atdat->lock);
+
+  if (defer_ppv2) {
+    /* The ppv2 header can only be inserted on a non-GSO packet; drop this
+     * one (connection left unmarked) and let the retransmit carry it.
+     */
+    LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_PLERR);
+  }
 
   if (nstate == CT_TCP_EST) {
     return CT_SMR_EST;
