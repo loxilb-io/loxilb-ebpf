@@ -982,6 +982,32 @@ dp_rewire_port(void *tbl, struct xfi *xf)
   return bpf_redirect(*oif, BPF_F_INGRESS);
 }
 
+/* __sk_buff.gso_size is absent from older UAPI headers used by the build
+ * toolchain, so read it via its fixed ctx offset (gso_segs at 164, sk ptr at
+ * 168-175, gso_size at 176). The verifier validates ctx loads by offset, not
+ * by C type, and resolves these against the running kernel's __sk_buff.
+ * Kernels lacking the field reject the program at load time -> define
+ * HAVE_NO_SKB_GSO_CTX for such legacy targets (detection then degrades to
+ * "never GSO", i.e. current behavior).
+ */
+struct dp_skb_gso_view {
+  __u8  pad0[164];
+  __u32 gso_segs;   /* ctx offset 164 */
+  __u8  pad1[8];
+  __u32 gso_size;   /* ctx offset 176 */
+};
+
+static int __always_inline
+dp_skb_is_gso(void *md)
+{
+#ifdef HAVE_NO_SKB_GSO_CTX
+  return 0;
+#else
+  struct dp_skb_gso_view *g = md;
+  return g->gso_size > 0;
+#endif
+}
+
 static int __always_inline
 dp_is_ppv2_ipv6(struct xfi *xf)
 {
@@ -2661,6 +2687,13 @@ static int __always_inline
 dp_ins_ppv2(void *md, struct xfi *xf)
 {
   /* Not supported */
+  return 0;
+}
+
+static int __always_inline
+dp_skb_is_gso(void *md)
+{
+  /* XDP frames are never GSO super-packets */
   return 0;
 }
 
