@@ -2005,6 +2005,14 @@ llb_nat_dec_act_sessions(uint32_t rid, uint32_t aid)
   }
 }
 
+static int
+llb_nat_ep_slot_same(struct mf_xfrm_inf *a, struct mf_xfrm_inf *b)
+{
+  return !memcmp(a->nat_xip, b->nat_xip, sizeof(a->nat_xip)) &&
+         a->nat_xport == b->nat_xport &&
+         a->nv6 == b->nv6;
+}
+
 static void
 llb_nat_rst_act_sessions(uint32_t rid)
 {
@@ -2253,6 +2261,7 @@ llb_conv_nat2proxy(void *k, void *v, struct proxy_ent *pent, struct proxy_arg *p
     proxy_ep->xip = mf->nat_xip[0];
     proxy_ep->xport = mf->nat_xport;
     proxy_ep->protocol = nat_key->l4proto;
+    pval->ep_aids[j] = i;
 
     j++;
   }
@@ -2309,10 +2318,28 @@ llb_add_map_elem(int tbl, void *k, void *v)
 
     if (tbl == LL_DP_NAT_MAP) {
       int aid = 0;
-      for (aid = 0; aid < LLB_MAX_NXFRMS; aid++) {
-        llb_clear_map_stats(tbl, LLB_NAT_STAT_CID(cidx, aid));
-        llb_nat_rst_act_sessions(cidx);
+      int have_old = 0;
+      struct dp_proxy_tacts *nval = v;
+      static struct dp_proxy_tacts oldv;
+
+      if (!xh->have_noebpf &&
+          bpf_map_lookup_elem(llb_map2fd(tbl), k, &oldv) == 0) {
+        have_old = 1;
       }
+
+      /* Preserve per-ep counters across in-place rule updates (e.g.
+       * health-monitor driven re-adds toggle only the inactive flag);
+       * clear a slot only when its endpoint identity changed and clear
+       * everything on fresh create
+       */
+      for (aid = 0; aid < LLB_MAX_NXFRMS; aid++) {
+        if (have_old &&
+            llb_nat_ep_slot_same(&oldv.nxfrms[aid], &nval->nxfrms[aid])) {
+          continue;
+        }
+        llb_clear_map_stats(tbl, LLB_NAT_STAT_CID(cidx, aid));
+      }
+      llb_nat_rst_act_sessions(cidx);
     } else {
       llb_clear_map_stats(tbl, cidx);
     }
@@ -2548,6 +2575,15 @@ llb_del_map_elem_wval(int tbl, void *k, void *v)
 
   /* Need some post-processing for certain maps */
   if (tbl == LL_DP_NAT_MAP) {
+    /* Counters survive in-place updates, so retire them here or a
+     * future rule reusing this cidx would start from stale values
+     */
+    if (ret == 0) {
+      int aid = 0;
+      for (aid = 0; aid < LLB_MAX_NXFRMS; aid++) {
+        llb_clear_map_stats(tbl, LLB_NAT_STAT_CID(t.ca.cidx, aid));
+      }
+    }
     llb_del_map_elem_nat_post_proc(k, &t);
   }
 

@@ -74,6 +74,9 @@ struct proxy_epval {
   int ep_sel;
   int select;
   proxy_ent_t eps[MAX_PROXY_EP];
+  /* ep_aids[i] is the rule's original endpoint index for eps[i];
+   * ep_stats[] is indexed by aid, not by eps[] slot */
+  int ep_aids[MAX_PROXY_EP];
   proxy_epstat_t ep_stats[MAX_PROXY_EP];
   UT_hash_handle hh;
 };
@@ -856,17 +859,27 @@ proxy_setup_ep__(uint32_t xip, uint16_t xport, uint8_t protocol,
                  void *ssl_ctx, void **ssl)
 {
   int sel = 0;
-  uint32_t epip;
-  uint16_t epport;
-  uint8_t epprotocol;
+  int n_eps = 0;
+  int proxy_mode = -1;
+  int laids[MAX_PROXY_EP] = { 0 };
+  proxy_ent_t leps[MAX_PROXY_EP];
   proxy_ent_t ent = { 0 };
-  struct proxy_epval *tepval;
-  proxy_map_ent_t *node = proxy_struct->head;
+  struct proxy_epval *tepval = NULL;
+  proxy_map_ent_t *node;
 
   ent.xip = xip;
   ent.xport = xport;
   ent.protocol = protocol;
 
+  /* Snapshot the selected ep(s) under the proxy lock. proxy_add_entry() can
+   * refresh tepval->eps/n_eps in place (health-monitor driven updates) and
+   * multiple notify threads race on ep_sel, so the list walk, the hash
+   * lookup, the ep copies and the ep_sel round-robin bump must all happen
+   * with the lock held. The (blocking) connect calls are done after unlock
+   * so the lock is never held across socket i/o.
+   */
+  PROXY_LOCK();
+  node = proxy_struct->head;
   while (node) {
     if (cmp_proxy_ent(&node->key, &ent)) {
       if (node->val.proxy_mode == PROXY_MODE_DFL) {
@@ -876,62 +889,82 @@ proxy_setup_ep__(uint32_t xip, uint16_t xport, uint8_t protocol,
           HASH_FIND_STR(node->val.ephash, host_str, tepval);
         }
 
-        if (tepval == NULL) break;
+        if (tepval == NULL || tepval->n_eps == 0) {
+          tepval = NULL;
+          break;
+        }
         sel = tepval->ep_sel % tepval->n_eps;
-        if (sel >= MAX_PROXY_EP) break;
-
-        epip = tepval->eps[sel].xip;
-        epport = tepval->eps[sel].xport;
-        epprotocol = tepval->eps[sel].protocol;
-        tepval->ep_sel++;
-        ep_sel->ep_cfds[0].ep_cfd = proxy_setup_ep_connect(epip, epport, (uint8_t)epprotocol,
-                                                           pp2hdr, pp2len, ssl_ctx, ssl);
-        if (ep_sel->ep_cfds[0].ep_cfd < 0) {
-          return -1;
+        if (sel >= MAX_PROXY_EP) {
+          tepval = NULL;
+          break;
         }
 
-        *seltype = 0;
-        *rid = tepval->_id;
-        *epv = tepval;
-        ep_sel->ep_cfds[0].ep_num = sel;
-        ep_sel->n_eps = 1;
-
-        return 0;
+        leps[0] = tepval->eps[sel];
+        laids[0] = tepval->ep_aids[sel];
+        n_eps = 1;
+        tepval->ep_sel++;
+        proxy_mode = PROXY_MODE_DFL;
+        break;
       } else if (node->val.proxy_mode == PROXY_MODE_ALL) {
-        int ep = 0;
-
         tepval = node->val.ephash;
         if (tepval == NULL) break;
 
         /* Do not support for this mode */
         assert(ssl_ctx == NULL);
 
-        for (ep = 0; ep < tepval->n_eps; ep++) {
-          epip = tepval->eps[ep].xip;
-          epport = tepval->eps[ep].xport;
-          epprotocol = tepval->eps[ep].protocol;
-          ep_sel->ep_cfds[sel].ep_cfd = proxy_setup_ep_connect(epip, epport, (uint8_t)epprotocol,
-                                                               pp2hdr, pp2len, NULL, NULL);
-          if (ep_sel->ep_cfds[sel].ep_cfd > 0) {
-            ep_sel->ep_cfds[sel].ep_num = sel;
-            sel++;
-          }
-        }
-
-        *rid = tepval->_id;
-        *epv = tepval;
-        if (sel) {
-          ep_sel->n_eps = sel;
-          *seltype = tepval->select;
-          return 0;
-        }
-        return -1;
+        n_eps = tepval->n_eps;
+        if (n_eps > MAX_PROXY_EP) n_eps = MAX_PROXY_EP;
+        memcpy(leps, tepval->eps, n_eps * sizeof(leps[0]));
+        memcpy(laids, tepval->ep_aids, n_eps * sizeof(laids[0]));
+        proxy_mode = PROXY_MODE_ALL;
+        break;
       }
     }
     node = node->next;
   }
 
-  return -1;
+  if (tepval == NULL || proxy_mode < 0 || n_eps <= 0) {
+    PROXY_UNLOCK();
+    return -1;
+  }
+
+  *rid = tepval->_id;
+  *epv = tepval;
+  *seltype = proxy_mode == PROXY_MODE_ALL ? tepval->select : 0;
+  PROXY_UNLOCK();
+
+  if (proxy_mode == PROXY_MODE_DFL) {
+    ep_sel->ep_cfds[0].ep_cfd = proxy_setup_ep_connect(leps[0].xip, leps[0].xport,
+                                                       (uint8_t)leps[0].protocol,
+                                                       pp2hdr, pp2len, ssl_ctx, ssl);
+    if (ep_sel->ep_cfds[0].ep_cfd < 0) {
+      return -1;
+    }
+
+    ep_sel->ep_cfds[0].ep_num = laids[0];
+    ep_sel->n_eps = 1;
+
+    return 0;
+  } else {
+    int ep = 0;
+    int nsel = 0;
+
+    for (ep = 0; ep < n_eps; ep++) {
+      ep_sel->ep_cfds[nsel].ep_cfd = proxy_setup_ep_connect(leps[ep].xip, leps[ep].xport,
+                                                            (uint8_t)leps[ep].protocol,
+                                                            pp2hdr, pp2len, NULL, NULL);
+      if (ep_sel->ep_cfds[nsel].ep_cfd > 0) {
+        ep_sel->ep_cfds[nsel].ep_num = laids[ep];
+        nsel++;
+      }
+    }
+
+    if (nsel) {
+      ep_sel->n_eps = nsel;
+      return 0;
+    }
+    return -1;
+  }
 }
 
 static int
@@ -1046,6 +1079,12 @@ proxy_delete_entry__(proxy_ent_t *ent, proxy_arg_t *arg, int *mfd,
       return -EINVAL;
     }
 
+    /* NOTE: tepval is intentionally NOT freed here (or later). Active
+     * connections keep a bare reference to it via pfe->epv (see
+     * setup_proxy_path()) with no refcounting, so freeing it would cause
+     * use-after-free on the accounting/stats paths. Adding a refcount to
+     * proxy_epval_t is a prerequisite for reclaiming this memory.
+     */
     HASH_DEL(node->val.ephash, tepval);
 
     epcount = HASH_COUNT(node->val.ephash);
@@ -1198,12 +1237,23 @@ proxy_add_entry(proxy_ent_t *new_ent, proxy_arg_t *arg)
   while (ent) {
     if (cmp_proxy_ent(&ent->key, new_ent)) {
       proxy_epval_t *eval = NULL;
-      HASH_FIND_STR(ent->val.ephash, arg->host_url, tepval);
+      HASH_FIND_STR(ent->val.ephash, arg->host_url, eval);
       if (eval != NULL) {
+        /* Refresh the existing ep-list in place so that health-monitor
+         * driven updates (inactive eps filtered out) take effect for
+         * all lookup paths including non-HTTP flows which use the
+         * hash-head directly
+         */
+        eval->n_eps = arg->n_eps;
+        eval->_id = arg->_id;
+        eval->select = arg->select;
+        memcpy(eval->eps, arg->eps, sizeof(arg->eps));
+        memcpy(eval->ep_aids, arg->ep_aids, sizeof(arg->ep_aids));
         PROXY_UNLOCK();
-        log_info("sockproxy : %s:%u exists",
-          inet_ntoa(*(struct in_addr *)&ent->key.xip), ntohs(ent->key.xport));
-        return -EEXIST;
+        log_info("sockproxy : %s:%u (%s) updated",
+          inet_ntoa(*(struct in_addr *)&ent->key.xip), ntohs(ent->key.xport),
+          arg->host_url ? arg->host_url: "");
+        return 0;
       } else {
         tepval = calloc(1, sizeof(*tepval));
         assert(tepval);
@@ -1212,6 +1262,7 @@ proxy_add_entry(proxy_ent_t *new_ent, proxy_arg_t *arg)
         tepval->select = arg->select;
         strncpy(tepval->host_url, arg->host_url, sizeof(tepval->host_url) - 1);
         memcpy(tepval->eps, arg->eps, sizeof(arg->eps));
+        memcpy(tepval->ep_aids, arg->ep_aids, sizeof(arg->ep_aids));
         HASH_ADD_STR(ent->val.ephash, host_url, tepval);
         log_info("sockproxy : %s:%u (%s) added %s",
           inet_ntoa(*(struct in_addr *)&ent->key.xip), ntohs(ent->key.xport),
@@ -1308,6 +1359,7 @@ proxy_add_entry(proxy_ent_t *new_ent, proxy_arg_t *arg)
   strncpy(tepval->host_url, arg->host_url, sizeof(tepval->host_url) - 1);
   tepval->host_url[sizeof(tepval->host_url) - 1] = '\0';
   memcpy(tepval->eps, arg->eps, sizeof(arg->eps));
+  memcpy(tepval->ep_aids, arg->ep_aids, sizeof(arg->ep_aids));
   HASH_ADD_STR(node->val.ephash, host_url, tepval);
 
   node->next = proxy_struct->head;
@@ -1454,13 +1506,19 @@ proxy_get_entry_stats(uint32_t id, int epid, uint64_t *p, uint64_t *b)
   *p = 0;
   *b = 0;
 
+  if (epid < 0 || epid >= MAX_PROXY_EP) {
+    return;
+  }
+
+  /* A rule may own multiple proxy entries (e.g. secondary VIPs share the
+   * same rule id), so accumulate across every epval matching this id */
   PROXY_LOCK();
   node = proxy_struct->head;
   while (node) {
     for (epv = node->val.ephash; epv; epv = epv->hh.next) {
-      if (epid >=0 && epid < MAX_PROXY_EP) {
-        *b = epv->ep_stats[epid].ntb;
-        *p = epv->ep_stats[epid].ntp;
+      if (epv->_id == id) {
+        *b += epv->ep_stats[epid].ntb;
+        *p += epv->ep_stats[epid].ntp;
       }
     }
     node = node->next;

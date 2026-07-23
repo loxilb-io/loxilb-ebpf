@@ -96,6 +96,11 @@ struct proxy_arg {
   int select;
   int n_eps;
   proxy_ent_t eps[MAX_PROXY_EP];
+  /* Original rule endpoint index (aid) per eps[] slot. eps[] is compacted
+   * (inactive endpoints skipped) so slot order alone cannot be used to
+   * attribute stats back to the rule's endpoint list.
+   */
+  int ep_aids[MAX_PROXY_EP];
 };
 typedef struct proxy_arg proxy_arg_t;
 
