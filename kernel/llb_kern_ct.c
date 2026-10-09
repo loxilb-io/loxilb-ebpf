@@ -908,6 +908,11 @@ dp_ct_sctp_sm(void *ctx, struct xfi *xf,
     goto end;
   }
 
+  if (dir == CT_DIR_IN && c->type == SCTP_INIT_CHUNK &&
+      ss->state != CT_SCTP_CLOSED && ss->state != CT_SCTP_INIT) {
+    ss->state = CT_SCTP_CLOSED;
+  }
+
   switch (ss->state) {
   case CT_SCTP_CLOSED:
     if (xf->nm.dsr) {
