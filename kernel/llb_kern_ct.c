@@ -521,6 +521,13 @@ dp_ct_tcp_sm(void *ctx, struct xfi *xf,
         nstate = CT_TCP_FINI2;
         td->seq = seq;
       }
+    } else if (tdat->xi.dsr) {
+      /* DSR never sees the server FIN; the client's pure ACK after its FIN is its last packet */
+      if ((tcp_flags & (LLB_TCP_FIN|LLB_TCP_ACK)) == LLB_TCP_ACK) {
+        nstate = CT_TCP_CW;
+      } else {
+        nstate = CT_TCP_FINI;
+      }
     }
     break;
   case CT_TCP_FINI2:
