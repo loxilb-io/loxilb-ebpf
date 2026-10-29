@@ -151,7 +151,19 @@ enum llb_dp_tid {
   LL_DP_NAT_EP_MAP,
   LL_DP_SOCK_RWR_MAP,
   LL_DP_SOCK_PROXY_MAP,
+  LL_DP_CT_FAIL_STATS_MAP,
   LL_DP_MAX_MAP
+};
+
+/* Index into ct_fail_stats_map: why a packet could not be tracked.
+ * Counted per CPU in packets/bytes like the other stats maps.
+ */
+enum llb_ct_fail {
+  LLB_CT_FAIL_MAP_FULL = 0, /* ct_map full, no entry created */
+  LLB_CT_FAIL_HALF_INS,     /* only the reverse entry fit, rolled back */
+  LLB_CT_FAIL_XKEY_EXIST,   /* reverse key present without the forward key */
+  LLB_CT_FAIL_XKEY_MISS,    /* forward key present without the reverse key */
+  LLB_CT_FAIL_MAX
 };
 
 enum {

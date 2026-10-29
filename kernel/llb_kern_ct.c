@@ -1824,17 +1824,34 @@ dp_ct_in(void *ctx, struct xfi *xf)
 
     axtdat = bpf_map_lookup_elem(&ct_map, &xkey);
     if (axtdat != NULL) {
+      dp_do_map_stats(ctx, xf, LL_DP_CT_FAIL_STATS_MAP, LLB_CT_FAIL_XKEY_EXIST);
       LLBS_PPLN_DROPC(xf, LLB_PIPE_CT_ERR);
       return 0;
     }
-    bpf_map_update_elem(&ct_map, &xkey, axdat, BPF_ANY);
-    bpf_map_update_elem(&ct_map, &key, adat, BPF_ANY);
+
+    /* ct_map is a plain hash map: an insert fails when it is full. Both
+     * entries of the pair must exist, so a failed second insert removes the
+     * first one again; an unpaired entry would otherwise make every later
+     * packet of this flow hit the LLB_PIPE_CT_ERR drop above until the sweep
+     * removes it. The packet itself is handed to the host stack as before
+     * (CT_SMR_ERR -> DP_PASS), only the reason is now recorded.
+     */
+    if (bpf_map_update_elem(&ct_map, &xkey, axdat, BPF_ANY) != 0) {
+      dp_do_map_stats(ctx, xf, LL_DP_CT_FAIL_STATS_MAP, LLB_CT_FAIL_MAP_FULL);
+      goto ct_insert_fail;
+    }
+    if (bpf_map_update_elem(&ct_map, &key, adat, BPF_ANY) != 0) {
+      bpf_map_delete_elem(&ct_map, &xkey);
+      dp_do_map_stats(ctx, xf, LL_DP_CT_FAIL_STATS_MAP, LLB_CT_FAIL_HALF_INS);
+      goto ct_insert_fail;
+    }
 
     atdat = bpf_map_lookup_elem(&ct_map, &key);
     axtdat = bpf_map_lookup_elem(&ct_map, &xkey);
   } else {
     axtdat = bpf_map_lookup_elem(&ct_map, &xkey);
     if (axtdat == NULL) {
+      dp_do_map_stats(ctx, xf, LL_DP_CT_FAIL_STATS_MAP, LLB_CT_FAIL_XKEY_MISS);
       LLBS_PPLN_DROPC(xf, LLB_PIPE_CT_ERR);
       return 0;
     }
@@ -1891,4 +1908,12 @@ dp_ct_in(void *ctx, struct xfi *xf)
   }
 
   return smr; 
+
+ct_insert_fail:
+  LLBS_PPLN_PASSC(xf, LLB_PIPE_RC_CT_FULL);
+  if (xi->nat_flags) {
+    /* the endpoint's session count was raised when it was selected */
+    dp_do_dec_nat_sess(ctx, xf, xf->pm.rule_id, xf->nm.sel_aid);
+  }
+  return CT_SMR_ERR;
 }

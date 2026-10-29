@@ -447,6 +447,13 @@ struct ct_stats_map_d {
         __uint(max_entries, LLB_CT_MAP_ENTRIES);
 } ct_stats_map SEC(".maps");
 
+struct ct_fail_stats_map_d {
+        __uint(type,        BPF_MAP_TYPE_PERCPU_ARRAY);
+        __type(key,         __u32);
+        __type(value,       struct dp_pb_stats);
+        __uint(max_entries, LLB_CT_FAIL_MAX);
+} ct_fail_stats_map SEC(".maps");
+
 struct nat_map_d {
         __uint(type,        BPF_MAP_TYPE_HASH);
         __type(key,         struct dp_nat_key);
@@ -633,6 +640,9 @@ dp_do_map_stats(void *ctx,
     break;
   case LL_DP_CT_STATS_MAP:
     map = &ct_stats_map;
+    break;
+  case LL_DP_CT_FAIL_STATS_MAP:
+    map = &ct_fail_stats_map;
     break;
   case LL_DP_INTF_STATS_MAP:
     map = &intf_stats_map;
