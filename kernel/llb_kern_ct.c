@@ -302,7 +302,9 @@ dp_ct_tcp_sm(void *ctx, struct xfi *xf,
   ct_tcp_pinfd_t *rtd;
   uint32_t seq;
   uint32_t ack;
-  uint32_t nstate = 0;
+  /* Start from the current state: a segment that matches no explicit
+   * transition must leave the entry where it is, not reset it to CLOSED. */
+  uint32_t nstate = ts->state;
   /* Read outside the spin-lock section below: no helper calls are allowed
    * while the lock is held */
   int is_gso = dp_skb_is_gso(ctx);
