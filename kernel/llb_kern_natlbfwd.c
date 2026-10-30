@@ -156,9 +156,7 @@ dp_do_nat(void *ctx, struct xfi *xf)
   struct dp_proxy_tacts *act;
   int sel;
 
-  if (xf->pm.l4fin || xf->pm.il4fin) {
-    return 0;
-  }
+  int fin = xf->pm.l4fin || xf->pm.il4fin;
 
   memset(&key, 0, sizeof(key));
   key.mark = xf->pm.dp_mark;
@@ -183,16 +181,28 @@ dp_do_nat(void *ctx, struct xfi *xf)
 
   BPF_TRACE_PRINTK("[NAT] lookup--");
 
-  xf->pm.table_id = LL_DP_NAT_MAP;
-
   act = bpf_map_lookup_elem(&nat_map, &key);
   if (!act) {
     /* Default action - Nothing to do */
+    if (fin) {
+      return 0;
+    }
     BPF_DBG_PRINTK("[NAT] lkup miss");
+    xf->pm.table_id = LL_DP_NAT_MAP;
     xf->pm.nf &= ~LLB_NAT_SRC;
     return 0;
   }
 
+  /* A FIN or RST never starts a new NAT session. A DSR rule is the
+   * exception: its selection is a pure function of the flow hash and
+   * nothing is rewritten, so selecting the backend here is stateless and
+   * lets a FIN/RST whose conntrack entry is already gone reach it.
+   */
+  if (fin && !act->ca.oaux) {
+    return 0;
+  }
+
+  xf->pm.table_id = LL_DP_NAT_MAP;
   xf->pm.phit |= LLB_DP_NAT_HIT;
   BPF_TRACE_PRINTK("[NAT] action %d pipe %x",
                    act->ca.act_type, xf->pm.pipe_act);

@@ -353,7 +353,9 @@ dp_ct_tcp_sm(void *ctx, struct xfi *xf,
   case CT_TCP_CLOSED:
 
     if (xf->nm.dsr) {
-      nstate = CT_TCP_EST;
+      /* A DSR entry created from a FIN (e.g. a retransmitted FIN after the
+       * entry was released) must not become a long-lived EST entry */
+      nstate = (tcp_flags & LLB_TCP_FIN) ? CT_TCP_CW : CT_TCP_EST;
       goto end;
     }
 
@@ -505,6 +507,15 @@ dp_ct_tcp_sm(void *ctx, struct xfi *xf,
 
   case CT_TCP_EST:
     if (tcp_flags & LLB_TCP_FIN) {
+      if (tdat->xi.dsr) {
+        /* DSR: the LB never sees the server's side of the close, so the
+         * client's FIN is the last segment that needs the entry. Release it
+         * now (CT_SMR_CTD); the empty segments that follow (final ACK, FIN
+         * or ACK retransmits) are forwarded without an entry, see dp_ct_in()
+         */
+        nstate = CT_TCP_CW;
+        goto end;
+      }
       ts->fndir = dir;
       nstate = CT_TCP_FINI;
       td->seq = seq;
@@ -1747,6 +1758,24 @@ dp_ct_in(void *ctx, struct xfi *xf)
   atdat = bpf_map_lookup_elem(&ct_map, &key);
   if (atdat == NULL) {
 
+    if (xf->nm.dsr && key.l4proto == IPPROTO_TCP &&
+        !(xf->pm.tcp_flags & LLB_TCP_SYN)) {
+      /* DSR releases the entry at the client's FIN. A later empty segment
+       * (final ACK, retransmitted FIN or ACK, RST) is forwarded to the
+       * backend already selected into xf->nm - DSR selection is hash-based,
+       * so the backend is the same - without creating a new entry pair. A
+       * segment with payload still creates one (in-flight connection
+       * pick-up).
+       */
+      struct tcphdr *t = DP_ADD_PTR(DP_PDATA(ctx), xf->pm.l4_off);
+      void *dend = DP_TC_PTR(DP_PDATA_END(ctx));
+
+      if (t + 1 <= dend && xf->pm.l3_plen == (__u16)(t->doff << 2)) {
+        BPF_TRACE_PRINTK("[CTRK] dsr stateless");
+        return 0;
+      }
+    }
+
     BPF_TRACE_PRINTK("[CTRK] new-ct ent");
     adat->ca.ftrap = 0;
     adat->ca.oaux = 0;
@@ -1823,6 +1852,21 @@ dp_ct_in(void *ctx, struct xfi *xf)
     axdat->ctd.pi.pmhh[2] = xf->nm.pmhh[2]; // LLB_MAX_MHOSTS
     axdat->ctd.pb.bytes = 0;
     axdat->ctd.pb.packets = 0;
+
+    if (xf->nm.dsr && key.l4proto == IPPROTO_TCP &&
+        !(xf->pm.tcp_flags & LLB_TCP_SYN)) {
+      /* A DSR entry created from a non-SYN segment is either an in-flight
+       * pick-up or a data retransmit that arrived after the entry was
+       * released at the client's FIN. In the second case nothing will ever
+       * close it, since the LB does not see the server's side, so give it
+       * an idle timeout instead of the 30 min EST timeout. A live
+       * connection re-creates its pair with its next data segment.
+       */
+      if (adat->ito == 0 || adat->ito > CT_DSR_NOSYN_CPTO) {
+        adat->ito = CT_DSR_NOSYN_CPTO;
+        axdat->ito = CT_DSR_NOSYN_CPTO;
+      }
+    }
 
     axtdat = bpf_map_lookup_elem(&ct_map, &xkey);
     if (axtdat != NULL) {

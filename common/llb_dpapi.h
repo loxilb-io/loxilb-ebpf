@@ -84,6 +84,9 @@
 #define CT_ICMP_EST_CPTO      (20000000000)
 #define CT_ICMP_FN_CPTO       (5000000000)
 #define CT_MISMATCH_FN_CPTO   (180000000000)
+/* DSR entry created from a non-SYN segment: idle timeout instead of the
+ * 30 min EST timeout, since the LB never sees the server's close */
+#define CT_DSR_NOSYN_CPTO     (60000000000)
 
 /* FW Mark values */
 #define LLB_MARK_NAT          (0x80000000)
