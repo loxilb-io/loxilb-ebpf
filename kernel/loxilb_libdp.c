@@ -318,6 +318,9 @@ llb_decode_pmdata(char *buf, struct ll_dp_pmdi *pmd)
     if (pmd->rcode & LLB_PIPE_RC_NH_UNK) {
       n += sprintf(buf + n, "nh-excp,");
     }
+    if (pmd->rcode & LLB_PIPE_RC_CT_FULL) {
+      n += sprintf(buf + n, "ct-full,");
+    }
   }
 }
 
@@ -1540,6 +1543,13 @@ llb_xh_init(llb_dp_struct_t *xh)
   xh->maps[LL_DP_LCPU_MAP].map_name = "live_cpu_map";
   xh->maps[LL_DP_LCPU_MAP].has_pb   = 0;
   xh->maps[LL_DP_LCPU_MAP].max_entries = 128;
+
+  xh->maps[LL_DP_CT_FAIL_STATS_MAP].map_name = "ct_fail_stats_map";
+  xh->maps[LL_DP_CT_FAIL_STATS_MAP].has_pb   = 1;
+  xh->maps[LL_DP_CT_FAIL_STATS_MAP].max_entries = LLB_CT_FAIL_MAX;
+  xh->maps[LL_DP_CT_FAIL_STATS_MAP].pbs = calloc(LLB_CT_FAIL_MAX,
+                                                 sizeof(struct dp_pbc_stats));
+  assert(xh->maps[LL_DP_CT_FAIL_STATS_MAP].pbs);
 
   xh->maps[LL_DP_PPLAT_MAP].map_name = "pplat_map";
   xh->maps[LL_DP_PPLAT_MAP].has_pb   = 1;
