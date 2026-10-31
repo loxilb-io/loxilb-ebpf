@@ -701,6 +701,36 @@ llb_unload_kern_sock(void)
   }
 }
 
+/*
+ * Map-trace events are the only source of HA conntrack sync, so the perf
+ * buffer is not optional. 2048 pages per CPU hold about 20k events of
+ * ~400 bytes; llb_maptrace_main drains them every 100 ms, which covers about
+ * 200k events per second per CPU before an event is lost.
+ */
+#define LLB_MAPTRACE_PB_PAGES    2048
+#define LLB_MAPTRACE_PB_ATTEMPTS 5
+
+static struct perf_buffer *
+llb_maptrace_pb_new(int map_fd, struct perf_buffer_opts *opts)
+{
+#ifdef HAVE_DP_PERFBUF_FAULTS
+  /*
+   * Test builds only: LLB_PERFBUF_FAIL_N makes the first N attempts fail
+   * with ENOMEM, as an allocation would on a node short of memory.
+   */
+  static int failed;
+  const char *n = getenv("LLB_PERFBUF_FAIL_N");
+
+  if (n && failed < atoi(n)) {
+    failed++;
+    errno = ENOMEM;
+    return NULL;
+  }
+#endif
+  return perf_buffer__new(map_fd, LLB_MAPTRACE_PB_PAGES,
+                          llb_maptrace_output, llb_maptrace_lost, NULL, opts);
+}
+
 static int
 llb_setup_kern_mon(void)
 {
@@ -736,12 +766,21 @@ llb_setup_kern_mon(void)
   struct perf_buffer_opts pb_opts = { .sz = sizeof(struct perf_buffer_opts) } ;
 
   struct perf_buffer *pb;
-  pb = perf_buffer__new(bpf_map__fd(prog->maps.map_events), 16384,
-            llb_maptrace_output, llb_maptrace_lost, NULL, &pb_opts);
-  err = libbpf_get_error(pb);
-  if (err) {
-    log_error("failed to setup perf_buffer: %d", err);
-    goto cleanup;
+  int attempt;
+  for (attempt = 1; ; attempt++) {
+    pb = llb_maptrace_pb_new(bpf_map__fd(prog->maps.map_events), &pb_opts);
+    err = libbpf_get_error(pb);
+    if (!err) {
+      break;
+    }
+    if (attempt == LLB_MAPTRACE_PB_ATTEMPTS) {
+      log_error("failed to setup perf_buffer: %d (attempt %d of %d)",
+                err, attempt, LLB_MAPTRACE_PB_ATTEMPTS);
+      goto cleanup;
+    }
+    log_warn("failed to setup perf_buffer: %d (attempt %d of %d), retrying",
+             err, attempt, LLB_MAPTRACE_PB_ATTEMPTS);
+    usleep(200000 << (attempt - 1));
   }
 
   pthread_create(&xh->mon_thr, NULL, llb_maptrace_main, pb);
@@ -1593,7 +1632,8 @@ llb_xh_init(llb_dp_struct_t *xh)
 
   if (xh->have_mtrace) {
     if (llb_setup_kern_mon() != 0) {
-      assert(0);
+      log_error("ebpf: fatal: llb_setup_kern_mon failed during init - aborting");
+      abort();
     }
   }
 
