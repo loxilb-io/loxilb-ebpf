@@ -1872,6 +1872,10 @@ dp_ct_in(void *ctx, struct xfi *xf)
     if (axtdat != NULL) {
       dp_do_map_stats(ctx, xf, LL_DP_CT_FAIL_STATS_MAP, LLB_CT_FAIL_XKEY_EXIST);
       LLBS_PPLN_DROPC(xf, LLB_PIPE_CT_ERR);
+      if (xi->nat_flags) {
+        /* the endpoint's session count was raised when it was selected */
+        dp_do_dec_nat_sess(ctx, xf, xf->pm.rule_id, xf->nm.sel_aid);
+      }
       return 0;
     }
 
