@@ -1150,6 +1150,41 @@ llb_setup_lcpu_map(int mapfd)
   }
 }
 
+/* Remove the pins left by a previous instance, one map at a time.
+ * bpf_object__unpin_maps() returns at the first map it cannot unpin, and a map
+ * this version adds has no pin yet. The maps after it would stay pinned and
+ * bpf_object__pin_maps() would then fail with EEXIST.
+ */
+static void
+llb_unpin_maps(struct bpf_object *bpf_obj, const char *pin_dir)
+{
+  struct bpf_map *map;
+  char path[PATH_MAX];
+  char *p;
+  int len;
+  int err;
+
+  bpf_object__for_each_map(map, bpf_obj) {
+    len = snprintf(path, sizeof(path), "%s/%s", pin_dir, bpf_map__name(map));
+    if (len < 0 || len >= (int)sizeof(path)) {
+      log_warn("%s: pin path too long for map %s", pin_dir, bpf_map__name(map));
+      continue;
+    }
+
+    /* bpffs has no periods in names: same path as bpf_object__pin_maps() */
+    for (p = path; *p; p++) {
+      if (*p == '.') *p = '_';
+    }
+
+    err = bpf_map__unpin(map, path);
+    if (err == -ENOENT) {
+      log_debug("%s: no previous pin", path);
+    } else if (err) {
+      log_warn("%s: unpin failed (%d)", path, err);
+    }
+  }
+}
+
 static int
 llb_dflt_sec_map2fd_all(struct bpf_object *bpf_obj)
 {
@@ -1226,9 +1261,7 @@ llb_dflt_sec_map2fd_all(struct bpf_object *bpf_obj)
   }
 
   /* Clean previous pins */
-  if (bpf_object__unpin_maps(bpf_obj, xh->ll_dp_pdir) != 0) {
-    log_warn("%s: Unpin maps failed", xh->ll_dp_pdir);
-  }
+  llb_unpin_maps(bpf_obj, xh->ll_dp_pdir);
 
   /* This will pin all maps in our bpf_object */
   err = bpf_object__pin_maps(bpf_obj, xh->ll_dp_pdir);
