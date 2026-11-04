@@ -88,14 +88,14 @@ struct bpf_map_def SEC("maps") pkt_ring = {
   .type = BPF_MAP_TYPE_PERF_EVENT_ARRAY,
   .key_size = sizeof(int),
   .value_size = sizeof(__u32),
-  .max_entries = MAX_REAL_CPUS,
+  .max_entries = LLB_PERF_RING_ENTRIES,
 };
 
 struct bpf_map_def SEC("maps") cp_ring = {
   .type = BPF_MAP_TYPE_PERF_EVENT_ARRAY,
   .key_size = sizeof(int),
   .value_size = sizeof(__u32),
-  .max_entries = MAX_REAL_CPUS,
+  .max_entries = LLB_PERF_RING_ENTRIES,
 };
 
 struct bpf_map_def SEC("maps") pkts = {
@@ -319,6 +319,20 @@ struct bpf_map_def SEC("maps") xfck = {
   .max_entries = 1,
 };
 
+struct bpf_map_def SEC("maps") rslv_map = {
+  .type = BPF_MAP_TYPE_LRU_HASH,
+  .key_size = sizeof(struct dp_rslv_key),
+  .value_size = sizeof(__u64),  /* Last resolve request (ns) */
+  .max_entries = LLB_RSLV_MAP_ENTRIES,
+};
+
+struct bpf_map_def SEC("maps") rslv_stats_map = {
+  .type = BPF_MAP_TYPE_PERCPU_ARRAY,
+  .key_size = sizeof(__u32),
+  .value_size = sizeof(__u64),
+  .max_entries = LLB_RSLV_STAT_MAX,
+};
+
 #else /* New BTF definitions */
 
 struct intf_map_d {
@@ -346,14 +360,14 @@ struct pkt_ring_d {
         __uint(type,        BPF_MAP_TYPE_PERF_EVENT_ARRAY);
         __type(key,         int);
         __type(value,       __u32);
-        __uint(max_entries, MAX_REAL_CPUS);
+        __uint(max_entries, LLB_PERF_RING_ENTRIES);
 } pkt_ring SEC(".maps");
 
 struct cp_ring_d {
         __uint(type,        BPF_MAP_TYPE_PERF_EVENT_ARRAY);
         __type(key,         int);
         __type(value,       __u32);
-        __uint(max_entries, MAX_REAL_CPUS);
+        __uint(max_entries, LLB_PERF_RING_ENTRIES);
 } cp_ring SEC(".maps");
 
 struct pkts_d {
@@ -582,6 +596,20 @@ struct xfck_d {
         __uint(max_entries, 1);
 } xfck SEC(".maps");
 
+struct rslv_map_d {
+        __uint(type,        BPF_MAP_TYPE_LRU_HASH);
+        __type(key,         struct dp_rslv_key);
+        __type(value,       __u64);  /* Last resolve request (ns) */
+        __uint(max_entries, LLB_RSLV_MAP_ENTRIES);
+} rslv_map SEC(".maps");
+
+struct rslv_stats_map_d {
+        __uint(type,        BPF_MAP_TYPE_PERCPU_ARRAY);
+        __type(key,         __u32);
+        __type(value,       __u64);
+        __uint(max_entries, LLB_RSLV_STAT_MAX);
+} rslv_stats_map SEC(".maps");
+
 struct crc32c_map_d {
         __uint(type,        BPF_MAP_TYPE_ARRAY);
         __type(key,         __u32);
@@ -807,12 +835,65 @@ do {                                             \
 #define TCALL_CRC1() bpf_tail_call(ctx, &pgm_tbl, LLB_DP_CRC_PGM_ID1)
 #define TCALL_CRC2() bpf_tail_call(ctx, &pgm_tbl, LLB_DP_CRC_PGM_ID2)
 
+static void __always_inline
+dp_rslv_stat_inc(__u32 sidx)
+{
+  __u64 *cnt = bpf_map_lookup_elem(&rslv_stats_map, &sidx);
+
+  if (cnt) {
+    *cnt += 1;
+  }
+}
+
+/* A burst of packets towards an unresolved neighbor must not turn into a
+ * burst of resolve requests: they all compete for the same user space
+ * budget, so one busy flow could starve the requests of other neighbors.
+ * Let one request per address through every RSLV_HOLDOFF_NS.
+ */
+static int __always_inline
+dp_rslv_allow(struct xfi *xf, __u32 rip)
+{
+  struct dp_rslv_key key;
+  __u64 now = bpf_ktime_get_ns();
+  __u64 *last;
+
+  memset(&key, 0, sizeof(key));
+  key.addr[0] = rip;
+  key.v6 = xf->l2m.dl_type == bpf_ntohs(ETH_P_IPV6) ? 1 : 0;
+
+  last = bpf_map_lookup_elem(&rslv_map, &key);
+  if (last && now - *last < RSLV_HOLDOFF_NS) {
+    dp_rslv_stat_inc(LLB_RSLV_STAT_HELD);
+    return 0;
+  }
+
+  bpf_map_update_elem(&rslv_map, &key, &now, BPF_ANY);
+  dp_rslv_stat_inc(LLB_RSLV_STAT_SENT);
+  return 1;
+}
+
 static int __always_inline
 dp_ring_event(void *ctx,  struct xfi *xf, int cp)
 {
   struct ll_dp_pmdi *pmd;
   int z = 0;
   __u64 flags = BPF_F_CURRENT_CPU;
+  __u32 rip = 0;
+
+  if (xf->l2m.dl_type == bpf_ntohs(ETH_P_IP)) {
+    rip = xf->l34m.daddr[0];
+    if (xf->pm.nf & LLB_NAT_DST) {
+      rip = xf->nm.nxip4;
+    } else if (xf->pm.nf & LLB_NAT_SRC && xf->nm.nrip4) {
+      /* One-arm/fullnat replies go to nrip. A default mode reply has no
+       * nrip and is headed for its own destination, the client */
+      rip = xf->nm.nrip4;
+    }
+  }
+
+  if (cp && !dp_rslv_allow(xf, rip)) {
+    return DP_DROP;
+  }
 
   /* Metadata will be in the perf event before the packet data. */
   pmd = bpf_map_lookup_elem(&pkts, &z);
@@ -827,19 +908,17 @@ dp_ring_event(void *ctx,  struct xfi *xf, int cp)
   pmd->table_id = xf->pm.table_id;
   pmd->rcode = xf->pm.rcode;
   pmd->pkt_len = DP_GET_LEN(ctx);
-  if (xf->l2m.dl_type == bpf_ntohs(ETH_P_IP)) {
-    pmd->resolve_ip = xf->l34m.daddr[0];
-    if (xf->pm.nf & LLB_NAT_DST) {
-      pmd->resolve_ip = xf->nm.nxip4;
-    } else if (xf->pm.nf & LLB_NAT_SRC) {
-      pmd->resolve_ip = xf->nm.nrip4;
-    }
-  } else {
-    pmd->resolve_ip = 0;
+  pmd->resolve_ip = rip;
+
+  /* Only the packet tracer needs the packet itself. A resolve request is
+   * metadata only: cp_ring has 4KB per CPU, so carrying the packet would
+   * leave room for a couple of requests and none at all for a packet
+   * larger than that (jumbo frames, GRO).
+   */
+  if (cp == 0) {
+    flags |= (__u64)pmd->pkt_len << 32;
   }
 
-  flags |= (__u64)pmd->pkt_len << 32;
-  
   if (cp == 0) {
     if (bpf_perf_event_output(ctx, &pkt_ring, flags,
                             pmd, sizeof(*pmd))) {

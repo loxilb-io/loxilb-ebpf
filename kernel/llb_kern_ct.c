@@ -438,8 +438,14 @@ dp_ct_tcp_sm(void *ctx, struct xfi *xf,
     } 
 
     if ((tcp_flags & LLB_TCP_SYN) == LLB_TCP_SYN) {
-      td->seq = seq;
-      nstate = CT_TCP_SS;
+      /* The same SYN again means the SYN-ACK did not reach the client.
+       * Stay in SA: the server's SYN-ACK retransmit can already be through,
+       * and back in SS the client's ACK for it would be an error that
+       * deletes the entry. Only a new SYN restarts the handshake. */
+      if (seq != td->seq) {
+        td->seq = seq;
+        nstate = CT_TCP_SS;
+      }
       goto end;
     }
   
@@ -914,7 +920,12 @@ dp_ct_sctp_sm(void *ctx, struct xfi *xf,
     nstate = CT_SCTP_ERR;
     goto end;
   case SCTP_SHUT:
-    nstate = CT_SCTP_SHUT;
+    /* A SHUTDOWN retransmit that crossed the SHUTDOWN ACK must not undo it:
+     * back in SHUT, the SHUTDOWN COMPLETE that follows would be an error
+     * that deletes the entry before it reaches the endpoint. */
+    if (ss->state != CT_SCTP_SHUTA) {
+      nstate = CT_SCTP_SHUT;
+    }
     goto end;
   case SCTP_ABORT:
     nstate = CT_SCTP_ABRT;
