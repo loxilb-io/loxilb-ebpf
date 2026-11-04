@@ -321,6 +321,9 @@ llb_decode_pmdata(char *buf, struct ll_dp_pmdi *pmd)
     if (pmd->rcode & LLB_PIPE_RC_CT_FULL) {
       n += sprintf(buf + n, "ct-full,");
     }
+    if (pmd->rcode & LLB_PIPE_RC_RNAT_UNRES) {
+      n += sprintf(buf + n, "rnat-unres,");
+    }
   }
 }
 
@@ -469,6 +472,44 @@ cleanup:
   return -1;
 }
 
+/* Resolve requests already sent per address (hashed, last one wins). Only
+ * the cp-ring thread touches these, so no locking.
+ */
+#define LLB_RSLV_DEDUP_SLOTS 1024
+
+static struct {
+  uint32_t ip;
+  uint64_t ts;
+} rslv_slots[LLB_RSLV_DEDUP_SLOTS];
+
+static struct {
+  uint64_t sent;
+  uint64_t dup;
+  uint64_t throttled;
+  uint64_t lost;
+  uint64_t logged;      /* sum of the above at the last log */
+  uint64_t log_ts;
+} rslv_cnt;
+
+static void
+llb_rslv_log(void)
+{
+  uint64_t now = get_os_nsecs();
+  uint64_t sum = rslv_cnt.sent + rslv_cnt.dup + rslv_cnt.throttled + rslv_cnt.lost;
+
+  if (sum == rslv_cnt.logged || now - rslv_cnt.log_ts < 10000000000ULL) {
+    return;
+  }
+
+  log_info("cp-ring: resolve sent %llu dup %llu throttled %llu lost %llu",
+           (unsigned long long)rslv_cnt.sent,
+           (unsigned long long)rslv_cnt.dup,
+           (unsigned long long)rslv_cnt.throttled,
+           (unsigned long long)rslv_cnt.lost);
+  rslv_cnt.logged = sum;
+  rslv_cnt.log_ts = now;
+}
+
 static void
 llb_handle_cp_event(void *ctx,
              int cpu,
@@ -476,15 +517,44 @@ llb_handle_cp_event(void *ctx,
              unsigned int data_sz)
 {
   struct ll_dp_pmdi *pmd = data;
+  uint32_t slot;
+  uint64_t now;
+
+  if (!(pmd->rcode & LLB_PIPE_RC_RESOLVE)) {
+    return;
+  }
+
+  /* The datapath rate limits per address too, but every CPU and every
+   * attach point may still send one. Drop those duplicates before they
+   * use up the throttle budget that other addresses need.
+   */
+  now = get_os_nsecs();
+  slot = (pmd->resolve_ip * 2654435761U) % LLB_RSLV_DEDUP_SLOTS;
+  if (rslv_slots[slot].ip == pmd->resolve_ip &&
+      now - rslv_slots[slot].ts < RSLV_HOLDOFF_NS) {
+    rslv_cnt.dup++;
+    goto out;
+  }
 
   if (do_throttle(&xh->cpt)) {
-    return;
+    rslv_cnt.throttled++;
+    goto out;
   }
 
-  if (pmd->rcode & LLB_PIPE_RC_RESOLVE) {
-    goLinuxArpResolver(pmd->resolve_ip);
-    return;
-  }
+  rslv_slots[slot].ip = pmd->resolve_ip;
+  rslv_slots[slot].ts = now;
+  rslv_cnt.sent++;
+  goLinuxArpResolver(pmd->resolve_ip);
+
+out:
+  llb_rslv_log();
+}
+
+static void
+llb_handle_cp_lost(void *ctx, int cpu, __u64 cnt)
+{
+  rslv_cnt.lost += cnt;
+  llb_rslv_log();
 }
 
 static void *
@@ -509,7 +579,8 @@ llb_setup_cp_ring(void)
 
   if (pkt_fd < 0) return -1;
 
-  pb = perf_buffer__new(pkt_fd, 1 /* 4KB per CPU */, llb_handle_cp_event, NULL, NULL, &pb_opts);
+  pb = perf_buffer__new(pkt_fd, 1 /* 4KB per CPU */, llb_handle_cp_event,
+                        llb_handle_cp_lost, NULL, &pb_opts);
   if (libbpf_get_error(pb)) {
     fprintf(stderr, "Failed to create cp-ring perf buffer\n");
     goto cleanup;
@@ -1609,7 +1680,11 @@ llb_xh_init(llb_dp_struct_t *xh)
     }
   }
 
-  init_throttler(&xh->cpt, 50);
+  /* cp_ring carries only neighbor resolve requests, already rate limited
+   * per address in the datapath and deduplicated in llb_handle_cp_event().
+   * This is the overall cap.
+   */
+  init_throttler(&xh->cpt, 500);
 
   if (proxy_main(xh->have_sockmap ? llb_sockmap_op : NULL)) {
     assert(0);

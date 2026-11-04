@@ -283,6 +283,12 @@ dp_pipe_check_res(void *ctx, struct xfi *xf, void *fa)
   if (xf->pm.pipe_act) {
 
     if (xf->pm.pipe_act & LLB_PIPE_DROP) {
+      if (xf->pm.rcode & LLB_PIPE_RC_RNAT_UNRES) {
+        /* Held reply, see dp_rnat_unres(): ask for the neighbor so that
+         * the sender's retransmission finds a nexthop */
+        xf->pm.rcode |= LLB_PIPE_RC_RESOLVE;
+        dp_ring_event(ctx, xf, 1);
+      }
       return DP_DROP;
     }
 
@@ -543,6 +549,18 @@ dp_ingress_ct_main(struct __sk_buff *ctx,  struct xfi *xf)
    * complexity for now 
    */
   dp_l3_fwd(ctx, xf, fa, 0);
+
+  /* A held reply (see dp_rnat_unres()) never reaches the client, so keep it
+   * out of the conntrack state machine too. Otherwise its retransmission
+   * meets a state the client never saw, and the error that follows hands
+   * it to the kernel without its NAT. IP fragments still go through it:
+   * the entry that matches the other fragments is created there.
+   */
+  if (xf->pm.pipe_act & LLB_PIPE_DROP &&
+      xf->pm.rcode & LLB_PIPE_RC_RNAT_UNRES &&
+      xf->l2m.ssnid == 0) {
+    goto res_end;
+  }
 
   /* Perform masquerading if necessary */
   if ((xf->pm.phit & LLB_DP_CTM_HIT) == 0) {

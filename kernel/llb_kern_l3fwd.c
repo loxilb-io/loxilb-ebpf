@@ -96,6 +96,33 @@ dp_rtv4_get_ipkey(struct xfi *xf)
   return ipkey;
 }
 
+/* The reply of a DNAT (LB) flow has no usable nexthop. Record it, and hold
+ * the packet (drop + resolve request in dp_pipe_check_res()) when it would
+ * otherwise reach the kernel without its reverse NAT, i.e. with the
+ * endpoint's own address as source. Holding is limited to IPv4 on TC
+ * ingress: egress output resolves L2 in the kernel after the NAT, and
+ * neither XDP nor IPv6 has a resolve path yet. Returns 1 if held.
+ */
+static int __always_inline
+dp_rnat_unres(void *ctx, struct xfi *xf, int hold)
+{
+  if (!xf->nm.rnat || DP_LLB_IS_EGR(ctx)) {
+    return 0;
+  }
+
+  xf->pm.rcode |= LLB_PIPE_RC_RNAT_UNRES;
+
+#ifdef LL_TC_EBPF
+  if (hold && xf->nm.dsr == 0 && xf->nm.nv6 == 0 &&
+      xf->l2m.dl_type == bpf_htons(ETH_P_IP) &&
+      xf->tm.tun_decap == 0 && xf->tm.new_tunnel_id == 0) {
+    LLBS_PPLN_DROPC(xf, LLB_PIPE_RC_RNAT_UNRES);
+    return 1;
+  }
+#endif
+  return 0;
+}
+
 static int __always_inline
 dp_do_rtops(void *ctx, struct xfi *xf, void *fa_, struct dp_rt_tact *act)
 {
@@ -115,7 +142,10 @@ dp_do_rtops(void *ctx, struct xfi *xf, void *fa_, struct dp_rt_tact *act)
 #endif
     LLBS_PPLN_TRAPC(xf, LLB_PIPE_RC_RT_TRAP);
   } else if (act->ca.act_type == DP_SET_NOP) {
-    LLBS_PPLN_PASSC(xf, LLB_PIPE_RC_RT_TRAP);
+    /* Connected subnet: the neighbor's own host route is not there (yet) */
+    if (!dp_rnat_unres(ctx, xf, 1)) {
+      LLBS_PPLN_PASSC(xf, LLB_PIPE_RC_RT_TRAP);
+    }
   } else if (act->ca.act_type == DP_SET_RDR_PORT) {
     struct dp_rdr_act *ra = &act->port_act;
     LLBS_PPLN_RDR(xf);
@@ -195,6 +225,7 @@ dp_do_rtv6(void *ctx, struct xfi *xf, void *fa_)
 
   act = bpf_map_lookup_elem(&rt_v6_map, key);
   if (!act) {
+    dp_rnat_unres(ctx, xf, 0);
     // Dont masquerade before doing PASS
     xf->pm.nf &= ~LLB_NAT_SRC;
     if (!DP_LLB_IS_EGR(ctx)) {
@@ -232,6 +263,9 @@ dp_do_rtv4(void *ctx, struct xfi *xf, void *fa_)
 
   act = bpf_map_lookup_elem(&rt_v4_map, key);
   if (!act) {
+    /* No route at all: a resolve request could not add one, so this case
+     * is only recorded, not held */
+    dp_rnat_unres(ctx, xf, 0);
     xf->pm.nf &= ~LLB_NAT_SRC;
     if (!DP_LLB_IS_EGR(ctx)) {
       LLBS_PPLN_TRAPC(xf, LLB_PIPE_RC_RT_TRAP);
@@ -257,7 +291,7 @@ dp_pipe_set_nat(void *ctx, struct xfi *xf,
   xf->nm.nxport = na->xport;
   xf->nm.nv6 = na->nv6 ? 1 : 0;
   xf->nm.dsr = na->dsr;
-  xf->nm.cdis = na->cdis;
+  xf->nm.cdis = na->cdis ? 1 : 0;
   xf->nm.ppv2 = na->ppv2 ? 1 : 0;
   xf->nm.npmhh = na->nmh;
   BPF_DBG_PRINTK("[CT] NAT ACT %x", xf->pm.nf);
@@ -330,6 +364,10 @@ dp_do_ctops(void *ctx, struct xfi *xf, void *fa_,
     }
 
     dp_pipe_set_nat(ctx, xf, na, act->ca.act_type == DP_SET_SNAT ? 1: 0);
+    if (act->ca.act_type == DP_SET_SNAT && act->ctd.dir == CT_DIR_OUT) {
+      /* Reply direction of a DNAT (LB) flow, see dp_rnat_unres() */
+      xf->nm.rnat = 1;
+    }
     dp_do_map_stats(ctx, xf, LL_DP_NAT_STATS_MAP, LLB_NAT_STAT_CID(na->rid, na->aid));
 
     if (na->fr == 1 || na->doct || xf->pm.goct) {

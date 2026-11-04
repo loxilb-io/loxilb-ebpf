@@ -73,6 +73,24 @@
 /* Hard-timeout of 15m for fc cp entry */
 #define FC_V4_CPTO            ( 900000000000)
 
+/* Neighbor resolve requests (cp_ring) are sent at most once per holdoff
+ * for a given address. The map only needs to hold the addresses that are
+ * unresolved at the same time.
+ */
+#define RSLV_HOLDOFF_NS       (100000000ULL)
+#define LLB_RSLV_MAP_ENTRIES  (4096)
+
+/* Index into rslv_stats_map */
+#define LLB_RSLV_STAT_SENT    0
+#define LLB_RSLV_STAT_HELD    1
+#define LLB_RSLV_STAT_MAX     2
+
+struct dp_rslv_key {
+  __u32 addr[4];
+  __u8  v6;
+  __u8  pad[3];
+};
+
 /* Hard-timeout of 30m for ct entry */
 #define CT_V4_CPTO            (1800000000000)
 

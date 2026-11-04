@@ -175,6 +175,7 @@ struct dp_pi_mdi {
 #define LLB_PIPE_RC_RESOLVE   0x4000000
 #define LLB_PIPE_CT_ERR       0x8000000
 #define LLB_PIPE_RC_CT_FULL   0x10000000
+#define LLB_PIPE_RC_RNAT_UNRES 0x20000000
     __u32            rcode;
 
     __u8             tc:4;
@@ -316,7 +317,8 @@ struct dp_nat_mdi {
     __u8            xlate_proto;
     __u8            dsr:4;
     __u8            ppv2:4;
-    __u8            cdis;
+    __u8            cdis:4;
+    __u8            rnat:4;        /* Reply direction of a DNAT (LB) flow */
     __u64           ito;
 };
 
