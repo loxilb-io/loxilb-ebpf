@@ -438,8 +438,14 @@ dp_ct_tcp_sm(void *ctx, struct xfi *xf,
     } 
 
     if ((tcp_flags & LLB_TCP_SYN) == LLB_TCP_SYN) {
-      td->seq = seq;
-      nstate = CT_TCP_SS;
+      /* The same SYN again means the SYN-ACK did not reach the client.
+       * Stay in SA: the server's SYN-ACK retransmit can already be through,
+       * and back in SS the client's ACK for it would be an error that
+       * deletes the entry. Only a new SYN restarts the handshake. */
+      if (seq != td->seq) {
+        td->seq = seq;
+        nstate = CT_TCP_SS;
+      }
       goto end;
     }
   
