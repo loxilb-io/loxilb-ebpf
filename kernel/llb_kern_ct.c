@@ -920,7 +920,12 @@ dp_ct_sctp_sm(void *ctx, struct xfi *xf,
     nstate = CT_SCTP_ERR;
     goto end;
   case SCTP_SHUT:
-    nstate = CT_SCTP_SHUT;
+    /* A SHUTDOWN retransmit that crossed the SHUTDOWN ACK must not undo it:
+     * back in SHUT, the SHUTDOWN COMPLETE that follows would be an error
+     * that deletes the entry before it reaches the endpoint. */
+    if (ss->state != CT_SCTP_SHUTA) {
+      nstate = CT_SCTP_SHUT;
+    }
     goto end;
   case SCTP_ABORT:
     nstate = CT_SCTP_ABRT;
