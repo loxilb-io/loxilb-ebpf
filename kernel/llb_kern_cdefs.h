@@ -88,14 +88,14 @@ struct bpf_map_def SEC("maps") pkt_ring = {
   .type = BPF_MAP_TYPE_PERF_EVENT_ARRAY,
   .key_size = sizeof(int),
   .value_size = sizeof(__u32),
-  .max_entries = MAX_REAL_CPUS,
+  .max_entries = LLB_PERF_RING_ENTRIES,
 };
 
 struct bpf_map_def SEC("maps") cp_ring = {
   .type = BPF_MAP_TYPE_PERF_EVENT_ARRAY,
   .key_size = sizeof(int),
   .value_size = sizeof(__u32),
-  .max_entries = MAX_REAL_CPUS,
+  .max_entries = LLB_PERF_RING_ENTRIES,
 };
 
 struct bpf_map_def SEC("maps") pkts = {
@@ -346,14 +346,14 @@ struct pkt_ring_d {
         __uint(type,        BPF_MAP_TYPE_PERF_EVENT_ARRAY);
         __type(key,         int);
         __type(value,       __u32);
-        __uint(max_entries, MAX_REAL_CPUS);
+        __uint(max_entries, LLB_PERF_RING_ENTRIES);
 } pkt_ring SEC(".maps");
 
 struct cp_ring_d {
         __uint(type,        BPF_MAP_TYPE_PERF_EVENT_ARRAY);
         __type(key,         int);
         __type(value,       __u32);
-        __uint(max_entries, MAX_REAL_CPUS);
+        __uint(max_entries, LLB_PERF_RING_ENTRIES);
 } cp_ring SEC(".maps");
 
 struct pkts_d {
