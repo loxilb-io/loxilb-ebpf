@@ -154,6 +154,25 @@ dp_set_egr_vlan(void *ctx, struct xfi *xf,
   return 0;
 }
 
+/*
+ * dp_l2_reflect - check if a bridged frame would go back out of its port
+ * A switch never sends a frame out of the port it came in on. loxilb adds an
+ * FDB entry for each neighbor, so a unicast frame flooded to a one-arm port
+ * for another host on that link would be sent back unchanged, and the switch
+ * would then learn its source MAC on loxilb's port. Routed, NATed and
+ * tunnelled packets are changed, and may still leave by their ingress port.
+ */
+static int __always_inline
+dp_l2_reflect(struct xfi *xf, __u16 oport)
+{
+  return oport == xf->pm.iport &&
+         (xf->pm.phit & LLB_DP_TMAC_HIT) == 0 &&
+         xf->pm.nf == 0 &&
+         xf->pm.nh_num == 0 &&
+         xf->tm.tun_decap == 0 &&
+         xf->tm.new_tunnel_id == 0;
+}
+
 static int __always_inline
 dp_do_dmac_lkup(void *ctx, struct xfi *xf, void *fa_)
 {
@@ -192,6 +211,12 @@ dp_do_dmac_lkup(void *ctx, struct xfi *xf, void *fa_)
   } else if (dma->ca.act_type == DP_SET_ADD_L2VLAN || 
              dma->ca.act_type == DP_SET_RM_L2VLAN) {
     struct dp_l2vlan_act *va = &dma->vlan_act;
+
+    if (dp_l2_reflect(xf, va->oport)) {
+      /* Leave it to the kernel, as it would be without loxilb */
+      LLBS_PPLN_PASSC(xf, LLB_PIPE_RC_L2_REFLECT);
+      return 0;
+    }
 #ifdef HAVE_DP_FC
     struct dp_fc_tact *ta = &fa->fcta[
                           dma->ca.act_type == DP_SET_ADD_L2VLAN ?
