@@ -324,6 +324,9 @@ llb_decode_pmdata(char *buf, struct ll_dp_pmdi *pmd)
     if (pmd->rcode & LLB_PIPE_RC_RNAT_UNRES) {
       n += sprintf(buf + n, "rnat-unres,");
     }
+    if (pmd->rcode & LLB_PIPE_RC_L2_REFLECT) {
+      n += sprintf(buf + n, "l2-reflect,");
+    }
   }
 }
 

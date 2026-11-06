@@ -176,6 +176,7 @@ struct dp_pi_mdi {
 #define LLB_PIPE_CT_ERR       0x8000000
 #define LLB_PIPE_RC_CT_FULL   0x10000000
 #define LLB_PIPE_RC_RNAT_UNRES 0x20000000
+#define LLB_PIPE_RC_L2_REFLECT 0x40000000
     __u32            rcode;
 
     __u8             tc:4;
