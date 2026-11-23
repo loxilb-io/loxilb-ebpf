@@ -1698,8 +1698,8 @@ dp_ct_ctd(struct xfi *xf,
 static int __always_inline
 dp_ct_in(void *ctx, struct xfi *xf)
 {
-  struct dp_ct_key key;
-  struct dp_ct_key xkey;
+  struct dp_ct_key *key;
+  struct dp_ct_key *xkey;
   struct dp_ct_tact_scratch *adat;
   struct dp_ct_tact_scratch *axdat;
   struct dp_ct_tact *atdat;
@@ -1712,11 +1712,13 @@ dp_ct_in(void *ctx, struct xfi *xf)
 
   k = 0;
   adat = bpf_map_lookup_elem(&xctk, &k);
+  key = bpf_map_lookup_elem(&xctkey, &k);
 
   k = 1;
   axdat = bpf_map_lookup_elem(&xctk, &k);
+  xkey = bpf_map_lookup_elem(&xctkey, &k);
 
-  if (adat == NULL || axdat == NULL) {
+  if (adat == NULL || axdat == NULL || key == NULL || xkey == NULL) {
     return smr;
   }
 
@@ -1724,21 +1726,21 @@ dp_ct_in(void *ctx, struct xfi *xf)
   xxi = &axdat->ctd.xi;
  
   /* CT Key */
-  DP_XADDR_CP(key.daddr, xf->l34m.daddr);
-  DP_XADDR_CP(key.saddr, xf->l34m.saddr);
-  key.sport = xf->l34m.source;
-  key.dport = xf->l34m.dest;
-  key.l4proto = xf->l34m.nw_proto;
-  key.zone = xf->pm.zone;
-  key.v6 = xf->l2m.dl_type == bpf_ntohs(ETH_P_IPV6) ? 1: 0;
-  key.ident = xf->tm.tun_decap ? 0 : xf->tm.tunnel_id;
-  key.type = xf->tm.tun_decap ? 0 : xf->tm.tun_type;
+  DP_XADDR_CP(key->daddr, xf->l34m.daddr);
+  DP_XADDR_CP(key->saddr, xf->l34m.saddr);
+  key->sport = xf->l34m.source;
+  key->dport = xf->l34m.dest;
+  key->l4proto = xf->l34m.nw_proto;
+  key->zone = xf->pm.zone;
+  key->v6 = xf->l2m.dl_type == bpf_ntohs(ETH_P_IPV6) ? 1: 0;
+  key->ident = xf->tm.tun_decap ? 0 : xf->tm.tunnel_id;
+  key->type = xf->tm.tun_decap ? 0 : xf->tm.tun_type;
 
-  if (key.l4proto != IPPROTO_TCP &&
-      key.l4proto != IPPROTO_UDP &&
-      key.l4proto != IPPROTO_ICMP &&
-      key.l4proto != IPPROTO_SCTP &&
-      key.l4proto != IPPROTO_ICMPV6) {
+  if (key->l4proto != IPPROTO_TCP &&
+      key->l4proto != IPPROTO_UDP &&
+      key->l4proto != IPPROTO_ICMP &&
+      key->l4proto != IPPROTO_SCTP &&
+      key->l4proto != IPPROTO_ICMPV6) {
     return 0;
   }
 
@@ -1764,12 +1766,12 @@ dp_ct_in(void *ctx, struct xfi *xf)
     }
   }
 
-  dp_ct_proto_xfk_init(&key, xi, &xkey, xxi);
+  dp_ct_proto_xfk_init(key, xi, xkey, xxi);
 
-  atdat = bpf_map_lookup_elem(&ct_map, &key);
+  atdat = bpf_map_lookup_elem(&ct_map, key);
   if (atdat == NULL) {
 
-    if (xf->nm.dsr && key.l4proto == IPPROTO_TCP &&
+    if (xf->nm.dsr && key->l4proto == IPPROTO_TCP &&
         !(xf->pm.tcp_flags & LLB_TCP_SYN)) {
       /* DSR releases the entry at the client's FIN. A later empty segment
        * (final ACK, retransmitted FIN or ACK, RST) is forwarded to the
@@ -1841,7 +1843,7 @@ dp_ct_in(void *ctx, struct xfi *xf)
       axdat->nat_act.doct = 1;
       axdat->nat_act.rid = xf->pm.rule_id;
       axdat->nat_act.aid = xf->nm.sel_aid;
-      axdat->nat_act.nv6 = key.v6 ? 1:0;
+      axdat->nat_act.nv6 = key->v6 ? 1:0;
       axdat->nat_act.dsr = xf->nm.dsr;
       axdat->nat_act.cdis = xf->nm.cdis;
       axdat->nat_act.nmh = xf->nm.npmhh;
@@ -1864,7 +1866,7 @@ dp_ct_in(void *ctx, struct xfi *xf)
     axdat->ctd.pb.bytes = 0;
     axdat->ctd.pb.packets = 0;
 
-    if (xf->nm.dsr && key.l4proto == IPPROTO_TCP &&
+    if (xf->nm.dsr && key->l4proto == IPPROTO_TCP &&
         !(xf->pm.tcp_flags & LLB_TCP_SYN)) {
       /* A DSR entry created from a non-SYN segment is either an in-flight
        * pick-up or a data retransmit that arrived after the entry was
@@ -1879,7 +1881,7 @@ dp_ct_in(void *ctx, struct xfi *xf)
       }
     }
 
-    axtdat = bpf_map_lookup_elem(&ct_map, &xkey);
+    axtdat = bpf_map_lookup_elem(&ct_map, xkey);
     if (axtdat != NULL) {
       dp_do_map_stats(ctx, xf, LL_DP_CT_FAIL_STATS_MAP, LLB_CT_FAIL_XKEY_EXIST);
       LLBS_PPLN_DROPC(xf, LLB_PIPE_CT_ERR);
@@ -1893,20 +1895,20 @@ dp_ct_in(void *ctx, struct xfi *xf)
      * removes it. The packet itself is handed to the host stack as before
      * (CT_SMR_ERR -> DP_PASS), only the reason is now recorded.
      */
-    if (bpf_map_update_elem(&ct_map, &xkey, axdat, BPF_ANY) != 0) {
+    if (bpf_map_update_elem(&ct_map, xkey, axdat, BPF_ANY) != 0) {
       dp_do_map_stats(ctx, xf, LL_DP_CT_FAIL_STATS_MAP, LLB_CT_FAIL_MAP_FULL);
       goto ct_insert_fail;
     }
-    if (bpf_map_update_elem(&ct_map, &key, adat, BPF_ANY) != 0) {
-      bpf_map_delete_elem(&ct_map, &xkey);
+    if (bpf_map_update_elem(&ct_map, key, adat, BPF_ANY) != 0) {
+      bpf_map_delete_elem(&ct_map, xkey);
       dp_do_map_stats(ctx, xf, LL_DP_CT_FAIL_STATS_MAP, LLB_CT_FAIL_HALF_INS);
       goto ct_insert_fail;
     }
 
-    atdat = bpf_map_lookup_elem(&ct_map, &key);
-    axtdat = bpf_map_lookup_elem(&ct_map, &xkey);
+    atdat = bpf_map_lookup_elem(&ct_map, key);
+    axtdat = bpf_map_lookup_elem(&ct_map, xkey);
   } else {
-    axtdat = bpf_map_lookup_elem(&ct_map, &xkey);
+    axtdat = bpf_map_lookup_elem(&ct_map, xkey);
     if (axtdat == NULL) {
       dp_do_map_stats(ctx, xf, LL_DP_CT_FAIL_STATS_MAP, LLB_CT_FAIL_XKEY_MISS);
       LLBS_PPLN_DROPC(xf, LLB_PIPE_CT_ERR);
@@ -1936,9 +1938,9 @@ dp_ct_in(void *ctx, struct xfi *xf)
         atdat->nat_act.doct = 0;
         axtdat->nat_act.doct = 0;
         if (atdat->ctd.dir == CT_DIR_IN) {
-          dp_ct_est(xf, &key, &xkey, atdat, axtdat);
+          dp_ct_est(xf, key, xkey, atdat, axtdat);
         } else {
-          dp_ct_est(xf, &xkey, &key, axtdat, atdat);
+          dp_ct_est(xf, xkey, key, axtdat, atdat);
         }
         atdat->ctd.xi.mhon = 0;
         axtdat->ctd.xi.mhon = 0;
@@ -1947,15 +1949,15 @@ dp_ct_in(void *ctx, struct xfi *xf)
         axtdat->ca.act_type = DP_SET_NOP;
       }
     } else if (smr == CT_SMR_ERR || smr == CT_SMR_CTD) {
-      bpf_map_delete_elem(&ct_map, &xkey);
-      bpf_map_delete_elem(&ct_map, &key);
-      dp_ct_related_fc_rm(&xkey);
-      dp_ct_related_fc_rm(&key);
+      bpf_map_delete_elem(&ct_map, xkey);
+      bpf_map_delete_elem(&ct_map, key);
+      dp_ct_related_fc_rm(xkey);
+      dp_ct_related_fc_rm(key);
 
       if (atdat->ctd.dir == CT_DIR_IN) {
-        dp_ct_ctd(xf, &key, &xkey, atdat, axtdat);
+        dp_ct_ctd(xf, key, xkey, atdat, axtdat);
       } else {
-        dp_ct_ctd(xf, &xkey, &key, axtdat, atdat);
+        dp_ct_ctd(xf, xkey, key, axtdat, atdat);
       }
 
       if (xi->nat_flags) {
