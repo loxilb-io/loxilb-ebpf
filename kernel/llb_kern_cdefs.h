@@ -645,6 +645,20 @@ struct xctk_d {
         __uint(max_entries, 2);
 } xctk SEC(".maps");
 
+/* Scratch for the conntrack key pair of the packet being processed.
+ * The keys are kept here rather than on the stack: since Linux 6.14 the
+ * verifier keeps tracking the contents of a stack buffer that is passed to
+ * a helper read-only, so a key built on the stack reaches the conntrack
+ * state machine in many distinct tracked states and every one of them is
+ * verified separately. The contents of a map value are not tracked.
+ */
+struct xctkey_d {
+        __uint(type,        BPF_MAP_TYPE_PERCPU_ARRAY);
+        __type(key,         __u32);
+        __type(value,       struct dp_ct_key);
+        __uint(max_entries, 2);
+} xctkey SEC(".maps");
+
 
 #endif
 
