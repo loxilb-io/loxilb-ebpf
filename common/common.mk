@@ -87,6 +87,11 @@ CFLAGS_ALL ?= -DHAVE_DP_FC=1 -DHAVE_DP_EXTCT=1 -DHAVE_DP_SCTP_SUM=1 -DHAVE_DP_CT
 ifeq ($(CLANG), clang-13)
 CFLAGS_ALL += -DHAVE_CLANG13
 endif
+# Extra defines from the command line, added to the defaults above
+# (e.g. make EXTRA_CFLAGS=-DHAVE_DP_PERFBUF_FAULTS=1)
+ifdef EXTRA_CFLAGS
+CFLAGS_ALL += $(EXTRA_CFLAGS)
+endif
 CFLAGS ?= -I$(LIBBPF_DIR)/build/usr/include/ -g
 CFLAGS += -I../headers/ -I$(LIBBPF_DIR)/ $(CFLAGS_ALL)
 LDFLAGS ?= -L$(LIBBPF_DIR)
